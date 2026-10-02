@@ -1,0 +1,33 @@
+# OS files
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Node / build output
+node_modules/
+dist/
+build/
+.svelte-kit/
+
+# PocketBase live data and secrets (never commit store data)
+pb_data/
+*.db
+*.db-wal
+*.db-shm
+.env
+*.key
+*.pem
+
+# Installers and large binaries (keep out of git)
+*.exe
+*.msi
+*.zip
+*.img
+*.iso
+
+# Logs
+*.log
