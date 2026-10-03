@@ -1,0 +1,43 @@
+# P0 Foundation: mini-spec
+
+Baseline: Master Specification v1.0. Status: draft, 2026-10-02.
+
+## Goal
+
+A hub that stays up, can be reached safely by any device, is backed up, and can be updated and rolled back, plus the setup wizard that turns it into "a store".
+
+**Done when** (Section 13): 3 devices log in (Windows PC, Android 9, iPhone 13 Pro / iOS 26), the hub survives a power pull, an update installs and rolls back. Phase gate items also apply.
+
+## Build order
+
+| Step | Delivers | Requirements |
+| --- | --- | --- |
+| 1. Hub base | OS hardening, PocketBase service, HTTPS (per-store CA), mDNS, chrony, watchdog, firewall, auto-restart | NFR-08, 09, 11, 19; hub plumbing |
+| 2. Schema v1 + event log | `business`, `location`, `settings`, `modules`, `users`, `roles`, `permissions`, `permission_overrides`, `devices`, `storage_areas`, `tasks` (minimal, for skipped steps), `events`, `backups`, `updates`. Common fields on every table; a hook writes an `events` row on every create/update/delete | Section 10, NFR-20 |
+| 3. Access | Role templates (Owner, Manager, Cashier, Staff, Accountant), per-person overrides with end date, "Who can do this?", PIN login + lockout after 5 tries, auto-lock, manager-can't-exceed-own-rights (BR-33) | FR-1.03, 1.04, 1.09, 1.10, NFR-11 |
+| 4. Devices | Pairing by code/QR; certificate install guide (iOS trust toggle, Android user CA, IP fallback for Android 9); device manager (status, user, version, lock, log out, rename, revoke, approve) | FR-1.07, 1.08 |
+| 5. Client shell | Svelte PWA: install, offline shell, connectivity bar, login, owner on any device | FR-1.09, 12.01, NFR-16/17 |
+| 6. Setup wizard | Language, hub time check, business profile, branding (logo, colours from logo, receipt header/footer preview), owner account + printed recovery code, people, storage areas, shop-type preset + module switches, optional external references, backup; resumable, skipped steps become tasks | FR-1.01-1.06, 1.13, 1.15 |
+| 7. Backups | USB backup (SQLite online backup, verify, retention 14/8/12), schedule, first backup in wizard, restore procedure to spare card; encrypted cloud copy (Google Drive or OneDrive) once client IDs are provided | FR-1.14, 12.08, NFR-03, 04 |
+| 8. Health page | Uptime, temperature, RAM, disk, last backup, clock source, devices online, queue backlog, versions, pending updates | FR-12.09 |
+| 9. Updates | Signed packages (minisign), published to the public `chedam-updates` repo; download when online or from USB; install outside trading hours with backup first and automatic rollback; tax-table packages switch on at effective date | FR-12.01-12.04, NFR-20 |
+| 10. Gate tests | 3-device login, power pull mid-write (x10), update + rollback, backup + restore to spare card, memory < 150 MB under load (R6), iOS/Android camera over HTTPS (R5) | Section 13 gate |
+
+## Decisions made in P0 (to add to the Decision log)
+
+| ID | Decision |
+| --- | --- |
+| DL-21 | HTTPS via Caddy with its internal CA generated **on each hub** (one CA per store, never shared). mkcert stays a developer-PC tool only. Certificate covers `chedam.local` and the hub IP |
+| DL-22 | Source repo stays private; signed update packages are published to a separate public repo `chedam-updates` (GitHub Releases) |
+| DL-23 | RTC (DS3231) deferred to the pilot build; dev hub uses network time via chrony. Health page reports clock source |
+| DL-24 | Hub runs headless: GPU, audio, camera, display detection and Bluetooth disabled to free RAM |
+| DL-25 | PocketBase extended with JavaScript hooks (`pb_hooks`), no Go build, so one binary serves Pi and mini PC (NFR-19) |
+
+## Notes and risks found during setup
+
+- **Android 9 cannot resolve `.local` names**, so it must reach the hub by IP. The hub needs a fixed IP (router DHCP reservation), and the pairing QR code must carry the IP. The TELUS modem doesn't allow reservations, so the dev hub sits behind our own LAN-cabled router (2026-10-03, see `P0-restart-new-network.md`).
+- Android 9's Chrome no longer receives updates (I believe 138 was the last version). Treat that phone as the worst-case browser test.
+- Caddy's hub certificates last 12 hours and renew automatically, so they depend on a correct clock. Without an RTC, a hub that boots offline after a power cut starts with a stale clock. Certificate validity and the BR-30 time rules both depend on the clock, which makes the RTC a hard requirement for the pilot (DL-23).
+- If the hub IP changes, re-run `setup-hub.sh` so the certificate covers the new IP.
+- Windows `curl` (Schannel) fails revocation checks on the private CA. Use `--ssl-no-revoke` for command-line tests; browsers are unaffected.
+- Windows mDNS lookup is unreliable from some tools. Developer SSH uses the `chedam` alias pointing at the IP.
