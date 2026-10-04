@@ -2,6 +2,8 @@
 
 Date: 2026-10-03. Why: the TELUS modem gives us no admin access (no DHCP reservations), so the dev hub now runs behind our **own router**, plugged by LAN cable into the bedroom wall port. Every address changed, so we start P0 again from a clean SD card.
 
+**Status (2026-10-03): steps 1-4 done.** The Pi is on the new router at `192.168.50.101`, key-only SSH works, and the OS is updated. What actually happened, including every failed attempt and its fix, is in `P0-pi-setup-log-2026-10-03.pdf`. Next: hub setup (`setup-hub.sh`).
+
 ## What changes and what stays
 
 | Item | Status |
@@ -71,7 +73,7 @@ Remove the old hub certificate, if it was installed:
 ## Step 4. Find the Pi and fix its IP
 
 1. Router admin page → connected devices / DHCP clients → find `chedam` and note its IP and MAC.
-2. Create a **DHCP reservation** (Address Reservation / Static Lease) for that MAC, e.g. `192.168.50.10`.
+2. Create a **DHCP reservation** (Address Reservation / Static Lease) for that MAC, e.g. `192.168.50.10`. (Done: kept the address the router first gave, `192.168.50.101`.) On the TP-Link the entry is saved as *Disabled*: tick it and click **Enable Selected**. Leave **IP & MAC Binding / ARP Binding** off; it is not a reservation.
 3. Reboot the Pi (unplug/replug) so it picks up the reserved address.
 4. Test from PowerShell:
    ```powershell
@@ -86,11 +88,13 @@ Remove the old hub certificate, if it was installed:
 | Item | Value |
 | --- | --- |
 | TELUS modem subnet | 192.168.1.0/24, gateway 192.168.1.254 |
-| New router model | |
+| New router model | TP-Link 300Mbps Wireless N USB VDSL/ADSL modem router (in router mode) |
 | New router admin IP / subnet | 192.168.50.1 / 192.168.50.0/24 |
-| 2.4 GHz SSID | |
-| Pi MAC (wlan0) | |
-| Pi reserved IP | |
+| 2.4 GHz SSID | `TP-LINK_2CBE` |
+| Pi MAC (wlan0) | 88:A2:9E:5C:17:65 |
+| Pi reserved IP | 192.168.50.101 |
+| Dev PC | DESKTOP-AHG4TD7, 192.168.50.100 |
+| Pi re-flashed, SSH working | 2026-10-03 |
 | Date hub re-setup completed | |
 
 ## If something goes wrong
@@ -100,5 +104,10 @@ Remove the old hub certificate, if it was installed:
 | Pi never shows in the router's device list | Wrong SSID/password at flashing, or 5 GHz-only SSID. Re-flash |
 | `ping` fails but the Pi is listed | PC is on TELUS Wi-Fi, not the new router |
 | "REMOTE HOST IDENTIFICATION HAS CHANGED" | Old fingerprint: run the `ssh-keygen -R` lines |
-| `Permission denied (publickey)` | Wrong public key pasted at flashing; check `id_ed25519.pub` |
+| `Permission denied (publickey)` | Wrong public key pasted at flashing; check `id_ed25519.pub`. Imager **remembers keys from earlier sessions**: on the SSH page the key must end like `type C:\Users\Venkata\.ssh\id_ed25519.pub` (`... chedam-dev`). Use BROWSE and pick the `.pub` file; never paste a command into the key box |
+| `Permission denied` as `venkata@...` | No user given, so SSH used the Windows name. Use `ssh chedam@<ip>` or the `chedam` alias |
+| `ssh chedam@chedam` times out | Windows cannot resolve the bare name. Use the IP, `chedam.local`, or the alias in `~/.ssh/config` |
+| `cd C:\Users\...` fails in Git Bash | Git Bash needs forward slashes: `cd ~/Desktop/Projects/Chedam` |
+| HDMI screen blank | Lite has no desktop (text login only, by design). Zero 2 W needs a **mini**-HDMI cable, screen connected before power-on, PWR port with 5 V 2.5 A. If `dmesg` shows `Cannot find any crtc or sizes`, append ` video=HDMI-A-1:1280x720@60D` to the single line in `/boot/firmware/cmdline.txt` and reboot. `setup-hub.sh` turns HDMI off again unless run with `--keep-display` |
+| `sudo` asks for a password and eats pasted lines | Paste multi-line blocks one command at a time when `sudo` may prompt |
 | Internet works on TELUS but not on the new router | New router WAN set wrong, or both use `192.168.1.x` (step 1.2) |

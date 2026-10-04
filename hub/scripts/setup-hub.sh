@@ -1,8 +1,23 @@
 #!/usr/bin/env bash
 # Chedam hub base setup (P0). Idempotent: safe to re-run after an IP change or on a fresh card.
-# Usage (on the Pi, as a sudo user):  sudo bash setup-hub.sh [hub-ip]
+# Usage (on the Pi, as a sudo user):  sudo bash setup-hub.sh [hub-ip] [--keep-display]
+#   hub-ip          optional; default is the Pi's first address (hostname -I)
+#   --keep-display  keep HDMI output working (skips the headless display/GPU tweaks below).
+#                   Use it while a monitor is attached for debugging. Without it the hub runs
+#                   headless (decision DL-24) and the HDMI screen goes dark after the next reboot.
 # Expects in the same folder as this script: pocketbase (linux arm64 binary), ../system/*
+# Tested on: Pi Zero 2 W, Raspberry Pi OS Lite 64-bit (Debian 13 trixie), 2026-10-03.
 set -euo pipefail
+
+KEEP_DISPLAY=0
+ARGS=()
+for a in "$@"; do
+  case "$a" in
+    --keep-display) KEEP_DISPLAY=1 ;;
+    *) ARGS+=("$a") ;;
+  esac
+done
+set -- "${ARGS[@]+"${ARGS[@]}"}"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SYS="$HERE/../system"
@@ -49,11 +64,21 @@ install -m 644 "$SYS/wifi-powersave-off.conf" /etc/NetworkManager/conf.d/chedam-
 log "Headless boot config (frees RAM for the hub)"
 CFG=/boot/firmware/config.txt
 cp -n "$CFG" "$CFG.chedam-orig" || true
+# Always: audio, camera detection and Bluetooth off
 sed -i -e 's/^dtparam=audio=on/dtparam=audio=off/' \
-       -e 's/^camera_auto_detect=1/camera_auto_detect=0/' \
-       -e 's/^display_auto_detect=1/display_auto_detect=0/' \
-       -e 's/^dtoverlay=vc4-kms-v3d/#dtoverlay=vc4-kms-v3d  # chedam: headless/' "$CFG"
-grep -q '^# chedam$' "$CFG" || printf '\n[all]\n# chedam\ngpu_mem=16\ndtoverlay=disable-bt\n' >> "$CFG"
+       -e 's/^camera_auto_detect=1/camera_auto_detect=0/' "$CFG"
+if [ "$KEEP_DISPLAY" -eq 1 ]; then
+  # Monitor attached: leave the display driver (vc4-kms-v3d) and display detection on.
+  # A blank screen on the Zero 2 W ("vc4-drm: Cannot find any crtc or sizes" in dmesg) is fixed by
+  # forcing the output in /boot/firmware/cmdline.txt (single line): video=HDMI-A-1:1280x720@60D
+  echo "--keep-display: HDMI output left on"
+  grep -q '^# chedam$' "$CFG" || printf '\n[all]\n# chedam\ndtoverlay=disable-bt\n' >> "$CFG"
+else
+  # Headless (DL-24): display driver and detection off, minimum GPU memory. HDMI goes dark.
+  sed -i -e 's/^display_auto_detect=1/display_auto_detect=0/' \
+         -e 's/^dtoverlay=vc4-kms-v3d/#dtoverlay=vc4-kms-v3d  # chedam: headless/' "$CFG"
+  grep -q '^# chedam$' "$CFG" || printf '\n[all]\n# chedam\ngpu_mem=16\ndtoverlay=disable-bt\n' >> "$CFG"
+fi
 systemctl disable --now hciuart.service bluetooth.service 2>/dev/null || true
 
 log "Firewall: SSH, HTTP (cert download + redirect), HTTPS, mDNS"
@@ -77,3 +102,4 @@ systemctl is-active chedam-hub caddy chrony avahi-daemon | paste -sd' '
 echo "Hub:   https://chedam.local   https://$HUB_IP"
 echo "CA:    http://chedam.local/ca.crt   (install on each device)"
 echo "Reboot needed once for boot-config and watchdog changes."
+[ "$KEEP_DISPLAY" -eq 1 ] || echo "Headless mode: HDMI output stops after the reboot (re-run with --keep-display to keep it)."

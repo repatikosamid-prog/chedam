@@ -43,7 +43,7 @@ Also from the phase gate and risks: hub memory < 150 MB (NFR-08), load test on t
 | H6 | USB OTG adapter (micro-USB male to USB-A female) | Plugging a USB drive into the Pi | To get |
 | H7 | USB flash drive, 16-32 GB | FR-1.14 USB backups, FR-12.04 USB update package | To get / spare |
 | H8 | DS3231 RTC module + 2x20 GPIO header (soldered, or buy the Pi Zero 2 **WH** with header) | Clock without internet (NFR-10). Optional in dev, see question Q1 | Decide |
-| H9 | Mini-HDMI to HDMI cable + USB keyboard | Only if headless SSH setup fails. Note: Zero 2 W is **mini**-HDMI, not micro-HDMI as the spec says | Optional |
+| H9 | Mini-HDMI to HDMI cable + USB keyboard | Only if headless SSH setup fails. Note: Zero 2 W is **mini**-HDMI, not micro-HDMI as the spec says | Owned, working (needed the `video=` fix, see `P0-restart-new-network.md`) |
 | H10 | Own router (LAN-cabled to the bedroom port) with a **2.4 GHz** network and admin access for DHCP reservations. TELUS modem has no admin access, see `P0-restart-new-network.md` | Pi Zero 2 W has no 5 GHz; fixed hub IP | Owned |
 | H11 | 3 test devices: Windows PC + one Android phone + one iPhone | "3 devices log in"; R5 certificate/camera test | Check |
 
@@ -85,6 +85,8 @@ Not needed: Go (we extend PocketBase with JavaScript hooks in `pb_hooks`, no Go 
 6. Test from PowerShell: `ping chedam.local` then `ssh chedam@chedam.local`. If `chedam.local` does not resolve, find the Pi's IP in the new router's device list and give it a DHCP reservation (see `P0-restart-new-network.md`).
 
 Once SSH works, tell me; I take it from there (updates, PocketBase, chrony, watchdog, systemd, HTTPS).
+
+**Status 2026-10-03:** done on the new network (Pi at `192.168.50.101`, key-only SSH, OS updated). Details: `P0-pi-setup-log-2026-10-03.pdf`. Next is hub setup: `sudo bash setup-hub.sh` (add `--keep-display` while a monitor is attached).
 
 ## 5. Accounts
 
