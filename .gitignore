@@ -21,6 +21,10 @@ pb_data/
 .env
 *.key
 *.pem
+# SSH private keys (never commit; .pub files are fine)
+id_ed25519
+id_rsa
+id_ecdsa
 
 # Installers and large binaries (keep out of git)
 *.exe
