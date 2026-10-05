@@ -24,6 +24,14 @@ These rules apply to every phase. They come from Master Spec Section 10 and NFR-
 - Events are append-only. Edits and deletes are refused, even for superusers.
 - The device comes from the `X-Chedam-Device` header. P0 step 4 will verify it against `devices`.
 
+## Access
+
+- **A new table is refused until it is added to `TABLES` in `hub/pb_hooks/lib/access.js`.** For each action, give a permission code, `any`, `self`, `assignee` or `null` (never via the API).
+- **API rules on Chedam tables** are only "active, not-deleted Chedam user" (or `null`). The hook decides everything else.
+- **Fields only endpoints may set** go in `PROTECTED`. Fields a person may change on their own record (or on a task assigned to them) go in `FIELD_LIMITS`.
+- **Each phase adds its permission codes in a migration** and gives them to the role templates there.
+- **Endpoints** live under `/api/chedam/...`. Check `access.isActive(e.auth)` and `access.can(...)`, and use `checkTargetUser` when acting on another person (BR-33).
+
 ## Migrations
 
 - Location: `hub/pb_migrations/<unix-ts>_<phase>_<what>.js`. Every migration has a `down` that removes exactly what `up` added (NFR-20).
@@ -33,11 +41,11 @@ These rules apply to every phase. They come from Master Spec Section 10 and NFR-
 ## Workflow
 
 1. Write or change migrations and hooks in the repo.
-2. Run the tests on the PC:
+2. Run all tests on the PC:
    ```
-   PB_BIN='C:\Tools\pocketbase.exe' node hub/tests/step2-schema-eventlog.test.mjs
+   PB_BIN='C:\Tools\pocketbase.exe' node hub/tests/run-all.mjs
    ```
-   They use a throwaway PocketBase on 127.0.0.1:8091.
+   Each suite uses a throwaway PocketBase on 127.0.0.1 (shared harness: `hub/tests/lib/hub.mjs`).
 3. Deploy:
    ```
    bash hub/scripts/deploy.sh --sample-data

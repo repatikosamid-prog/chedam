@@ -56,11 +56,18 @@ function wrap(e, action) {
     e.next();
     return;
   }
-  e.app.runInTransaction((txApp) => {
-    e.app = txApp;
-    e.next();
-    write(txApp, e.record, action);
-  });
+  // Put the original app back afterwards: hooks that run after this one (e.g. PocketBase's own
+  // clean-up after a password change) must not use the finished transaction.
+  const outer = e.app;
+  try {
+    outer.runInTransaction((txApp) => {
+      e.app = txApp;
+      e.next();
+      write(txApp, e.record, action);
+    });
+  } finally {
+    e.app = outer;
+  }
 }
 
 // Request hooks: stamp who and which device. Clients can never set these fields themselves.

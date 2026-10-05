@@ -14,7 +14,7 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | --- | --- | --- |
 | 1. Hub base ✅ 2026-10-05 | OS hardening, PocketBase service, HTTPS (per-store CA), mDNS, chrony, watchdog, firewall, auto-restart | NFR-08, 09, 11, 19; hub plumbing |
 | 2. Schema v1 + event log ✅ 2026-10-05 | `business`, `location`, `settings`, `modules`, `users`, `roles`, `permissions`, `permission_overrides`, `devices`, `storage_areas`, `tasks` (minimal, for skipped steps), `events`, `backups`, `updates`. Common fields on every table; a hook writes an `events` row on every create/update/delete | Section 10, NFR-20 |
-| 3. Access | Role templates (Owner, Manager, Cashier, Staff, Accountant), per-person overrides with end date, "Who can do this?", PIN login + lockout after 5 tries, auto-lock, manager-can't-exceed-own-rights (BR-33) | FR-1.03, 1.04, 1.09, 1.10, NFR-11 |
+| 3. Access ✅ 2026-10-05 | Role templates (Owner, Manager, Cashier, Staff, Accountant), per-person overrides with end date, "Who can do this?", PIN login + lockout after 5 tries, auto-lock, manager-can't-exceed-own-rights (BR-33) | FR-1.03, 1.04, 1.09, 1.10, NFR-11 |
 | 4. Devices | Pairing by code/QR; certificate install guide (iOS trust toggle, Android user CA, IP fallback for Android 9); device manager (status, user, version, lock, log out, rename, revoke, approve) | FR-1.07, 1.08 |
 | 5. Client shell | Svelte PWA: install, offline shell, connectivity bar, login, owner on any device | FR-1.09, 12.01, NFR-16/17 |
 | 6. Setup wizard | Language, hub time check, business profile, branding (logo, colours from logo, receipt header/footer preview), owner account + printed recovery code, people, storage areas, shop-type preset + module switches, optional external references, backup; resumable, skipped steps become tasks | FR-1.01-1.06, 1.13, 1.15 |
@@ -34,6 +34,11 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | DL-25 | PocketBase extended with JavaScript hooks (`pb_hooks`), no Go build, so one binary serves Pi and mini PC (NFR-19) |
 | DL-26 | Event log written in the same transaction as each change (rolls back together); append-only even for superusers; actor and device stamped by the hub from the request, never trusted from the client |
 | DL-27 | Dev sample data lives in `hub/pb_migrations_dev/` and is deployed only with `deploy.sh --sample-data` |
+| DL-28 | Sign-in = pick your name, then PIN (4-6 digits; repeated digits and straight runs refused). PINs need not be unique. PINs and the owner recovery code are bcrypt password fields (hidden). Sign-in takes about 0.5 s on the Pi Zero |
+| DL-29 | Lockout (NFR-11) counts wrong PINs, passwords and recovery codes together: 5 tries, then 15 minutes (owner settings). Someone with users.manage who is above the locked person can unlock them early |
+| DL-30 | Permission checks run in one hook library (`lib/access.js`). The API rules only require an active Chedam user. Tables not listed in the access map are refused. Owner = every permission, including ones added by later phases |
+| DL-31 | BR-33 applies to people, roles and overrides: non-owners act only on people and roles below their level, never on themselves, and never grant permissions they lack. Owner-only permissions are granted only by the owner |
+| DL-32 | Auth tokens last 12 h. Suspending or removing someone signs them out everywhere. Idle auto-lock is done in the client (step 5). The PIN name list is open on the LAN until step 4 limits it to paired devices |
 
 ## Notes and risks found during setup
 

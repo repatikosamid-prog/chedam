@@ -4,7 +4,7 @@
 // Usage:  node hub/tests/step2-schema-eventlog.test.mjs
 // Env:    PB_BIN  path to pocketbase(.exe)  (default: "pocketbase" on PATH)
 import { spawn, spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -140,11 +140,11 @@ try {
   // Secrets never reach the log
   const pw = randomBytes(12).toString("hex");
   const u = await api("POST", "/api/collections/users/records",
-    { name: "Secret Test", password: pw, passwordConfirm: pw, pin_hash: "SECRET-PIN-HASH", status: "active" });
+    { name: "Secret Test", password: pw, passwordConfirm: pw, pin: "4826", status: "active" });
   const uev = await eventsFor("users", u.json.id);
   const dump = JSON.stringify(uev);
   check("user create logged", uev.length === 1 && uev[0].action === "create");
-  check("hidden fields (pin_hash) not in log", !dump.includes("SECRET-PIN-HASH"));
+  check("hidden fields (PIN bcrypt hash) not in log", !dump.includes("$2a$") && !dump.includes("4826"));
   check("password / tokenKey not in log", !dump.includes(pw) && !dump.includes("tokenKey"));
 
   // Append-only
@@ -173,10 +173,13 @@ try {
   server = null;
 
   console.log("Reversible migrations (NFR-20)");
-  const down = spawnSync(PB, pbArgs(["migrate", "down", "3"]), { input: "y\n", encoding: "utf8" });
-  check("migrate down 3 (sample, reference, schema)", down.status === 0, down.stdout + down.stderr);
+  // Every Chedam migration: dev pins, dev sample, access, reference data, schema
+  const ours = readdirSync(migDir).filter((f) => f.startsWith("17912")).length;
+  const down = spawnSync(PB, pbArgs(["migrate", "down", String(ours)]), { input: "y\n", encoding: "utf8" });
+  check(`migrate down ${ours} (all Chedam migrations)`, down.status === 0
+    && (down.stdout.match(/Reverted/g) || []).length === ours, down.stdout + down.stderr);
   const reup = spawnSync(PB, pbArgs(["migrate", "up"]), { encoding: "utf8" });
-  check("migrate up again", reup.status === 0 && reup.stdout.includes("1791200100"), reup.stdout + reup.stderr);
+  check("migrate up again", reup.status === 0 && reup.stdout.includes("1791200101"), reup.stdout + reup.stderr);
 } catch (err) {
   failed++;
   console.log("  FAIL unexpected error:", err.message);

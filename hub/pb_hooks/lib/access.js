@@ -1,0 +1,296 @@
+// Access control (FR-1.10, NFR-11, BR-33). One place decides who may do what:
+//   effective permissions = role permissions + active "allow" overrides - active "deny" overrides;
+//   the owner role holds every permission, including ones added by later phases.
+// Every API request on a Chedam table passes guard() (pb_hooks/access.pb.js). Tables missing from
+// TABLES are refused, so a new table is closed until someone decides who may use it.
+
+const ANY = "any";
+
+// Per table and action: null = never through the API; otherwise alternatives separated by "|":
+// "any" (any active user), a permission code, "self" (the user's own record),
+// "assignee" (task assigned to the user). Field-level limits for self/assignee are in FIELD_LIMITS.
+const TABLES = {
+  business:             { list: ANY, view: ANY, create: "setup.run", update: "business.edit", delete: null },
+  locations:            { list: ANY, view: ANY, create: "business.edit", update: "business.edit", delete: null },
+  settings:             { list: ANY, view: ANY, create: "settings.manage", update: "settings.manage", delete: null },
+  modules:              { list: ANY, view: ANY, create: null, update: "modules.manage", delete: null },
+  permissions:          { list: ANY, view: ANY, create: null, update: null, delete: null },
+  roles:                { list: ANY, view: ANY, create: "access.manage", update: "access.manage", delete: "access.manage" },
+  users:                { list: "users.view", view: "users.view|self", create: "users.manage", update: "users.manage|self", delete: null },
+  permission_overrides: { list: "access.manage", view: "access.manage", create: "access.manage", update: "access.manage", delete: "access.manage" },
+  devices:              { list: "devices.view", view: "devices.view", create: "devices.manage", update: "devices.manage", delete: null },
+  storage_areas:        { list: ANY, view: ANY, create: "storage.manage", update: "storage.manage", delete: null },
+  tasks:                { list: "tasks.view", view: "tasks.view", create: "tasks.manage", update: "tasks.manage|assignee", delete: null },
+  events:               { list: "events.view", view: "events.view", create: null, update: null, delete: null },
+  backups:              { list: "backups.view", view: "backups.view", create: null, update: null, delete: null },
+  updates:              { list: "updates.view", view: "updates.view", create: null, update: null, delete: null },
+};
+
+// Fields a user may send when the only thing that matched was "self" / "assignee".
+const FIELD_LIMITS = {
+  self: ["name", "email", "phone", "language", "large_text", "high_contrast", "password", "passwordConfirm", "oldPassword", "avatar", "emailVisibility"],
+  assignee: ["status", "note", "closed_at"],
+};
+
+// Never settable through the generic API (dedicated endpoints only), except by a superuser.
+const PROTECTED = {
+  users: ["pin", "pin_set", "pin_failed_count", "pin_locked_until", "recovery_code", "recovery_code_created_at", "verified", "tokenKey"],
+  permission_overrides: ["granted_by"],
+  modules: ["enabled_by", "enabled_at", "module", "kind"],
+};
+
+// Common fields are stamped by the event-log hook, so clients sending them changes nothing.
+const IGNORED_BODY = ["id", "created_at", "updated_at", "created_by", "updated_by", "device_id", "collectionId", "collectionName", "expand"];
+
+function forbid(msg) { throw new ForbiddenError(msg); }
+
+// ---- Effective permissions -----------------------------------------------------------------
+
+function roleOf(app, user) {
+  const id = user.getString("role");
+  if (!id) return null;
+  try { return app.findRecordById("roles", id); } catch (_) { return null; }
+}
+
+function levelOf(app, user) {
+  const r = roleOf(app, user);
+  return r ? r.getInt("level") : 0;
+}
+
+function isOwner(app, user) {
+  const r = roleOf(app, user);
+  return !!r && r.getString("code") === "owner";
+}
+
+function permCodes(app, ids) {
+  if (!ids || !ids.length) return [];
+  return app.findRecordsByIds("permissions", ids).map((p) => p.getString("code"));
+}
+
+// Returns { code: { via: "role" | "override", expires_at } } for everything the user holds.
+function effective(app, user) {
+  const out = {};
+  const role = roleOf(app, user);
+  if (role && role.getString("code") === "owner") {
+    app.findRecordsByFilter("permissions", "id != ''", "code", 0, 0)
+      .forEach((p) => { out[p.getString("code")] = { via: "role", expires_at: "" }; });
+    return out;
+  }
+  if (role) permCodes(app, role.get("permissions")).forEach((c) => { out[c] = { via: "role", expires_at: "" }; });
+
+  const overrides = app.findRecordsByFilter("permission_overrides",
+    "user = {:u} && deleted_at = '' && (expires_at = '' || expires_at > @now)", "created_at", 0, 0, { u: user.id });
+  overrides.forEach((o) => {
+    const code = permCodes(app, [o.getString("permission")])[0];
+    if (!code) return;
+    if (o.getString("effect") === "allow") out[code] = { via: "override", expires_at: o.getString("expires_at") };
+  });
+  overrides.forEach((o) => {
+    const code = permCodes(app, [o.getString("permission")])[0];
+    if (code && o.getString("effect") === "deny") delete out[code];
+  });
+  return out;
+}
+
+function can(app, user, code) {
+  return !!effective(app, user)[code];
+}
+
+function isActive(user) {
+  return !!user && user.collection().name === "users"
+    && user.getString("status") === "active" && !user.getString("deleted_at");
+}
+
+// "Who can do this?" (FR-1.10)
+function whoCan(app, code) {
+  return app.findRecordsByFilter("users", "status = 'active' && deleted_at = ''", "name", 0, 0)
+    .map((u) => ({ user: u, grant: effective(app, u)[code] }))
+    .filter((x) => !!x.grant)
+    .map((x) => ({ id: x.user.id, name: x.user.getString("name"),
+      role: (roleOf(app, x.user) || { getString: () => "" }).getString("name"),
+      via: x.grant.via, expires_at: x.grant.expires_at }));
+}
+
+// ---- Request guard ---------------------------------------------------------------------------
+
+function bodyKeys(e) {
+  const body = e.requestInfo().body || {};
+  return Object.keys(body).filter((k) => IGNORED_BODY.indexOf(k) < 0);
+}
+
+// Returns which alternative allowed the action ("any", a code, "self", "assignee").
+function match(app, spec, user, record) {
+  const alts = spec.split("|");
+  for (let i = 0; i < alts.length; i++) {
+    const a = alts[i];
+    if (a === ANY) return a;
+    if (a === "self") { if (record && record.id === user.id) return a; continue; }
+    if (a === "assignee") { if (record && record.getString("owner") === user.id) return a; continue; }
+    if (can(app, user, a)) return a;
+  }
+  return "";
+}
+
+function guard(e, action) {
+  if (e.hasSuperuserAuth()) return;
+  const name = e.collection.name;
+  if (name.charAt(0) === "_") return;          // PocketBase system collections keep their own rules
+  const table = TABLES[name];
+  if (!table) forbid("This table is not open to the app yet.");
+  const spec = table[action];
+  if (spec === null || spec === undefined) forbid("This action is not allowed.");
+  const user = e.auth;
+  if (!isActive(user)) throw new UnauthorizedError("Sign in as an active user.");
+
+  const app = e.app;
+  // For update/delete/view the existing record decides self/assignee; for create there is none yet.
+  const existing = action === "create" || action === "list" ? null : e.record;
+  const how = match(app, spec, user, existing);
+  if (!how) forbid("You do not have permission for this.");
+
+  if (action === "create" || action === "update") {
+    const keys = bodyKeys(e);
+    const prot = PROTECTED[name] || [];
+    keys.forEach((k) => { if (prot.indexOf(k) >= 0) forbid("Field '" + k + "' cannot be changed here."); });
+    const limit = FIELD_LIMITS[how];
+    if (limit) keys.forEach((k) => { if (limit.indexOf(k) < 0) forbid("You may not change '" + k + "'."); });
+  }
+
+  const special = SPECIAL[name] && SPECIAL[name][action];
+  if (special) special(e, app, user, how);
+}
+
+// ---- Table-specific rules (BR-33 and friends) --------------------------------------------------
+
+function roleLevel(app, roleId) {
+  if (!roleId) return 0;
+  try { return app.findRecordById("roles", roleId).getInt("level"); } catch (_) { forbid("Unknown role."); }
+}
+
+// BR-33: a non-owner may only act on people below their own level and may not hand out a role
+// holding permissions they lack.
+function checkRoleGrant(app, actor, roleId) {
+  if (!roleId || isOwner(app, actor)) return;
+  if (roleLevel(app, roleId) >= levelOf(app, actor)) forbid("You can only give roles below your own.");
+  const mine = effective(app, actor);
+  const role = app.findRecordById("roles", roleId);
+  permCodes(app, role.get("permissions")).forEach((c) => {
+    if (!mine[c]) forbid("That role holds '" + c + "', which you do not have.");
+  });
+}
+
+function checkTargetUser(app, actor, target) {
+  if (isOwner(app, actor)) return;
+  if (target.id === actor.id) return;
+  if (levelOf(app, target) >= levelOf(app, actor)) forbid("You can only manage people below your own level.");
+}
+
+const SPECIAL = {
+  users: {
+    create: (e, app, actor) => {
+      const keys = bodyKeys(e);
+      if (keys.indexOf("role") >= 0 && !can(app, actor, "access.manage") && e.record.getString("role")) {
+        forbid("Giving a role needs access.manage.");
+      }
+      checkRoleGrant(app, actor, e.record.getString("role"));
+      if (!e.record.getString("status")) e.record.set("status", "active");
+      // Staff without an email still need a password for the auth collection; they sign in by PIN.
+      if (keys.indexOf("password") < 0) e.record.setRandomPassword();
+    },
+    update: (e, app, actor, how) => {
+      const keys = bodyKeys(e);
+      const orig = e.record.original();
+      if (how !== "self") checkTargetUser(app, actor, orig);
+      if (keys.indexOf("role") >= 0 && e.record.getString("role") !== orig.getString("role")) {
+        if (!can(app, actor, "access.manage")) forbid("Changing a role needs access.manage.");
+        if (orig.id === actor.id) forbid("You cannot change your own role.");
+        checkRoleGrant(app, actor, e.record.getString("role"));
+      }
+      if (keys.indexOf("password") >= 0 && how !== "self" && !isOwner(app, actor) && levelOf(app, orig) >= levelOf(app, actor)) {
+        forbid("You cannot reset this person's password.");
+      }
+      // Suspending, removing or deleting someone signs them out everywhere.
+      const leaving = (keys.indexOf("status") >= 0 && e.record.getString("status") !== "active")
+        || (keys.indexOf("deleted_at") >= 0 && e.record.getString("deleted_at"));
+      if (leaving) {
+        if (orig.id === actor.id) forbid("You cannot suspend or remove yourself.");
+        e.record.refreshTokenKey();
+      }
+    },
+  },
+  roles: {
+    create: (e, app, actor) => {
+      if (!isOwner(app, actor)) {
+        if (e.record.getInt("level") >= levelOf(app, actor)) forbid("New roles must be below your own level.");
+        const mine = effective(app, actor);
+        permCodes(app, e.record.get("permissions")).forEach((c) => { if (!mine[c]) forbid("You do not hold '" + c + "'."); });
+      }
+      e.record.set("is_template", false);
+    },
+    update: (e, app, actor) => {
+      const orig = e.record.original();
+      if (orig.getBool("is_template") && !isOwner(app, actor)) forbid("Only the owner can change role templates.");
+      if (orig.getString("code") === "owner" && bodyKeys(e).some((k) => k === "permissions" || k === "level" || k === "code")) {
+        forbid("The owner role always holds everything.");
+      }
+      if (!isOwner(app, actor)) {
+        if (orig.getInt("level") >= levelOf(app, actor) || e.record.getInt("level") >= levelOf(app, actor)) {
+          forbid("You can only edit roles below your own level.");
+        }
+        const mine = effective(app, actor);
+        permCodes(app, e.record.get("permissions")).forEach((c) => { if (!mine[c]) forbid("You do not hold '" + c + "'."); });
+      }
+      if (bodyKeys(e).indexOf("is_template") >= 0) e.record.set("is_template", orig.getBool("is_template"));
+    },
+    delete: (e, app, actor) => {
+      if (e.record.getBool("is_template")) forbid("Role templates cannot be deleted.");
+      if (!isOwner(app, actor) && e.record.getInt("level") >= levelOf(app, actor)) forbid("You can only delete roles below your own level.");
+      const used = app.findRecordsByFilter("users", "role = {:r}", "", 1, 0, { r: e.record.id });
+      if (used.length) forbid("This role is still given to someone.");
+    },
+  },
+  permission_overrides: {
+    create: (e, app, actor) => overrideCheck(e, app, actor, e.record),
+    update: (e, app, actor) => { overrideCheck(e, app, actor, e.record.original()); overrideCheck(e, app, actor, e.record); },
+    delete: (e, app, actor) => overrideCheck(e, app, actor, e.record),
+  },
+  modules: {
+    update: (e, app, actor) => {
+      const keys = bodyKeys(e);
+      keys.forEach((k) => { if (k !== "enabled") forbid("Only 'enabled' can be changed on a module."); });
+      const kind = e.record.original().getString("kind");
+      if (kind === "core" && !e.record.getBool("enabled")) forbid("Core modules are always on.");
+      if (kind === "later" && e.record.getBool("enabled")) forbid("This module is not available yet.");
+      e.record.set("enabled_by", "users:" + actor.id);
+      e.record.set("enabled_at", e.record.getBool("enabled") ? new DateTime() : "");
+    },
+  },
+  business: {
+    create: (e, app) => {
+      if (app.findRecordsByFilter("business", "deleted_at = ''", "", 1, 0).length) forbid("The business profile already exists.");
+    },
+  },
+  settings: {
+    create: (e, app, actor) => { if (e.record.getString("key").indexOf("security.") === 0 && !isOwner(app, actor)) forbid("Only the owner can change security settings."); },
+    update: (e, app, actor) => {
+      if (bodyKeys(e).indexOf("key") >= 0) forbid("A setting's key cannot be renamed.");
+      if (e.record.getString("key").indexOf("security.") === 0 && !isOwner(app, actor)) forbid("Only the owner can change security settings.");
+    },
+  },
+};
+
+function overrideCheck(e, app, actor, rec) {
+  const targetId = rec.getString("user");
+  if (targetId === actor.id) forbid("You cannot change your own access.");
+  let target;
+  try { target = app.findRecordById("users", targetId); } catch (_) { forbid("Unknown person."); }
+  checkTargetUser(app, actor, target);
+  const perm = app.findRecordById("permissions", rec.getString("permission"));
+  if (perm.getBool("owner_only") && !isOwner(app, actor)) forbid("Only the owner can grant or remove '" + perm.getString("code") + "'.");
+  if (rec.getString("effect") === "allow" && !can(app, actor, perm.getString("code"))) {
+    forbid("You cannot grant '" + perm.getString("code") + "' because you do not hold it.");
+  }
+  if (e.record === rec) e.record.set("granted_by", "users:" + actor.id);
+}
+
+module.exports = { TABLES, effective, can, whoCan, guard, isActive, isOwner, levelOf, roleOf, checkTargetUser };
