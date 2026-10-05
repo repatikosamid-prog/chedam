@@ -1,0 +1,7 @@
+[Unit]
+Description=Refresh the monitor's login screen with the Chedam hub message
+
+[Service]
+Type=oneshot
+# Makes the login prompt on the monitor re-read /etc/issue and /etc/issue.d
+ExecStart=/sbin/agetty --reload

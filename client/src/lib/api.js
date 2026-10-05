@@ -58,3 +58,28 @@ export async function api(method, path, body, { timeout = 6000 } = {}) {
   try { json = await res.json(); } catch { /* empty body */ }
   return { status: res.status, ok: res.ok, json, message: (json && json.message) || res.statusText };
 }
+
+// Multipart request (file uploads such as the logo). Same headers as api(), no JSON body.
+export async function apiForm(method, path, form, { timeout = 20000 } = {}) {
+  if (hubDown) return DOWN;
+  const h = { "X-Chedam-Version": VERSION };
+  const dev = load("device");
+  if (dev) { h["X-Chedam-Device"] = dev.id; h["X-Chedam-Device-Key"] = dev.key; }
+  const tok = load("token");
+  if (tok) h.Authorization = tok;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeout);
+  let res;
+  try {
+    res = await fetch(path, { method, headers: h, body: form, signal: ctl.signal });
+  } catch {
+    setDown(true);
+    return DOWN;
+  } finally {
+    clearTimeout(timer);
+  }
+  setDown(false);
+  let json = null;
+  try { json = await res.json(); } catch { /* empty body */ }
+  return { status: res.status, ok: res.ok, json, message: (json && json.message) || res.statusText };
+}

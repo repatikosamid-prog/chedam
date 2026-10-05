@@ -1,5 +1,5 @@
 // What the app shows, decided from this device's status on the hub and who is signed in.
-// Screens: boot | pair | wait | names | pin | newpin | owner | home | devices
+// Screens: boot | setup | recovery | pair | wait | names | pin | newpin | owner | home | devices | wizard
 import { api, load, save } from "./api.js";
 
 export const s = $state({
@@ -9,13 +9,14 @@ export const s = $state({
   me: null,             // GET /api/chedam/access/me
   notice: { text: "", kind: "" },
   autoLockMin: 5,
+  recoveryCode: "",     // shown once after setup (FR-1.03)
 });
 
 export function notify(text, kind = "") { s.notice = { text, kind }; }
 
 export function go(screen) {
   s.screen = screen;
-  const hash = screen === "devices" ? "#devices" : "";
+  const hash = screen === "devices" ? "#devices" : screen === "wizard" ? "#setup" : "";
   if (location.hash !== hash) history.replaceState(null, "", location.pathname + location.search + hash);
 }
 
@@ -36,7 +37,9 @@ export async function refresh() {
   if (!load("device")) {
     s.device = null;
     if (load("token")) return loadMe();          // owner on an unpaired browser (FR-1.09)
-    return go("pair");
+    // A new hub (no owner yet): the setup wizard starts here (setup code from the hub's screen)
+    const st = await api("GET", "/api/chedam/setup/status");
+    return go(st.ok && st.json.needs_setup ? "setup" : "pair");
   }
   const r = await api("GET", "/api/chedam/devices/me");
   if (r.status === 0) {
@@ -72,7 +75,10 @@ async function loadMe() {
   applyPrefs(s.me.user);
   if (s.me.user.pin_must_change) return go("newpin");
   await loadAutoLock();
-  return go(location.hash === "#devices" && can("devices.view") ? "devices" : (s.screen === "devices" ? "devices" : "home"));
+  const want = location.hash === "#devices" || s.screen === "devices" ? "devices" : location.hash === "#setup" || s.screen === "wizard" ? "wizard" : "home";
+  if (want === "devices" && can("devices.view")) return go("devices");
+  if (want === "wizard" && can("setup.run")) return go("wizard");
+  return go("home");
 }
 
 async function loadAutoLock() {
@@ -90,6 +96,17 @@ export async function signedIn(auth) {
   s.me = null;
   notify("");
   await loadMe();
+}
+
+// After POST /api/chedam/setup/start: this device is paired, the owner is signed in; show the recovery code.
+export async function setupStarted(auth) {
+  save("device", { id: auth.meta.device_id, key: auth.meta.key });
+  save("token", auth.token);
+  s.recoveryCode = auth.meta.recovery_code;
+  s.me = null;
+  history.replaceState(null, "", location.pathname);
+  await refresh();
+  go("recovery");
 }
 
 export async function signOut(text = "") {

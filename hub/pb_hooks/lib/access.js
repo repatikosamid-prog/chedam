@@ -38,6 +38,7 @@ const PROTECTED = {
     "recovery_code_created_at", "verified", "tokenKey"],
   permission_overrides: ["granted_by"],
   modules: ["enabled_by", "enabled_at", "module", "kind"],
+  business: ["setup_state"],                 // only /api/chedam/setup/step changes it
   // Status, keys and sign-in state change only through /api/chedam/devices/... (pairing, approve, lock, revoke)
   devices: ["status", "key_hash", "pairing_code_hash", "pairing_expires_at", "current_user", "last_seen_at", "app_version",
     "user_agent", "approved_by", "approved_at", "revoked_at", "paired_via", "paired_at", "deleted_at"],

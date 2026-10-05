@@ -12,12 +12,16 @@
   import OwnerSignIn from "./screens/OwnerSignIn.svelte";
   import Home from "./screens/Home.svelte";
   import Devices from "./screens/Devices.svelte";
+  import Setup from "./screens/Setup.svelte";
+  import Recovery from "./screens/Recovery.svelte";
+  import Wizard from "./screens/Wizard.svelte";
 
   onMount(() => {
     startMonitor();
     refresh();
     // Re-check now and then, so a sign-out, lock or removal from the device manager shows here.
-    const poll = setInterval(() => { if (s.screen !== "pin" && s.screen !== "owner") refresh(); }, 30000);
+    const busyScreens = ["pin", "owner", "setup", "recovery", "wizard", "newpin"];
+    const poll = setInterval(() => { if (!busyScreens.includes(s.screen)) refresh(); }, 30000);
     const stop = watchIdle(() => s.autoLockMin, () => !!s.me,
       () => signOut("Locked after " + s.autoLockMin + " minutes without use. Pick your name to continue."));
     const onHash = () => { if (s.me) refresh(); };
@@ -40,10 +44,10 @@
   });
 </script>
 
-<ConnectivityBar />
+<div class="print:hidden"><ConnectivityBar /></div>
 
 <main class="mx-auto w-full max-w-3xl px-4 pt-4 pb-12">
-  <header class="mb-4 flex items-center justify-between gap-3">
+  <header class="mb-4 flex items-center justify-between gap-3 print:hidden">
     <div class="flex items-center gap-2">
       <img src="./icons/icon-192.png" alt="" class="h-8 w-8 rounded-lg" />
       <span class="text-lg font-bold">Chedam</span>
@@ -73,5 +77,8 @@
   {:else if s.screen === "owner"}<OwnerSignIn />
   {:else if s.screen === "home"}<Home />
   {:else if s.screen === "devices"}<Devices />
+  {:else if s.screen === "setup"}<Setup />
+  {:else if s.screen === "recovery"}<Recovery />
+  {:else if s.screen === "wizard"}<Wizard />
   {/if}
 </main>

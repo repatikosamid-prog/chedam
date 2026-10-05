@@ -32,7 +32,7 @@ ssh "$HOST" "rm -rf ~/$STAGE && mkdir -p ~/$STAGE/pb_migrations"
 scp -q -r "$HUB/pb_hooks" "$HOST:$STAGE/"
 scp -q -r "$HUB/pb_public" "$HOST:$STAGE/"
 scp -q "$HUB"/pb_migrations/*.js "$HOST:$STAGE/pb_migrations/"
-scp -q "$HUB/system/Caddyfile" "$HOST:$STAGE/Caddyfile"
+scp -q "$HUB/system/Caddyfile" "$HUB/system/chedam-console.path" "$HUB/system/chedam-console.service" "$HOST:$STAGE/"
 if [ "$SAMPLE" -eq 1 ]; then
   scp -q "$HUB"/pb_migrations_dev/*.js "$HOST:$STAGE/pb_migrations/"
 fi
@@ -78,6 +78,14 @@ else
   echo "updated for $HUB_IP and reloaded (previous copy in backups/)"
 fi
 
+echo "== Monitor message units"
+changed=0
+for u in chedam-console.path chedam-console.service; do
+  sudo cmp -s ~/"$STAGE/$u" /etc/systemd/system/$u || { sudo install -m 644 ~/"$STAGE/$u" /etc/systemd/system/$u; changed=1; }
+done
+[ "$(readlink /etc/issue.d/chedam.issue)" = "$ROOT/pb_data/console.issue" ] || { sudo ln -sfn "$ROOT/pb_data/console.issue" /etc/issue.d/chedam.issue; changed=1; }
+if [ "$changed" -eq 1 ]; then sudo systemctl daemon-reload; sudo systemctl enable --now chedam-console.path >/dev/null; echo "installed"; else echo "unchanged"; fi
+
 echo "== Restart"
 sudo systemctl restart chedam-hub
 for i in $(seq 1 60); do
@@ -89,6 +97,7 @@ curl -s http://127.0.0.1:8090/api/health; echo
 
 echo "== Applied migrations (newest 5)"
 sudo -u chedam-hub sqlite3 "$DB" "SELECT file FROM _migrations ORDER BY applied DESC LIMIT 5;"
+if sudo test -f "$ROOT/pb_data/setup-code"; then echo "== New hub: setup code $(sudo cat "$ROOT/pb_data/setup-code")"; fi
 echo "== Recent errors"
 sudo journalctl -u chedam-hub --since "-2min" --no-pager | grep -iE "error|fail|panic" || echo "none"
 rm -rf ~/"$STAGE"

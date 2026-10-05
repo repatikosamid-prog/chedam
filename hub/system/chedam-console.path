@@ -1,0 +1,10 @@
+[Unit]
+Description=Show Chedam hub messages on the monitor (setup code on a new hub)
+
+[Path]
+# Written by the hub (pb_hooks/lib/setup.js); /etc/issue.d/chedam.issue links to it
+PathChanged=/opt/chedam/pb_data/console.issue
+Unit=chedam-console.service
+
+[Install]
+WantedBy=multi-user.target

@@ -51,6 +51,10 @@ fi
 log "PocketBase service"
 install -m 644 "$SYS/chedam-hub.service" /etc/systemd/system/chedam-hub.service
 
+log "Monitor message (setup code on a new hub, DL-44)"
+install -m 644 "$SYS/chedam-console.path" "$SYS/chedam-console.service" /etc/systemd/system/
+ln -sfn "$ROOT/pb_data/console.issue" /etc/issue.d/chedam.issue
+
 log "HTTPS: Caddy with a per-store local CA (hostname chedam.local + IP $HUB_IP)"
 sed "s/__HUB_IP__/$HUB_IP/g" "$SYS/Caddyfile" > /etc/caddy/Caddyfile
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
@@ -98,6 +102,7 @@ log "Start services"
 systemctl daemon-reload
 systemctl enable --now chrony avahi-daemon >/dev/null
 systemctl enable chedam-hub caddy >/dev/null
+systemctl enable --now chedam-console.path >/dev/null
 systemctl restart chedam-hub caddy
 systemctl restart systemd-journald
 
@@ -107,3 +112,8 @@ echo "Hub:   https://chedam.local   https://$HUB_IP"
 echo "CA:    http://chedam.local/ca.crt   (install on each device)"
 echo "Reboot needed once for boot-config and watchdog changes."
 [ "$KEEP_DISPLAY" -eq 1 ] || echo "Headless mode: HDMI output stops after the reboot (re-run with --keep-display to keep it)."
+# A new hub (no owner yet) has a one-time setup code for the first device (DL-44)
+for i in $(seq 1 30); do [ -f "$ROOT/pb_data/setup-code" ] && break; curl -sf http://127.0.0.1:8090/api/chedam/setup/status >/dev/null; sleep 1; done
+if [ -f "$ROOT/pb_data/setup-code" ]; then
+  echo "Setup code for the first device: $(cat "$ROOT/pb_data/setup-code")   (open https://$HUB_IP)"
+fi
