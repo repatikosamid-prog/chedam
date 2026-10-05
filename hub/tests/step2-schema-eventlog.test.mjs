@@ -14,7 +14,6 @@ const HUB = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PB = process.env.PB_BIN || "pocketbase";
 const PORT = 8091;
 const BASE = `http://127.0.0.1:${PORT}`;
-const DEVICE = "testdevice00001";
 
 const work = mkdtempSync(join(tmpdir(), "chedam-step2-"));
 const dataDir = join(work, "pb_data");
@@ -100,7 +99,8 @@ try {
   check("owner has every permission", owner.permissions.length === 20);
   const ownerOnly = (await list("permissions", "owner_only=true")).items.map((p) => p.id);
   check("manager holds no owner-only permission (BR-33)", manager.permissions.every((p) => !ownerOnly.includes(p)));
-  check("12 default settings", counts.settings === 12);
+  const step2Settings = (await list("settings", "key !~ 'devices.'")).totalItems;
+  check("12 default settings (devices.* come with step 4)", step2Settings === 12, String(step2Settings));
 
   console.log("Dev sample data");
   check("sample business + location", counts.business === 1 && counts.locations === 1);
@@ -109,17 +109,24 @@ try {
   check("grocery preset modules on (7)", grocery.length === 7, grocery.join(","));
 
   console.log("Event log");
+  // A paired device (step 4): the hub stamps only devices whose key it has checked.
+  const code = (await api("POST", "/api/chedam/devices/pairing-code", { name: "Step 2 till", type: "till" })).json.code;
+  const paired = (await api("POST", "/api/chedam/devices/pair", { code })).json;
+  const DEVICE = paired.device_id;
+  const DEV_HEADERS = { "X-Chedam-Device": DEVICE, "X-Chedam-Device-Key": paired.key };
+  check("made-up device header refused (401)",
+    (await api("GET", "/api/collections/storage_areas/records", null, { "X-Chedam-Device": "testdevice00001" })).status === 401);
   // Client-made id (offline devices create ids) and a forged created_by that must be overwritten
   const cid = "dev" + randomBytes(6).toString("hex");
   const created = await api("POST", "/api/collections/storage_areas/records",
     { id: cid, name: "Back cooler", kind: "cooler", temp_min_c: 1, temp_max_c: 4, active: true, created_by: "forged" },
-    { "X-Chedam-Device": DEVICE });
+    DEV_HEADERS);
   check("create with device-made id", created.status === 200 && created.json.id === cid, JSON.stringify(created.json));
   check("created_by stamped by hub, not client", created.json.created_by === `_superusers:${suId}`);
-  check("device_id stamped from header", created.json.device_id === DEVICE);
+  check("device_id stamped from the verified device", created.json.device_id === DEVICE);
 
   await api("PATCH", `/api/collections/storage_areas/records/${cid}`, { name: "Back cooler 2", created_by: "forged" },
-    { "X-Chedam-Device": DEVICE });
+    DEV_HEADERS);
   await api("PATCH", `/api/collections/storage_areas/records/${cid}`, { deleted_at: new Date().toISOString() });
   const del = await api("DELETE", `/api/collections/storage_areas/records/${cid}`);
   check("hard delete (superuser) allowed", del.status === 204);

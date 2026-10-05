@@ -13,11 +13,25 @@
 chedam.local, __HUB_IP__ {
 	tls internal
 	encode gzip
-	reverse_proxy 127.0.0.1:8090
+	# The hub's LAN address, so pairing QR codes carry the IP (Android 9 cannot resolve .local names)
+	handle /hub.json {
+		header Content-Type application/json
+		respond `{"ip":"__HUB_IP__","name":"chedam.local"}`
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8090
+	}
 }
 
-# Plain HTTP: only the root certificate download for device pairing (FR-1.07); everything else goes to HTTPS.
+# Plain HTTP: only what a new device needs before it trusts the store CA (FR-1.07): the certificate
+# download and the install guide (with its styles). Everything else goes to HTTPS.
 http://chedam.local, http://__HUB_IP__ {
+	handle /device-setup.html {
+		reverse_proxy 127.0.0.1:8090
+	}
+	handle /assets/chedam.css {
+		reverse_proxy 127.0.0.1:8090
+	}
 	handle /ca.crt {
 		root * /var/lib/caddy/.local/share/caddy/pki/authorities/local
 		rewrite * /root.crt

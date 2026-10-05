@@ -21,11 +21,14 @@ try {
   const as = (token) => ({ get: (p) => t.api("GET", p, null, { token }),
     post: (p, b) => t.api("POST", p, b, { token }), patch: (p, b) => t.api("PATCH", p, b, { token }),
     del: (p) => t.api("DELETE", p, null, { token }) });
-  const pinLogin = (name, pin) => t.api("POST", "/api/chedam/auth/pin", { user: people[name], pin });
+  // Since step 4, PIN sign-in needs a paired device: one till per person, so their sessions don't replace each other.
+  const dev = {};
+  for (const n of Object.keys(people)) dev[n] = await t.pair("Till of " + n);
+  const pinLogin = (name, pin) => t.api("POST", "/api/chedam/auth/pin", { user: people[name], pin }, { device: dev[name] });
   const login = async (name) => (await pinLogin(name, PIN[name])).json.token;
 
   console.log("Sign-in by PIN");
-  const pu = (await t.api("GET", "/api/chedam/auth/pin-users")).json;
+  const pu = (await t.api("GET", "/api/chedam/auth/pin-users", null, { device: dev["Cal Cashier"] })).json;
   check("PIN people listed (5 sample people)", Array.isArray(pu) && pu.length === 5, JSON.stringify(pu));
   check("PIN list has no secrets", !JSON.stringify(pu).includes("$2a$") && !JSON.stringify(pu).includes("pin"));
   const ok = await pinLogin("Cal Cashier", PIN["Cal Cashier"]);

@@ -75,9 +75,8 @@ function stamp(e, action) {
   const rec = e.record;
   if (!isLogged(rec.collection().name)) return;
   const actor = e.auth ? e.auth.collection().name + ":" + e.auth.id : "guest";
-  // Device identity is the X-Chedam-Device header for now; P0 step 4 (Devices) verifies it.
-  // requestInfo() normalizes header names: lowercase, "-" becomes "_"
-  const device = String(e.requestInfo().headers["x_chedam_device"] || "").substring(0, 64);
+  // Only a device whose key was checked (lib/devices.js verify) is stamped; a bare header counts for nothing.
+  const device = require(`${__hooks}/lib/devices.js`).currentId(e);
   rec.set("@actor", actor);
   rec.set("@device", device);
   if (action === "create") {

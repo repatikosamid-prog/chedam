@@ -22,7 +22,7 @@ These rules apply to every phase. They come from Master Spec Section 10 and NFR-
 - `pb_hooks/event_log.pb.js` writes one `events` row for every create, update or delete on any non-system collection, **in the same transaction**. If the event fails, the change rolls back.
 - Each event has `table_name`, `record_id`, `action`, `actor`, `device_id`, `before`, `after` and `changed` (the field names changed by an update).
 - Events are append-only. Edits and deletes are refused, even for superusers.
-- The device comes from the `X-Chedam-Device` header. P0 step 4 will verify it against `devices`.
+- The device is the one verified by `lib/devices.js` (its id + key headers); a bare `X-Chedam-Device` header counts for nothing.
 
 ## Access
 
@@ -31,6 +31,14 @@ These rules apply to every phase. They come from Master Spec Section 10 and NFR-
 - **Fields only endpoints may set** go in `PROTECTED`. Fields a person may change on their own record (or on a task assigned to them) go in `FIELD_LIMITS`.
 - **Each phase adds its permission codes in a migration** and gives them to the role templates there.
 - **Endpoints** live under `/api/chedam/...`. Check `access.isActive(e.auth)` and `access.can(...)`, and use `checkTargetUser` when acting on another person (BR-33).
+
+## Devices
+
+- **Every client request carries** `X-Chedam-Device` and `X-Chedam-Device-Key` (from pairing) and `X-Chedam-Version`. The middleware in `pb_hooks/devices.pb.js` checks them before anything else.
+- **Inside hooks, use** `devices.current(e)` / `devices.currentId(e)` for the device. Never read the header yourself.
+- **Non-owners need an approved device**; one person is signed in per device. A 401 tells the client to sign in again, or to pair again when it comes from `GET /api/chedam/devices/me`.
+- **Realtime:** the SSE connect has no headers; the subscribe request (fetch) must carry the device headers like any other.
+- **Device fields** that track status, keys and sign-in are `PROTECTED`. They change only through `/api/chedam/devices/...`.
 
 ## Migrations
 

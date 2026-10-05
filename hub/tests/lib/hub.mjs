@@ -22,6 +22,7 @@ export class TestHub {
     cpSync(join(HUB, "pb_migrations"), this.migDir, { recursive: true });
     if (sample) cpSync(join(HUB, "pb_migrations_dev"), this.migDir, { recursive: true });
     this.server = null;
+    this.tokenDevice = new Map();   // token -> device it was signed in on (headers added automatically)
     this.passed = 0;
     this.failed = 0;
   }
@@ -67,16 +68,33 @@ export class TestHub {
     await new Promise((r) => p.on("exit", r));
   }
 
-  async api(method, path, body, { token = "", headers = {} } = {}) {
+  // device: { id, key } from pair(); tokens signed in on a device carry its headers automatically.
+  async api(method, path, body, { token = "", headers = {}, device = null } = {}) {
+    const dev = device || (token && this.tokenDevice.get(token)) || null;
     const res = await fetch(`${this.base}${path}`, {
       method,
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: token } : {}), ...headers },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: token } : {}),
+        ...(dev ? TestHub.deviceHeaders(dev) : {}), ...headers },
       body: body ? JSON.stringify(body) : undefined,
     });
     const text = await res.text();
     let json = null;
     try { json = JSON.parse(text); } catch { /* empty */ }
+    if (dev && json && json.token && res.ok) this.tokenDevice.set(json.token, dev);
     return { status: res.status, json };
+  }
+
+  static deviceHeaders(dev) {
+    return { "X-Chedam-Device": dev.id, "X-Chedam-Device-Key": dev.key };
+  }
+
+  // Pairs a new, approved device through a superuser pairing code. Returns { id, key, name }.
+  async pair(name = "Test till " + rid(2), type = "till") {
+    const c = await this.su_("POST", "/api/chedam/devices/pairing-code", { name, type });
+    if (c.status !== 200) throw new Error("pairing-code failed: " + JSON.stringify(c.json));
+    const p = await this.api("POST", "/api/chedam/devices/pair", { code: c.json.code });
+    if (p.status !== 200) throw new Error("pair failed: " + JSON.stringify(p.json));
+    return { id: p.json.device_id, key: p.json.key, name };
   }
 
   // Superuser shortcut

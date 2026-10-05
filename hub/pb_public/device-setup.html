@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set up this device</title>
+<link rel="stylesheet" href="/assets/chedam.css">
+</head>
+<body>
+<!-- Certificate install guide (FR-1.07). Served over plain HTTP too, because a new phone does not trust the
+     hub yet. The pairing QR code opens this page: http://<hub IP>/device-setup.html?code=XXXX-XXXX -->
+<main>
+  <h1>Set up this device</h1>
+  <p class="muted">Three steps: get the store's certificate, trust it, then pair. About two minutes.</p>
+
+  <div class="card">
+    <h2>1. Get the store certificate</h2>
+    <p>It lets this device talk to the hub securely. It is made by this store's hub and is used for nothing else.</p>
+    <a class="button full" href="/ca.crt" download="Chedam-Store-CA.crt">Download certificate</a>
+  </div>
+
+  <div class="card">
+    <h2>2. Trust it</h2>
+    <p id="detected" class="muted small"></p>
+
+    <details id="g-ios">
+      <summary>iPhone or iPad</summary>
+      <ol>
+        <li>Tap <b>Download certificate</b>, then <b>Allow</b>. You see "Profile Downloaded".</li>
+        <li>Open <b>Settings</b>. Tap <b>Profile Downloaded</b> near the top (or <b>General → VPN &amp; Device Management</b>).</li>
+        <li>Tap <b>Install</b>, enter your passcode, and tap <b>Install</b> again.</li>
+        <li>Go to <b>Settings → General → About → Certificate Trust Settings</b>.</li>
+        <li>Turn on <b>Chedam Store CA</b> and tap <b>Continue</b>. <i>This step is easy to miss.</i></li>
+        <li>Come back to Safari and do step 3.</li>
+      </ol>
+    </details>
+
+    <details id="g-android9">
+      <summary>Android 9 or older</summary>
+      <ol>
+        <li>Tap <b>Download certificate</b>.</li>
+        <li>If asked to name it: type <b>Chedam</b>, choose <b>VPN and apps</b>, tap <b>OK</b>.
+          (Android asks for a screen lock if the phone has none.)</li>
+        <li>If nothing appears: <b>Settings → Security &amp; location → Advanced → Encryption &amp; credentials → Install from storage</b>, then pick the downloaded file.</li>
+        <li>Always open the hub by its number (like <b>192.168.50.101</b>), not by <b>chedam.local</b>. Android 9 cannot find <b>.local</b> names.</li>
+      </ol>
+    </details>
+
+    <details id="g-android">
+      <summary>Android 10 or newer</summary>
+      <ol>
+        <li>Tap <b>Download certificate</b>.</li>
+        <li>Open <b>Settings</b> and search for <b>CA certificate</b>. On most phones it is <b>Security &amp; privacy → More security settings → Encryption &amp; credentials → Install a certificate → CA certificate</b>.</li>
+        <li>Tap <b>Install anyway</b>, then pick the downloaded <b>Chedam-Store-CA</b> file.</li>
+        <li>Come back to the browser and do step 3.</li>
+      </ol>
+    </details>
+
+    <details id="g-windows">
+      <summary>Windows PC</summary>
+      <ol>
+        <li>Download the certificate and open it. Click <b>Install Certificate…</b></li>
+        <li>Choose <b>Current User</b>, then <b>Place all certificates in the following store → Browse → Trusted Root Certification Authorities</b>.</li>
+        <li>Click <b>Next → Finish</b>, then <b>Yes</b> on the security warning.</li>
+        <li>Close all browser windows and open this page again.</li>
+      </ol>
+    </details>
+
+    <details id="g-mac">
+      <summary>Mac</summary>
+      <ol>
+        <li>Download the certificate and open it. It is added to <b>Keychain Access</b>.</li>
+        <li>Double-click <b>Chedam Store CA</b>, open <b>Trust</b>, set <b>When using this certificate</b> to <b>Always Trust</b>.</li>
+        <li>Close the window and enter your Mac password.</li>
+      </ol>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>3. Check and pair</h2>
+    <p>Tap the button. If the certificate is trusted, the pairing page opens.</p>
+    <button id="check" class="full">Check and continue</button>
+    <div id="result" class="msg hidden" role="status"></div>
+    <p class="small muted" id="pairing-code"></p>
+  </div>
+</main>
+<script>
+(function () {
+  const ua = navigator.userAgent;
+  const params = new URLSearchParams(location.search);
+  const code = (params.get("code") || "").toUpperCase().replace(/[^A-Z0-9-]/g, "").substring(0, 9);
+  const host = location.hostname;
+  const target = "https://" + host + "/pair.html" + (code ? "?code=" + encodeURIComponent(code) : "");
+
+  // Open the guide for this device
+  const android = /Android\s(\d+)/.exec(ua);
+  let id = "", label = "";
+  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) { id = "g-ios"; label = "iPhone or iPad"; }
+  else if (android && Number(android[1]) <= 9) { id = "g-android9"; label = "Android " + android[1]; }
+  else if (android) { id = "g-android"; label = "Android " + android[1]; }
+  else if (/Windows/.test(ua)) { id = "g-windows"; label = "Windows"; }
+  else if (/Macintosh/.test(ua)) { id = "g-mac"; label = "Mac"; }
+  if (id) {
+    document.getElementById(id).open = true;
+    document.getElementById("detected").textContent = "This looks like: " + label + ". Its steps are open below.";
+  }
+  if (code) document.getElementById("pairing-code").textContent = "Pairing code: " + code + " (filled in for you on the next page)";
+  if (android && Number(android[1]) <= 9 && host.endsWith(".local")) {
+    const r = document.getElementById("result");
+    r.textContent = "Android 9 cannot use chedam.local. Open this page with the hub's number instead (ask a manager for the QR code).";
+    r.className = "msg bad";
+  }
+
+  // Already on HTTPS: the certificate is trusted.
+  if (location.protocol === "https:") { location.replace(target); return; }
+
+  document.getElementById("check").addEventListener("click", async () => {
+    const r = document.getElementById("result");
+    r.className = "msg"; r.textContent = "Checking…";
+    try {
+      const res = await fetch("https://" + host + "/api/health", { cache: "no-store" });
+      if (!res.ok) throw new Error(res.status);
+      r.className = "msg ok"; r.textContent = "Trusted. Opening the pairing page…";
+      location.href = target;
+    } catch (_) {
+      r.className = "msg bad";
+      r.textContent = "Not trusted yet. Finish step 2 (on iPhone, don't miss Certificate Trust Settings), then try again.";
+    }
+  });
+})();
+</script>
+</body>
+</html>

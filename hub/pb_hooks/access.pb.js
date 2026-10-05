@@ -14,22 +14,26 @@ onRecordAuthWithPasswordRequest((e) => {
   const auth = require(`${__hooks}/lib/auth.js`);
   // e.record is the person matching the identity (empty if none); e.next() checks the password.
   const user = e.record;
+  const dev = require(`${__hooks}/lib/devices.js`).current(e);
   if (user) {
     const until = auth.lockedUntil(user);
     if (until) throw auth.lockedError(until);
     if (!auth.canSignIn(user)) throw new ForbiddenError("This account is not active.");
+    // FR-1.09: only the owner signs in on any device; everyone else needs a paired device.
+    if (!dev && !require(`${__hooks}/lib/access.js`).isOwner(e.app, user)) {
+      throw new ForbiddenError("Use a paired device. Only the owner can sign in on any device.", { device: "required" });
+    }
   }
   try {
     e.next();
   } catch (err) {
     if (!user) throw err;
-    auth.registerFailure(e.app, user, e);
-    // The try that reaches the limit answers "locked", the same as PIN sign-in.
-    const now = auth.lockedUntil(e.app.findRecordById("users", user.id));
-    if (now) throw auth.lockedError(now);
-    throw err;
+    auth.failAndThrow(e.app, user, e, err);
   }
-  if (user) auth.registerSuccess(e.app, user, e);
+  if (user) {
+    auth.registerSuccess(e.app, user, e);
+    require(`${__hooks}/lib/devices.js`).setUser(e, dev, user.id);
+  }
 }, "users");
 
 // Refreshing a token re-checks that the person is still active.
@@ -39,9 +43,15 @@ onRecordAuthRefreshRequest((e) => {
 }, "users");
 
 // ---- PIN sign-in --------------------------------------------------------------------------------
-// People who can sign in by PIN (names for the till's sign-in screen). Step 4 limits this to paired devices.
+// People who can sign in by PIN: step 1 of "pick your name, then PIN" (DL-28). Paired devices only.
+// A device assigned to one person (FR-1.08) lists only that person and the owner.
 routerAdd("GET", "/api/chedam/auth/pin-users", (e) => {
-  const list = e.app.findRecordsByFilter("users", "status = 'active' && deleted_at = '' && pin_set = true", "name", 0, 0);
+  const access = require(`${__hooks}/lib/access.js`);
+  const dev = require(`${__hooks}/lib/devices.js`).current(e);
+  if (!dev) throw new ForbiddenError("Pair this device with the hub first.", { device: "required" });
+  const assigned = dev.getString("assigned_user");
+  const list = e.app.findRecordsByFilter("users", "status = 'active' && deleted_at = '' && pin_set = true", "name", 0, 0)
+    .filter((u) => !assigned || u.id === assigned || access.isOwner(e.app, u));
   return e.json(200, list.map((u) => {
     let role = "";
     try { role = e.app.findRecordById("roles", u.getString("role")).getString("name"); } catch (_) { /* no role */ }
@@ -51,21 +61,26 @@ routerAdd("GET", "/api/chedam/auth/pin-users", (e) => {
 
 routerAdd("POST", "/api/chedam/auth/pin", (e) => {
   const auth = require(`${__hooks}/lib/auth.js`);
+  const devices = require(`${__hooks}/lib/devices.js`);
+  const dev = devices.current(e);
+  if (!dev) throw new ForbiddenError("Pair this device with the hub first.", { device: "required" });
   const body = e.requestInfo().body || {};
   let user = null;
   try { user = e.app.findRecordById("users", String(body.user || "")); } catch (_) { /* unknown */ }
   if (!user || !auth.canSignIn(user) || !user.getBool("pin_set")) {
     throw new BadRequestError("Wrong name or PIN.");
   }
+  const assigned = dev.getString("assigned_user");
+  if (assigned && assigned !== user.id && !require(`${__hooks}/lib/access.js`).isOwner(e.app, user)) {
+    throw new ForbiddenError("This device is assigned to someone else.");
+  }
   const until = auth.lockedUntil(user);
   if (until) throw auth.lockedError(until);
   if (!auth.checkSecret(user, "pin", String(body.pin || ""))) {
-    auth.registerFailure(e.app, user, e);
-    const now = auth.lockedUntil(e.app.findRecordById("users", user.id));
-    if (now) throw auth.lockedError(now);
-    throw new BadRequestError("Wrong name or PIN.");
+    auth.failAndThrow(e.app, user, e, new BadRequestError("Wrong name or PIN."));
   }
   auth.registerSuccess(e.app, user, e);
+  devices.setUser(e, dev, user.id);
   return $apis.recordAuthResponse(e, user, "pin");
 });
 
@@ -141,8 +156,7 @@ routerAdd("POST", "/api/chedam/auth/recover", (e) => {
   if (until) throw auth.lockedError(until);
   const code = String(body.code || "").toUpperCase().replace(/\s/g, "");
   if (!auth.checkSecret(user, "recovery_code", code)) {
-    auth.registerFailure(e.app, user, e);
-    throw new BadRequestError("Wrong email or recovery code.");
+    auth.failAndThrow(e.app, user, e, new BadRequestError("Wrong email or recovery code."));
   }
   const pw = String(body.new_password || "");
   if (pw.length < 10) throw new BadRequestError("The new password needs at least 10 characters.");
@@ -153,6 +167,8 @@ routerAdd("POST", "/api/chedam/auth/recover", (e) => {
   user.set("pin_locked_until", "");
   auth.stampSystem(user, e);
   e.app.save(user);
+  const devices = require(`${__hooks}/lib/devices.js`);
+  devices.setUser(e, devices.current(e), user.id);
   return $apis.recordAuthResponse(e, user, "recovery_code");
 });
 

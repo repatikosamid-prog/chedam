@@ -1,0 +1,75 @@
+/* Shared styles for the hub's device pages (P0 step 4). The Svelte client (step 5) replaces these pages. */
+:root {
+  --bg: #f6f5f1; --card: #ffffff; --ink: #1d2320; --muted: #5d6762; --line: #dcdfd9;
+  --accent: #1f6f5c; --accent-ink: #ffffff; --soft: #e6f0ec;
+  --ok: #1f7a45; --warn: #9a6200; --bad: #b3261e;
+  --radius: 12px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121614; --card: #1b201e; --ink: #e8ece9; --muted: #9aa59f; --line: #2d3531;
+    --accent: #5fbf9f; --accent-ink: #0d1a15; --soft: #20302a;
+    --ok: #63c58a; --warn: #e0a63a; --bad: #f08a80;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 34rem; margin: 0 auto; padding: 20px 16px 48px; }
+main.wide { max-width: 60rem; }
+h1 { font-size: 1.5rem; margin: 0 0 4px; }
+h2 { font-size: 1.1rem; margin: 0 0 8px; }
+p { margin: 0 0 12px; }
+.muted { color: var(--muted); }
+.small { font-size: .875rem; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin: 0 0 14px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.spread { justify-content: space-between; }
+label { display: block; font-weight: 600; margin: 10px 0 4px; }
+input, select { width: 100%; font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
+input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+button, .button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 10px 16px;
+  font: inherit; font-weight: 600; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+  cursor: pointer; text-decoration: none; }
+button.ghost, .button.ghost { background: transparent; color: var(--accent); }
+button.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
+button.small { min-height: 36px; padding: 6px 12px; font-size: .875rem; }
+button:disabled { opacity: .5; cursor: default; }
+.full { width: 100%; }
+a { color: var(--accent); }
+.msg { padding: 10px 12px; border-radius: 10px; margin: 10px 0; background: var(--soft); }
+.msg.bad { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+.msg.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+.hidden { display: none !important; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: .8rem; font-weight: 600; border: 1px solid currentColor; }
+.badge.approved { color: var(--ok); } .badge.pending { color: var(--warn); } .badge.locked { color: var(--bad); } .badge.revoked { color: var(--muted); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.dot.on { background: var(--ok); }
+
+/* Sign-in: pick your name, then PIN (DL-28) */
+.names { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.names button { flex-direction: column; min-height: 88px; background: var(--card); color: var(--ink); border-color: var(--line); }
+.names button .role { font-weight: 400; font-size: .85rem; color: var(--muted); }
+.initials { width: 40px; height: 40px; border-radius: 50%; background: var(--soft); color: var(--accent); display: grid; place-items: center; font-weight: 700; }
+.pin-dots { display: flex; justify-content: center; gap: 14px; margin: 16px 0; }
+.pin-dots span { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--muted); }
+.pin-dots span.full { background: var(--ink); border-color: var(--ink); }
+.pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 300px; margin: 0 auto; }
+.pad button { min-height: 64px; font-size: 1.4rem; background: var(--card); color: var(--ink); border-color: var(--line); }
+.pad button.go { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-size: 1rem; }
+.shake { animation: shake .3s; }
+@keyframes shake { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+@media (prefers-reduced-motion: reduce) { .shake { animation: none; } }
+
+/* Device manager */
+.devices { display: grid; gap: 10px; }
+.device h2 { margin: 0; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; font-size: .9rem; margin: 8px 0; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; overflow-wrap: anywhere; }
+.code { font: 700 2rem/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .08em; text-align: center; }
+.qr { display: grid; place-items: center; background: #fff; border-radius: 10px; padding: 12px; margin: 10px auto; max-width: 260px; }
+.qr svg { width: 100%; height: auto; }
+details { border-top: 1px solid var(--line); padding: 8px 0; }
+details summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+ol { padding-left: 1.3rem; } li { margin: 4px 0; }

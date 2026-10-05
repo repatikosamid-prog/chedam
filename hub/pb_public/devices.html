@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Device manager</title>
+<link rel="stylesheet" href="/assets/chedam.css">
+</head>
+<body>
+<!-- Device manager (FR-1.08): status, who is signed in, version; pair, approve, lock, sign out, rename,
+     assign, remove. Temporary page for testing on real devices; the Svelte client (step 5) replaces it. -->
+<main class="wide">
+  <div class="row spread">
+    <div>
+      <h1>Device manager</h1>
+      <p class="muted small" id="who"></p>
+    </div>
+    <div class="row">
+      <a class="button ghost small" href="pair.html">Sign-in page</a>
+      <button class="small" id="new-btn">Pair a new device</button>
+    </div>
+  </div>
+  <div id="top-msg" class="msg hidden" role="status"></div>
+
+  <section id="v-signin" class="hidden">
+    <div class="card">
+      <h2>Sign in first</h2>
+      <p class="muted">Staff and managers: sign in on a paired device on the <a href="pair.html">sign-in page</a>. The owner can sign in here on any device.</p>
+      <form id="f-owner">
+        <label for="ow-email">Owner email</label>
+        <input id="ow-email" type="email" autocomplete="username" required>
+        <label for="ow-pw">Password</label>
+        <input id="ow-pw" type="password" autocomplete="current-password" required>
+        <div id="ow-msg" class="msg hidden" role="alert"></div>
+        <button class="full" style="margin-top:12px">Sign in</button>
+      </form>
+    </div>
+  </section>
+
+  <section id="v-new" class="card hidden">
+    <div class="row spread"><h2>Pair a new device</h2><button class="ghost small" id="new-close">Close</button></div>
+    <form id="f-new">
+      <label for="nd-name">Name</label>
+      <input id="nd-name" maxlength="80" placeholder="Till 2" required>
+      <label for="nd-type">Type</label>
+      <select id="nd-type"></select>
+      <div id="new-msg" class="msg hidden" role="alert"></div>
+      <button class="full" style="margin-top:12px">Make pairing code</button>
+    </form>
+    <div id="new-code" class="hidden" style="text-align:center">
+      <p>On the new device, scan this with the camera:</p>
+      <div class="qr" id="qr" role="img" aria-label="Pairing QR code"></div>
+      <p class="small muted" id="qr-url"></p>
+      <p>Or open the sign-in page and type the code:</p>
+      <div class="code" id="code"></div>
+      <p class="muted small" id="code-expiry"></p>
+    </div>
+  </section>
+
+  <section id="v-list" class="hidden">
+    <div id="devices" class="devices"></div>
+    <p class="small muted" style="margin-top:12px">Updates every 10 seconds. "Online" means the device reached the hub in the last 2 minutes.</p>
+  </section>
+</main>
+<script src="/assets/qrcode.js"></script>
+<script src="/assets/chedam.js"></script>
+<script>
+(function () {
+  const C = Chedam;
+  let me = null, people = [], hubHost = location.hostname, timer = null, countdown = null;
+  Object.entries(C.TYPES).forEach(([v, t]) => { const o = document.createElement("option"); o.value = v; o.textContent = t; C.$("#nd-type").appendChild(o); });
+
+  // The hub's IP address (written by setup-hub.sh into Caddy), so the QR code also works on Android 9.
+  fetch("/hub.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).then((j) => { if (j && j.ip) hubHost = j.ip; }).catch(() => {});
+
+  async function start() {
+    if (!C.load("token")) return C.only(["v-signin", "v-list"], "v-signin");
+    const r = await C.api("GET", "/api/chedam/access/me");
+    if (!r.ok) { C.forgetSignIn(); C.msg("top-msg", r.status === 401 ? "Please sign in again." : r.message, "bad"); return C.only(["v-signin", "v-list"], "v-signin"); }
+    me = r.json;
+    C.$("#who").textContent = "Signed in as " + me.user.name + (me.role ? " (" + me.role.name + ")" : "");
+    if (!me.permissions["devices.view"]) { C.msg("top-msg", "You do not have permission to see devices.", "bad"); return; }
+    C.show("new-btn", !!me.permissions["devices.manage"]);
+    if (me.permissions["users.view"]) {
+      const u = await C.api("GET", "/api/collections/users/records?perPage=200&sort=name&filter=" + encodeURIComponent("status='active' && deleted_at=''"));
+      people = u.ok ? u.json.items : [];
+    }
+    C.only(["v-signin", "v-list"], "v-list");
+    load();
+    clearInterval(timer); timer = setInterval(load, 10000);
+  }
+
+  async function load() {
+    const r = await C.api("GET", "/api/chedam/devices");
+    if (r.status === 401) { C.forgetSignIn(); clearInterval(timer); C.msg("top-msg", "You were signed out.", "bad"); return C.only(["v-signin", "v-list"], "v-signin"); }
+    if (!r.ok) return C.msg("top-msg", r.message, "bad");
+    render(r.json);
+  }
+
+  function render(data) {
+    const manage = !!me.permissions["devices.manage"];
+    const box = C.$("#devices");
+    box.innerHTML = "";
+    const order = { pending: 0, approved: 1, locked: 2, revoked: 3 };
+    data.devices.sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name)).forEach((d) => {
+      const here = d.id === data.this_device;
+      const waitingForCode = d.status === "pending" && d.paired_via === "code";
+      const el = document.createElement("div");
+      el.className = "card device";
+      el.innerHTML =
+        '<div class="row spread"><div class="row"><span class="dot ' + (d.online ? "on" : "") + '" title="' + (d.online ? "online" : "offline") + '"></span>' +
+        "<h2>" + C.esc(d.name) + (here ? ' <span class="muted small">(this device)</span>' : "") + "</h2></div>" +
+        '<span class="badge ' + d.status + '">' + (waitingForCode ? "code not used yet" : d.status) + "</span></div>" +
+        '<dl class="kv">' +
+        "<dt>Type</dt><dd>" + C.esc(C.TYPES[d.type] || d.type) + "</dd>" +
+        "<dt>Signed in</dt><dd>" + (d.current_user ? C.esc(d.current_user.name) : "nobody") + "</dd>" +
+        "<dt>Assigned to</dt><dd>" + (d.assigned_user ? C.esc(d.assigned_user.name) : "anyone") + "</dd>" +
+        "<dt>Last seen</dt><dd>" + C.esc(C.when(d.last_seen_at)) + "</dd>" +
+        "<dt>App version</dt><dd>" + C.esc(d.app_version || "unknown") + "</dd>" +
+        (waitingForCode ? "<dt>Code expires</dt><dd>" + C.esc(new Date(d.pairing_expires_at.replace(" ", "T")).toLocaleTimeString()) + "</dd>" : "") +
+        "<dt>Browser</dt><dd class='small muted'>" + C.esc(shortUa(d.user_agent)) + "</dd>" +
+        "</dl>";
+      if (manage && d.status !== "revoked") {
+        const row = document.createElement("div");
+        row.className = "row";
+        const btn = (label, fn, cls = "ghost small") => { const b = document.createElement("button"); b.className = cls; b.textContent = label; b.onclick = fn; row.appendChild(b); };
+        if (d.status === "pending" && !waitingForCode) btn("Approve", () => act(d, "approve"), "small");
+        if (d.status === "approved" && !here) btn("Lock", () => act(d, "lock"));
+        if (d.status === "locked") btn("Unlock", () => act(d, "unlock"), "small");
+        if (d.current_user && !here) btn("Sign out " + d.current_user.name, () => act(d, "sign-out"));
+        btn("Rename", () => rename(d));
+        if (people.length) btn("Assign", () => assign(d));
+        if (!here) btn(waitingForCode ? "Cancel code" : "Remove", () => {
+          if (confirm("Remove \"" + d.name + "\"? It must be paired again to be used.")) act(d, "revoke");
+        }, "danger small");
+        el.appendChild(row);
+      }
+      box.appendChild(el);
+    });
+    if (!data.devices.length) box.innerHTML = '<p class="muted">No devices yet.</p>';
+  }
+
+  function shortUa(ua) {
+    if (!ua) return "unknown";
+    const os = /iPhone OS ([\d_]+)/.exec(ua) ? "iOS " + /iPhone OS ([\d_]+)/.exec(ua)[1].replace(/_/g, ".")
+      : /Android [\d.]+/.exec(ua) ? /Android [\d.]+/.exec(ua)[0] : /Windows/.test(ua) ? "Windows" : /Mac OS X/.test(ua) ? "macOS" : "";
+    const br = /Edg\/[\d]+/.exec(ua) ? "Edge" : /CriOS|Chrome\/[\d]+/.exec(ua) ? "Chrome " + ((/Chrome\/(\d+)/.exec(ua) || [])[1] || "")
+      : /Firefox\/\d+/.exec(ua) ? "Firefox" : /Safari/.test(ua) ? "Safari" : "";
+    return [os, br].filter(Boolean).join(", ") || ua.substring(0, 60);
+  }
+
+  async function act(d, action) {
+    const r = await C.api("POST", "/api/chedam/devices/" + d.id + "/" + action);
+    C.msg("top-msg", r.ok ? "" : r.message, r.ok ? "" : "bad");
+    load();
+  }
+  async function rename(d) {
+    const name = prompt("New name for \"" + d.name + "\"", d.name);
+    if (!name || name === d.name) return;
+    const r = await C.api("PATCH", "/api/collections/devices/records/" + d.id, { name });
+    C.msg("top-msg", r.ok ? "" : r.message, r.ok ? "" : "bad");
+    load();
+  }
+  async function assign(d) {
+    const list = people.map((p, i) => (i + 1) + ". " + p.name).join("\n");
+    const pick = prompt("Assign \"" + d.name + "\" to one person (only they and the owner can sign in on it).\n\n0. Anyone\n" + list + "\n\nNumber:", "0");
+    if (pick === null) return;
+    const n = parseInt(pick, 10);
+    if (isNaN(n) || n < 0 || n > people.length) return;
+    const r = await C.api("PATCH", "/api/collections/devices/records/" + d.id, { assigned_user: n ? people[n - 1].id : "" });
+    C.msg("top-msg", r.ok ? "" : r.message, r.ok ? "" : "bad");
+    load();
+  }
+
+  C.$("#new-btn").addEventListener("click", () => { C.show("v-new"); C.show("new-code", false); C.show("f-new"); C.$("#nd-name").focus(); });
+  C.$("#new-close").addEventListener("click", () => { C.show("v-new", false); clearInterval(countdown); });
+  C.$("#f-new").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const r = await C.api("POST", "/api/chedam/devices/pairing-code", { name: C.$("#nd-name").value, type: C.$("#nd-type").value });
+    if (!r.ok) return C.msg("new-msg", r.message, "bad");
+    C.msg("new-msg", "");
+    const url = "http://" + hubHost + "/device-setup.html?code=" + r.json.code;
+    const qr = qrcode(0, "M");
+    qr.addData(url); qr.make();
+    C.$("#qr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+    C.$("#qr-url").textContent = url;
+    C.$("#code").textContent = r.json.code;
+    C.show("f-new", false); C.show("new-code");
+    const ends = new Date(r.json.expires_at.replace(" ", "T")).getTime();
+    clearInterval(countdown);
+    const tick = () => {
+      const s = Math.max(0, Math.round((ends - Date.now()) / 1000));
+      C.$("#code-expiry").textContent = s ? "Works once, for " + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") + " more." : "Expired. Make a new code.";
+      if (!s) clearInterval(countdown);
+    };
+    tick(); countdown = setInterval(tick, 1000);
+    C.$("#nd-name").value = "";
+    load();
+  });
+  C.$("#f-owner").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const r = await C.api("POST", "/api/collections/users/auth-with-password", { identity: C.$("#ow-email").value, password: C.$("#ow-pw").value });
+    C.$("#ow-pw").value = "";
+    if (!r.ok) return C.msg("ow-msg", r.status === 400 ? "Wrong email or password." : r.message, "bad");
+    C.signedIn(r.json);
+    C.msg("top-msg", "");
+    start();
+  });
+  start();
+})();
+</script>
+</body>
+</html>

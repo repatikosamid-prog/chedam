@@ -31,7 +31,7 @@ function lockedUntil(user) {
 function stampSystem(user, e) {
   user.set("updated_by", "system:auth");
   user.set("@actor", "system:auth");
-  if (e) user.set("@device", String(e.requestInfo().headers["x_chedam_device"] || "").substring(0, 64));
+  if (e) user.set("@device", require(`${__hooks}/lib/devices.js`).currentId(e));
 }
 
 // Called after a wrong PIN, password or recovery code.
@@ -48,6 +48,15 @@ function registerFailure(app, user, e) {
   }
   stampSystem(user, e);
   app.save(user);
+}
+
+// Count a wrong PIN, password or recovery code, then throw. The try that reaches the limit answers
+// "locked" (423) on every sign-in path, so the screen can show the lock at once.
+function failAndThrow(app, user, e, err) {
+  registerFailure(app, user, e);
+  const now = lockedUntil(app.findRecordById("users", user.id));
+  if (now) throw lockedError(now);
+  throw err;
 }
 
 function registerSuccess(app, user, e) {
@@ -77,4 +86,4 @@ function newRecoveryCode() {
   return raw.match(/.{5}/g).join("-");
 }
 
-module.exports = { setting, pinProblem, lockedUntil, registerFailure, registerSuccess, canSignIn, lockedError, checkSecret, newRecoveryCode, stampSystem };
+module.exports = { setting, pinProblem, lockedUntil, registerFailure, failAndThrow, registerSuccess, canSignIn, lockedError, checkSecret, newRecoveryCode, stampSystem };

@@ -18,7 +18,7 @@ const TABLES = {
   roles:                { list: ANY, view: ANY, create: "access.manage", update: "access.manage", delete: "access.manage" },
   users:                { list: "users.view", view: "users.view|self", create: "users.manage", update: "users.manage|self", delete: null },
   permission_overrides: { list: "access.manage", view: "access.manage", create: "access.manage", update: "access.manage", delete: "access.manage" },
-  devices:              { list: "devices.view", view: "devices.view", create: "devices.manage", update: "devices.manage", delete: null },
+  devices:              { list: "devices.view", view: "devices.view", create: null, update: "devices.manage", delete: null },
   storage_areas:        { list: ANY, view: ANY, create: "storage.manage", update: "storage.manage", delete: null },
   tasks:                { list: "tasks.view", view: "tasks.view", create: "tasks.manage", update: "tasks.manage|assignee", delete: null },
   events:               { list: "events.view", view: "events.view", create: null, update: null, delete: null },
@@ -37,6 +37,9 @@ const PROTECTED = {
   users: ["pin", "pin_set", "pin_failed_count", "pin_locked_until", "recovery_code", "recovery_code_created_at", "verified", "tokenKey"],
   permission_overrides: ["granted_by"],
   modules: ["enabled_by", "enabled_at", "module", "kind"],
+  // Status, keys and sign-in state change only through /api/chedam/devices/... (pairing, approve, lock, revoke)
+  devices: ["status", "key_hash", "pairing_code_hash", "pairing_expires_at", "current_user", "last_seen_at", "app_version",
+    "user_agent", "approved_by", "approved_at", "revoked_at", "paired_via", "paired_at", "deleted_at"],
 };
 
 // Common fields are stamped by the event-log hook, so clients sending them changes nothing.
@@ -263,6 +266,20 @@ const SPECIAL = {
       if (kind === "later" && e.record.getBool("enabled")) forbid("This module is not available yet.");
       e.record.set("enabled_by", "users:" + actor.id);
       e.record.set("enabled_at", e.record.getBool("enabled") ? new DateTime() : "");
+    },
+  },
+  devices: {
+    // Rename, change type, assign a person or printer. A personal device is managed only by people
+    // above its person, and only people below you can be assigned (BR-33).
+    update: (e, app, actor) => {
+      const before = e.record.original().getString("assigned_user");
+      const after = e.record.getString("assigned_user");
+      [before, after].forEach((id) => {
+        if (!id || id === actor.id) return;
+        let u;
+        try { u = app.findRecordById("users", id); } catch (_) { forbid("Unknown person."); }
+        checkTargetUser(app, actor, u);
+      });
     },
   },
   business: {

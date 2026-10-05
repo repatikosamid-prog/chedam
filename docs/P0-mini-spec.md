@@ -15,7 +15,7 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | 1. Hub base ✅ 2026-10-05 | OS hardening, PocketBase service, HTTPS (per-store CA), mDNS, chrony, watchdog, firewall, auto-restart | NFR-08, 09, 11, 19; hub plumbing |
 | 2. Schema v1 + event log ✅ 2026-10-05 | `business`, `location`, `settings`, `modules`, `users`, `roles`, `permissions`, `permission_overrides`, `devices`, `storage_areas`, `tasks` (minimal, for skipped steps), `events`, `backups`, `updates`. Common fields on every table; a hook writes an `events` row on every create/update/delete | Section 10, NFR-20 |
 | 3. Access ✅ 2026-10-05 | Role templates (Owner, Manager, Cashier, Staff, Accountant), per-person overrides with end date, "Who can do this?", PIN login + lockout after 5 tries, auto-lock, manager-can't-exceed-own-rights (BR-33) | FR-1.03, 1.04, 1.09, 1.10, NFR-11 |
-| 4. Devices | Pairing by code/QR; certificate install guide (iOS trust toggle, Android user CA, IP fallback for Android 9); device manager (status, user, version, lock, log out, rename, revoke, approve) | FR-1.07, 1.08 |
+| 4. Devices 🔶 built + tested on PC 2026-10-05 (Pi deploy and phone pairing pending) | Pairing by code/QR; certificate install guide (iOS trust toggle, Android user CA, IP fallback for Android 9); device manager (status, user, version, lock, log out, rename, revoke, approve) | FR-1.07, 1.08 |
 | 5. Client shell | Svelte PWA: install, offline shell, connectivity bar, login, owner on any device | FR-1.09, 12.01, NFR-16/17 |
 | 6. Setup wizard | Language, hub time check, business profile, branding (logo, colours from logo, receipt header/footer preview), owner account + printed recovery code, people, storage areas, shop-type preset + module switches, optional external references, backup; resumable, skipped steps become tasks | FR-1.01-1.06, 1.13, 1.15 |
 | 7. Backups | USB backup (SQLite online backup, verify, retention 14/8/12), schedule, first backup in wizard, restore procedure to spare card; encrypted cloud copy (Google Drive or OneDrive) once client IDs are provided | FR-1.14, 12.08, NFR-03, 04 |
@@ -39,6 +39,16 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | DL-30 | Permission checks run in one hook library (`lib/access.js`). The API rules only require an active Chedam user. Tables not listed in the access map are refused. Owner = every permission, including ones added by later phases |
 | DL-31 | BR-33 applies to people, roles and overrides: non-owners act only on people and roles below their level, never on themselves, and never grant permissions they lack. Owner-only permissions are granted only by the owner |
 | DL-32 | Auth tokens last 12 h. Suspending or removing someone signs them out everywhere. Idle auto-lock is done in the client (step 5). The PIN name list is open on the LAN until step 4 limits it to paired devices |
+| DL-33 | A device proves itself on every request with `X-Chedam-Device` + `X-Chedam-Device-Key`. The key (48 random characters) is given once at pairing and stored as SHA-256 (a long random secret needs no bcrypt, and every request stays fast on the Pi). A wrong key or a removed device gets 401; the event log stamps only verified devices |
+| DL-34 | Pairing: a manager (devices.manage) makes a one-time code `XXXX-XXXX`, valid 10 minutes, also shown as a QR code that opens the certificate guide over HTTP with the hub IP (Android 9). Using the code approves the device. A device without a code may ask to join and waits for approval (at most 10 open requests). 20 wrong codes in 10 minutes pause pairing |
+| DL-35 | Only the owner signs in on any device (FR-1.09). Everyone else, and the PIN name list, need an approved device. A device assigned to a person lists only that person and the owner |
+| DL-36 | One person per device: signing in on a device replaces whoever was signed in there, and their token stops working on that device. Tokens cannot move between devices. Device "sign out" uses this |
+| DL-37 | Device manager actions: approve, lock (refuses everything except its own status check), unlock, sign out, rename/type/assign (generic API, BR-33 on the assigned person), remove (revoke: key erased, must pair again). Nobody can lock or remove the device they are using |
+| DL-38 | "Online" = reached the hub in the last 2 minutes, kept in memory; `last_seen_at` is written at most every 30 minutes (or when the app version or browser changes), so the event log is not flooded |
+
+## Open items to discuss
+
+- **Forgot PIN** (Sreya, 2026-10-05): a quick way to recover. Today: a manager sets a new PIN for people below them (`POST /api/chedam/users/{id}/pin`); the owner signs in with password or the printed recovery code. The sign-in page shows these as a "Forgot your PIN?" hint. Options to decide later: a manager approves a reset from their own device, a one-time reset code, or the owner's phone.
 
 ## Notes and risks found during setup
 

@@ -3,7 +3,8 @@
 # Run from the PC (Git Bash):  bash hub/scripts/deploy.sh [--sample-data] [ssh-host]
 #   --sample-data  also deploy hub/pb_migrations_dev (dev sample store). Development hubs only.
 #   ssh-host       default "chedam" (alias in ~/.ssh/config)
-# Steps: copy files -> consistent DB backup -> sync into /opt/chedam -> restart -> health + migration check.
+# Steps: copy files -> consistent DB backup -> sync into /opt/chedam -> Caddy config if changed -> restart
+# -> health + migration check.
 # Migrations run automatically when PocketBase starts.
 set -euo pipefail
 
@@ -26,6 +27,7 @@ scp -q -r "$HUB/pb_hooks" "$HOST:$STAGE/"
 # pb_public arrives with the client app (P0 step 5); until then the hub keeps its placeholder page
 [ -d "$HUB/pb_public" ] && scp -q -r "$HUB/pb_public" "$HOST:$STAGE/"
 scp -q "$HUB"/pb_migrations/*.js "$HOST:$STAGE/pb_migrations/"
+scp -q "$HUB/system/Caddyfile" "$HOST:$STAGE/Caddyfile"
 if [ "$SAMPLE" -eq 1 ]; then
   scp -q "$HUB"/pb_migrations_dev/*.js "$HOST:$STAGE/pb_migrations/"
 fi
@@ -55,6 +57,20 @@ sudo rsync -a --delete --chown=chedam:chedam ~/"$STAGE"/pb_hooks/ $ROOT/pb_hooks
 sudo rsync -a --delete "${EXCL[@]}" --chown=chedam:chedam ~/"$STAGE"/pb_migrations/ $ROOT/pb_migrations/
 if [ -d ~/"$STAGE"/pb_public ]; then
   sudo rsync -a --delete --chown=chedam:chedam ~/"$STAGE"/pb_public/ $ROOT/pb_public/
+fi
+
+echo "== Caddy config"
+# Same IP as the running config (setup-hub.sh may have been given one); otherwise the first LAN address
+HUB_IP=$(grep -oP '^chedam\.local, \K[0-9.]+' /etc/caddy/Caddyfile || hostname -I | awk '{print $1}')
+sed "s/__HUB_IP__/$HUB_IP/g" ~/"$STAGE"/Caddyfile > ~/"$STAGE"/Caddyfile.rendered
+if sudo cmp -s ~/"$STAGE"/Caddyfile.rendered /etc/caddy/Caddyfile; then
+  echo "unchanged"
+else
+  caddy validate --config ~/"$STAGE"/Caddyfile.rendered --adapter caddyfile >/dev/null
+  sudo cp /etc/caddy/Caddyfile "$ROOT/backups/Caddyfile.pre-deploy-$TS"
+  sudo install -m 644 ~/"$STAGE"/Caddyfile.rendered /etc/caddy/Caddyfile
+  sudo systemctl reload caddy
+  echo "updated for $HUB_IP and reloaded (previous copy in backups/)"
 fi
 
 echo "== Restart"
