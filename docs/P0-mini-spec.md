@@ -12,8 +12,8 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 
 | Step | Delivers | Requirements |
 | --- | --- | --- |
-| 1. Hub base | OS hardening, PocketBase service, HTTPS (per-store CA), mDNS, chrony, watchdog, firewall, auto-restart | NFR-08, 09, 11, 19; hub plumbing |
-| 2. Schema v1 + event log | `business`, `location`, `settings`, `modules`, `users`, `roles`, `permissions`, `permission_overrides`, `devices`, `storage_areas`, `tasks` (minimal, for skipped steps), `events`, `backups`, `updates`. Common fields on every table; a hook writes an `events` row on every create/update/delete | Section 10, NFR-20 |
+| 1. Hub base ✅ 2026-10-05 | OS hardening, PocketBase service, HTTPS (per-store CA), mDNS, chrony, watchdog, firewall, auto-restart | NFR-08, 09, 11, 19; hub plumbing |
+| 2. Schema v1 + event log ✅ 2026-10-05 | `business`, `location`, `settings`, `modules`, `users`, `roles`, `permissions`, `permission_overrides`, `devices`, `storage_areas`, `tasks` (minimal, for skipped steps), `events`, `backups`, `updates`. Common fields on every table; a hook writes an `events` row on every create/update/delete | Section 10, NFR-20 |
 | 3. Access | Role templates (Owner, Manager, Cashier, Staff, Accountant), per-person overrides with end date, "Who can do this?", PIN login + lockout after 5 tries, auto-lock, manager-can't-exceed-own-rights (BR-33) | FR-1.03, 1.04, 1.09, 1.10, NFR-11 |
 | 4. Devices | Pairing by code/QR; certificate install guide (iOS trust toggle, Android user CA, IP fallback for Android 9); device manager (status, user, version, lock, log out, rename, revoke, approve) | FR-1.07, 1.08 |
 | 5. Client shell | Svelte PWA: install, offline shell, connectivity bar, login, owner on any device | FR-1.09, 12.01, NFR-16/17 |
@@ -32,6 +32,8 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | DL-23 | RTC (DS3231) deferred to the pilot build; dev hub uses network time via chrony. Health page reports clock source |
 | DL-24 | Display is a switch, not a fixed choice: `setup-hub.sh --keep-display` keeps HDMI on (the dev/pilot default, so the hub can be operated with a monitor and keyboard); without the flag the hub runs headless and saves about 50 MB of RAM. Re-running the script switches either way. Audio, camera detection and Bluetooth are always off. Pi 4 production hubs plan to use the display for direct operation |
 | DL-25 | PocketBase extended with JavaScript hooks (`pb_hooks`), no Go build, so one binary serves Pi and mini PC (NFR-19) |
+| DL-26 | Event log written in the same transaction as each change (rolls back together); append-only even for superusers; actor and device stamped by the hub from the request, never trusted from the client |
+| DL-27 | Dev sample data lives in `hub/pb_migrations_dev/` and is deployed only with `deploy.sh --sample-data` |
 
 ## Notes and risks found during setup
 
