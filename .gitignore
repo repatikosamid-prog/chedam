@@ -41,3 +41,6 @@ SDLC Docs Toosl softweare installers and ReadMe/installers and zips/
 
 # Separate repo (YouTube / personal notes), cloned here but tracked on its own
 chedam-updates/
+
+# Client build output (built by client/ npm run build; deploy.sh builds it)
+hub/pb_public/

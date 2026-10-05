@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy hub code (pb_hooks, pb_migrations, pb_public) from this repo to a hub over SSH.
+# Deploy hub code (pb_hooks, pb_migrations) and the client app (built into pb_public) to a hub over SSH.
 # Run from the PC (Git Bash):  bash hub/scripts/deploy.sh [--sample-data] [ssh-host]
 #   --sample-data  also deploy hub/pb_migrations_dev (dev sample store). Development hubs only.
 #   ssh-host       default "chedam" (alias in ~/.ssh/config)
@@ -21,11 +21,16 @@ HUB="$(cd "$(dirname "$0")/.." && pwd)"
 STAGE=deploy-stage
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 
+echo "== Build the client app (client/ -> hub/pb_public)"
+ROOT_DIR="$(cd "$HUB/.." && pwd)"
+[ -d "$ROOT_DIR/client/node_modules" ] || (cd "$ROOT_DIR/client" && npm ci --no-audit --no-fund)
+(cd "$ROOT_DIR/client" && npm run build --silent)
+[ -f "$HUB/pb_public/index.html" ] && [ -f "$HUB/pb_public/sw.js" ] || { echo "client build missing"; exit 1; }
+
 echo "== Copy to $HOST:~/$STAGE"
 ssh "$HOST" "rm -rf ~/$STAGE && mkdir -p ~/$STAGE/pb_migrations"
 scp -q -r "$HUB/pb_hooks" "$HOST:$STAGE/"
-# pb_public arrives with the client app (P0 step 5); until then the hub keeps its placeholder page
-[ -d "$HUB/pb_public" ] && scp -q -r "$HUB/pb_public" "$HOST:$STAGE/"
+scp -q -r "$HUB/pb_public" "$HOST:$STAGE/"
 scp -q "$HUB"/pb_migrations/*.js "$HOST:$STAGE/pb_migrations/"
 scp -q "$HUB/system/Caddyfile" "$HOST:$STAGE/Caddyfile"
 if [ "$SAMPLE" -eq 1 ]; then

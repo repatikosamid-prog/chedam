@@ -40,6 +40,15 @@ These rules apply to every phase. They come from Master Spec Section 10 and NFR-
 - **Realtime:** the SSE connect has no headers; the subscribe request (fetch) must carry the device headers like any other.
 - **Device fields** that track status, keys and sign-in are `PROTECTED`. They change only through `/api/chedam/devices/...`.
 
+## Client app
+
+- **Source** in `client/` (Svelte 5, Tailwind 4, Vite). `npm run build` writes `hub/pb_public/`, which is build output and is not committed. `deploy.sh` builds it.
+- **Screens** live in `client/src/screens/`. One state object (`lib/session.svelte.js`) decides which screen shows; the hub decides who may do what.
+- **All hub calls go through `lib/api.js`**, which adds the device id + key, the token and `X-Chedam-Version`. When a call is refused, use `handleRefusal()`: it deals with signed out (401), a new PIN being needed, and a locked or unpaired device.
+- **Accessibility:** touch targets at least 48 px (`min-h-12`), a label on every input, `role="alert"` on errors, colour from the tokens in `app.css` (light, dark, high contrast), and rem sizes so large text scales.
+- **Third-party code is an npm dependency with an exact version** (the lockfile has the integrity hash). Nothing is loaded from a CDN: the hub has no internet at the till.
+- **The certificate guide** (`client/public/device-setup.html` + `setup.css`) stays a plain page, because it is served over HTTP before the device trusts the hub.
+
 ## Migrations
 
 - Location: `hub/pb_migrations/<unix-ts>_<phase>_<what>.js`. Every migration has a `down` that removes exactly what `up` added (NFR-20).

@@ -16,7 +16,7 @@ const TYPES = ["till", "back_office_pc", "phone", "tablet", "customer_display", 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 // Paths a device may call while its key is unknown (pairing itself) or while pending/locked.
-const PAIRING_PATHS = ["/api/chedam/devices/pair", "/api/chedam/devices/request", "/api/health"];
+const PAIRING_PATHS = ["/api/chedam/devices/pair", "/api/chedam/devices/request", "/api/health", "/api/chedam/status"];
 const STATUS_PATH = "/api/chedam/devices/me";
 
 function header(e, name) {

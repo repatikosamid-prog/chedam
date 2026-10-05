@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Set up this device</title>
-<link rel="stylesheet" href="/assets/chedam.css">
+<link rel="stylesheet" href="/setup.css">
 </head>
 <body>
 <!-- Certificate install guide (FR-1.07). Served over plain HTTP too, because a new phone does not trust the
@@ -90,7 +90,7 @@
   const params = new URLSearchParams(location.search);
   const code = (params.get("code") || "").toUpperCase().replace(/[^A-Z0-9-]/g, "").substring(0, 9);
   const host = location.hostname;
-  const target = "https://" + host + "/pair.html" + (code ? "?code=" + encodeURIComponent(code) : "");
+  const target = "https://" + host + "/" + (code ? "?pair=" + encodeURIComponent(code) : "");
 
   // Open the guide for this device
   const android = /Android\s(\d+)/.exec(ua);

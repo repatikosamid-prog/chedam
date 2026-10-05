@@ -29,7 +29,7 @@ http://chedam.local, http://__HUB_IP__ {
 	handle /device-setup.html {
 		reverse_proxy 127.0.0.1:8090
 	}
-	handle /assets/chedam.css {
+	handle /setup.css {
 		reverse_proxy 127.0.0.1:8090
 	}
 	handle /ca.crt {

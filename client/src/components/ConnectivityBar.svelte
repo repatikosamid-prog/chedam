@@ -1,0 +1,27 @@
+<script>
+  // FR-12.01: Offline / Online (router) / Online (hotspot), plus "hub not reachable" and a clock warning.
+  import { net, checkNow } from "../lib/connectivity.svelte.js";
+
+  const look = $derived(
+    net.hub === "down" ? { text: "Hub not reachable. Working on this device only.", cls: "bg-bad text-bg", dot: "bg-bg" }
+    : net.hub === "checking" ? { text: "Checking the connection…", cls: "bg-soft text-ink", dot: "bg-muted" }
+    : net.internet === "router" ? { text: "Online (router)", cls: "bg-soft text-ink", dot: "bg-ok" }
+    : net.internet === "hotspot" ? { text: "Online (hotspot)", cls: "bg-soft text-ink", dot: "bg-warn" }
+    : { text: "Offline. Store network only; internet services wait.", cls: "bg-soft text-ink", dot: "bg-muted" }
+  );
+</script>
+
+<div class="sticky top-0 z-10 {look.cls}" role="status" aria-live="polite">
+  <div class="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-1.5 text-sm">
+    <span class="flex items-center gap-2">
+      <span class="inline-block h-2.5 w-2.5 rounded-full {look.dot}" aria-hidden="true"></span>
+      {look.text}
+    </span>
+    <button class="min-h-8 rounded-lg px-2 underline" onclick={checkNow}>Check</button>
+  </div>
+  {#if net.hub === "ok" && Math.abs(net.skewMin) >= 2}
+    <div class="bg-warn px-4 py-1 text-center text-sm text-bg">
+      This device's clock is {Math.abs(net.skewMin)} min {net.skewMin > 0 ? "ahead of" : "behind"} the hub. Please correct it.
+    </div>
+  {/if}
+</div>

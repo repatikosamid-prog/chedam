@@ -189,7 +189,8 @@ routerAdd("GET", "/api/chedam/access/me", (e) => {
   if (!access.isActive(e.auth)) throw new UnauthorizedError("Sign in first.");
   const role = access.roleOf(e.app, e.auth);
   return e.json(200, {
-    user: { id: e.auth.id, name: e.auth.getString("name") },
+    user: { id: e.auth.id, name: e.auth.getString("name"), pin_must_change: e.auth.getBool("pin_must_change"),
+      large_text: e.auth.getBool("large_text"), high_contrast: e.auth.getBool("high_contrast"), language: e.auth.getString("language") },
     role: role ? { code: role.getString("code"), name: role.getString("name"), level: role.getInt("level") } : null,
     permissions: access.effective(e.app, e.auth),
   });

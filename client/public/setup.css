@@ -1,4 +1,5 @@
-/* Shared styles for the hub's device pages (P0 step 4). The Svelte client (step 5) replaces these pages. */
+/* Styles for device-setup.html only: it is served over plain HTTP before the device trusts the hub, so it
+   cannot use the app's bundled CSS. */
 :root {
   --bg: #f6f5f1; --card: #ffffff; --ink: #1d2320; --muted: #5d6762; --line: #dcdfd9;
   --accent: #1f6f5c; --accent-ink: #ffffff; --soft: #e6f0ec;

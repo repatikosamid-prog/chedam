@@ -16,7 +16,7 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | 2. Schema v1 + event log ✅ 2026-10-05 | `business`, `location`, `settings`, `modules`, `users`, `roles`, `permissions`, `permission_overrides`, `devices`, `storage_areas`, `tasks` (minimal, for skipped steps), `events`, `backups`, `updates`. Common fields on every table; a hook writes an `events` row on every create/update/delete | Section 10, NFR-20 |
 | 3. Access ✅ 2026-10-05 | Role templates (Owner, Manager, Cashier, Staff, Accountant), per-person overrides with end date, "Who can do this?", PIN login + lockout after 5 tries, auto-lock, manager-can't-exceed-own-rights (BR-33) | FR-1.03, 1.04, 1.09, 1.10, NFR-11 |
 | 4. Devices 🔶 built, tested, deployed 2026-10-05 (real phone pairing pending) | Pairing by code/QR; certificate install guide (iOS trust toggle, Android user CA, IP fallback for Android 9); device manager (status, user, version, lock, log out, rename, revoke, approve) | FR-1.07, 1.08 |
-| 5. Client shell | Svelte PWA: install, offline shell, connectivity bar, login, owner on any device | FR-1.09, 12.01, NFR-16/17 |
+| 5. Client shell 🔶 built + tested on PC 2026-10-05 (Pi deploy and phone install pending) | Svelte PWA: install, offline shell, connectivity bar, login, owner on any device | FR-1.09, 12.01, NFR-16/17 |
 | 6. Setup wizard | Language, hub time check, business profile, branding (logo, colours from logo, receipt header/footer preview), owner account + printed recovery code, people, storage areas, shop-type preset + module switches, optional external references, backup; resumable, skipped steps become tasks | FR-1.01-1.06, 1.13, 1.15 |
 | 7. Backups | USB backup (SQLite online backup, verify, retention 14/8/12), schedule, first backup in wizard, restore procedure to spare card; encrypted cloud copy (Google Drive or OneDrive) once client IDs are provided | FR-1.14, 12.08, NFR-03, 04 |
 | 8. Health page | Uptime, temperature, RAM, disk, last backup, clock source, devices online, queue backlog, versions, pending updates | FR-12.09 |
@@ -45,10 +45,15 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | DL-36 | One person per device: signing in on a device replaces whoever was signed in there, and their token stops working on that device. Tokens cannot move between devices. Device "sign out" uses this |
 | DL-37 | Device manager actions: approve, lock (refuses everything except its own status check), unlock, sign out, rename/type/assign (generic API, BR-33 on the assigned person), remove (revoke: key erased, must pair again). Nobody can lock or remove the device they are using |
 | DL-38 | "Online" = reached the hub in the last 2 minutes, kept in memory; `last_seen_at` is written at most every 30 minutes (or when the app version or browser changes), so the event log is not flooded |
+| DL-39 | **Forgot PIN** (Sreya): a manager (users.manage, above the person) sets a **temporary PIN**. It works for 24 h (`security.temp_pin_hours`) and only to sign in: the hub refuses everything else until the person chooses their own new PIN, which must differ from the temporary one. The owner can still use password or recovery code |
+| DL-40 | Client = Svelte 5 + Tailwind 4 + Vite, a plain single-page app (no SvelteKit) built into `hub/pb_public` by `deploy.sh`. Build output is not committed. Exact versions pinned in `client/package-lock.json` |
+| DL-41 | Offline shell: a hand-written service worker (generated at build with the exact file list) caches the app files at install; the API is never cached by it. Offline data and the sales queue come with Dexie in later phases. Cache look-ups ignore `Vary` (the hub sends `Vary: Origin`) |
+| DL-42 | Connectivity (FR-12.01): the hub checks `network.check_url` (Cloudflare's 204 check, nothing personal sent) once a minute. Online (hotspot) = the hub's current Wi-Fi name is in `network.hotspot_ssids`; otherwise Online (router). The bar also shows "Hub not reachable" and warns when the device clock is 2+ minutes off the hub's |
+| DL-43 | Idle auto-lock: after `security.auto_lock_minutes` without a tap or key, the person is signed out on that device and the name list returns. Large text and high contrast are per-person settings (NFR-16/17); touch targets are at least 48 px |
 
 ## Open items to discuss
 
-- **Forgot PIN** (Sreya, 2026-10-05): a quick way to recover. Today: a manager sets a new PIN for people below them (`POST /api/chedam/users/{id}/pin`); the owner signs in with password or the printed recovery code. The sign-in page shows these as a "Forgot your PIN?" hint. Options to decide later: a manager approves a reset from their own device, a one-time reset code, or the owner's phone.
+- None open. (Forgot PIN was decided on 2026-10-05, DL-39.)
 
 ## Notes and risks found during setup
 
