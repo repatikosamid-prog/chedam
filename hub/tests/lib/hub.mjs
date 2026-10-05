@@ -38,7 +38,7 @@ export class TestHub {
   async start(env = {}) {
     if (!this.suPass) {
       this.suEmail = "test@chedam.test";
-      this.suPass = randomBytes(18).toString("base64url");
+      this.suPass = "Pw" + randomBytes(18).toString("base64url");   // never starts with "-" (would be read as a CLI flag)
       const up = this.cli(["superuser", "upsert", this.suEmail, this.suPass]);
       if (up.status !== 0) throw new Error("superuser upsert failed: " + up.stderr + up.stdout);
     }

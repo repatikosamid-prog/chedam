@@ -43,6 +43,9 @@ TMP = "/var/tmp/chedam-backup"
 FOLDER = "Chedam-Backups"
 NAME_RE = re.compile(r"^chedam-(\d{8})-(\d{6})-([a-z_]+)\.db\.gz\.age$")
 SUPPORTED = {"vfat", "exfat", "ntfs", "ext4", "ext3", "ext2", "btrfs", "xfs"}
+# The hub's HTTPS certificate authority (Caddy). Saved with each backup so that a rebuilt hub keeps the
+# same CA and the store's devices keep trusting it (no certificate reinstall on every phone).
+CA_DIR = "/var/lib/caddy/.local/share/caddy/pki/authorities/local"
 CHECK_TABLES = ["users", "roles", "permissions", "settings", "modules", "devices", "events", "business", "storage_areas", "tasks"]
 
 
@@ -57,6 +60,18 @@ def sh(*args, check=True, input=None, capture=True):
     if check and r.returncode != 0:
         raise Fail("command_failed", "%s failed: %s" % (args[0], (r.stderr or r.stdout or "").strip()[:400]))
     return r
+
+
+def run_limited(args, seconds):
+    """Runs a command with a time limit. A sick drive can leave mount stuck in the kernel (it cannot
+    be killed), so on timeout we stop waiting and report it instead of hanging the helper."""
+    p = subprocess.Popen(list(args), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        out, err = p.communicate(timeout=seconds)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        raise Fail("drive_slow", "The drive is not responding (it may be failing or not getting enough power).")
+    return p.returncode, out, err
 
 
 def write_json(path, data, owner_readable=True):
@@ -78,17 +93,19 @@ def usb_partitions():
     def walk(dev, tran, model):
         tran = dev.get("tran") or tran
         model = (dev.get("model") or model or "").strip()
-        if tran == "usb" and dev.get("fstype") and dev.get("uuid") and dev.get("type") in ("part", "disk"):
+        if tran == "usb" and dev.get("fstype") and dev.get("uuid") and dev.get("type") in ("part", "disk", "loop"):
             found.append({"path": dev["path"], "uuid": dev["uuid"], "label": dev.get("label") or "", "fstype": dev["fstype"],
                           "size_bytes": int(dev.get("size") or 0), "model": model, "mountpoint": dev.get("mountpoint") or "",
                           "supported": dev["fstype"] in SUPPORTED})
         for ch in dev.get("children") or []:
             walk(ch, tran, model)
 
+    # Tests on the Pi use a disk image (loop device) in place of a USB drive: CHEDAM_BACKUP_ALLOW_LOOP=1
+    allow_loop = os.environ.get("CHEDAM_BACKUP_ALLOW_LOOP") == "1"
     for d in out.get("blockdevices", []):
-        if d.get("name", "").startswith(("mmcblk", "zram", "loop")):
+        if d.get("name", "").startswith(("mmcblk", "zram")) or (d.get("name", "").startswith("loop") and not allow_loop):
             continue
-        walk(d, d.get("tran"), d.get("model"))
+        walk(d, "usb" if d.get("name", "").startswith("loop") else d.get("tran"), d.get("model") or "test image")
     return found
 
 
@@ -116,11 +133,11 @@ class Mounted:
         fs = self.drive["fstype"]
         if fs in ("vfat", "exfat"):
             opts += ",uid=0,gid=0,umask=077"
-        r = sh("mount", "-o", opts, "UUID=" + self.drive["uuid"], MNT, check=False)
-        if r.returncode != 0 and fs == "ntfs":
-            r = sh("mount", "-t", "ntfs-3g", "-o", opts, "UUID=" + self.drive["uuid"], MNT, check=False)
-        if r.returncode != 0:
-            raise Fail("mount_failed", "Could not open the drive: " + (r.stderr or "").strip()[:300])
+        code, _, err = run_limited(["mount", "-o", opts, self.drive["path"], MNT], 90)
+        if code != 0 and fs == "ntfs":
+            code, _, err = run_limited(["mount", "-t", "ntfs-3g", "-o", opts, self.drive["path"], MNT], 90)
+        if code != 0:
+            raise Fail("mount_failed", "Could not open the drive: " + (err or "").strip()[:300])
         self.ours, self.path = True, MNT
         return MNT
 
@@ -136,15 +153,11 @@ def free_bytes(path):
 
 
 def action_drives(req):
+    # No mounting here: listing must be quick even with a slow or sick drive. Free space is reported
+    # by each backup instead (and here only for drives that are already mounted).
     drives = usb_partitions()
     for d in drives:
-        d["free_bytes"] = None
-        if d["supported"]:
-            try:
-                with Mounted(d, readonly=True) as m:
-                    d["free_bytes"] = free_bytes(m)
-            except Fail:
-                pass
+        d["free_bytes"] = free_bytes(d["mountpoint"]) if d["mountpoint"] else None
     return {"drives": drives}
 
 
@@ -276,6 +289,13 @@ def action_run(req):
                 os.fsync(out.fileno())
             os.replace(part, final)
             digest = sha256(final)
+            if os.path.isdir(CA_DIR):
+                with open(final + ".ca", "wb") as out:
+                    tar = subprocess.Popen(["tar", "-C", os.path.dirname(CA_DIR), "-cz", os.path.basename(CA_DIR)], stdout=subprocess.PIPE)
+                    age = subprocess.run(["age", "-r", rec], stdin=tar.stdout, stdout=out, stderr=subprocess.PIPE)
+                    tar.stdout.close()
+                    if tar.wait() != 0 or age.returncode != 0:
+                        raise Fail("write_failed", "Could not save the certificate authority.")
             with open(final + ".sha256", "w") as f:
                 f.write("%s  %s\n" % (digest, name))
             sh("sync", check=False)
@@ -290,7 +310,7 @@ def action_run(req):
             existing = [os.path.basename(p) for p in glob.glob(os.path.join(folder, "chedam-*.db.gz.age"))]
             removed = retention(existing, dt.datetime.now())
             for n in removed:
-                for p in (os.path.join(folder, n), os.path.join(folder, n + ".sha256")):
+                for p in (os.path.join(folder, n), os.path.join(folder, n + ".sha256"), os.path.join(folder, n + ".ca")):
                     if os.path.exists(p):
                         os.remove(p)
             size = os.path.getsize(final)
@@ -391,13 +411,30 @@ def restore(argv):
     sh("systemctl", "stop", "chedam-hub")
     os.makedirs(ROOT + "/backups", exist_ok=True)
     if os.path.exists(DB):
-        shutil.copy2(DB, "%s/backups/pre-restore-%s.db" % (ROOT, ts))
+        keep = "%s/backups/pre-restore-%s.db" % (ROOT, ts)
+        shutil.copy2(DB, keep)
+        shutil.chown(keep, SVC, SVC)
+        os.chmod(keep, 0o640)
     for ext in ("", "-wal", "-shm"):
         if os.path.exists(DB + ext):
             os.remove(DB + ext)
     shutil.move(restored, DB)
     shutil.chown(DB, SVC, SVC)
     os.chmod(DB, 0o640)
+    # Same HTTPS certificate authority as before, so paired devices keep trusting the hub
+    if os.path.exists(src + ".ca"):
+        age = subprocess.Popen(["age", "-d", "-i", keyfile, src + ".ca"], stdout=subprocess.PIPE)
+        os.makedirs(os.path.dirname(CA_DIR), exist_ok=True)
+        if os.path.isdir(CA_DIR):
+            shutil.move(CA_DIR, "%s/backups/pre-restore-ca-%s" % (ROOT, ts))
+        tar = subprocess.run(["tar", "-C", os.path.dirname(CA_DIR), "-xz"], stdin=age.stdout)
+        age.stdout.close()
+        if age.wait() == 0 and tar.returncode == 0:
+            sh("chown", "-R", "caddy:caddy", os.path.dirname(os.path.dirname(CA_DIR)), check=False)
+            sh("systemctl", "restart", "caddy", check=False)
+            print("Certificate authority restored: devices keep trusting the hub.")
+        else:
+            print("WARNING: the certificate authority could not be restored; devices must install the new certificate.")
     sh("systemctl", "start", "chedam-hub")
     print("Restored. The previous database is in %s/backups/pre-restore-%s.db" % (ROOT, ts))
 
@@ -411,6 +448,9 @@ if __name__ == "__main__":
     elif cmd == "restore":
         restore(sys.argv[2:])
     elif cmd in ACTIONS:
-        print(json.dumps(ACTIONS[cmd]({"drive": sys.argv[2] if len(sys.argv) > 2 else ""}), indent=2))
+        # Manual use (support, tests): chedam-backup ACTION [DRIVE-UUID] [STORE]. Never prints the key.
+        res = ACTIONS[cmd]({"drive": sys.argv[2] if len(sys.argv) > 2 else "", "store": sys.argv[3] if len(sys.argv) > 3 else "store", "kind": "manual"})
+        res.pop("secret", None)
+        print(json.dumps(res, indent=2))
     else:
         print(__doc__)

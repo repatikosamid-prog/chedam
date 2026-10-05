@@ -73,7 +73,7 @@ let server;
 try {
   // Superuser with a random password that only this test run knows
   const suEmail = "test@chedam.test";
-  const suPass = randomBytes(18).toString("base64url");
+  const suPass = "Pw" + randomBytes(18).toString("base64url");   // never starts with "-" (would be read as a CLI flag)
   const up = spawnSync(PB, pbArgs(["superuser", "upsert", suEmail, suPass]), { encoding: "utf8" });
   if (up.status !== 0) throw new Error("superuser upsert failed: " + up.stderr + up.stdout);
 
