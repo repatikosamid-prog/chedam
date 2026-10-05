@@ -1,0 +1,416 @@
+#!/usr/bin/env python3
+"""Chedam backup helper (P0 step 7, FR-1.14, NFR-03/04/12). Runs as root.
+
+The hub (PocketBase, no root rights) asks for work by writing pb_data/backup/request.json; the
+chedam-backup.path unit then runs "chedam-backup handle", which does the work and writes
+pb_data/backup/result.json (same id). Actions:
+  drives        list USB drives (partitions with a filesystem) and their free space
+  key-init      make the backup encryption key once (age X25519); the secret is returned once for printing
+  key-show      return the secret again (the hub allows this to the owner only)
+  run           consistent SQLite snapshot -> integrity check -> gzip -> age encrypt -> USB drive,
+                then read the file BACK from the drive, decrypt and check it again (= "verified"),
+                then retention (keep newest per day 14, per week 8, per month 12, and the 3 newest)
+  test-restore  rebuild the newest (or a named) backup into a temporary copy and compare with live data
+Technician only (never from the app):
+  chedam-backup restore FILE --key KEYFILE [--yes]   replace the live database with a backup
+
+Safety: the drive is never formatted; only files named chedam-*.db.gz.age (+ .sha256) inside
+Chedam-Backups/<store>/ are ever written or deleted. The drive is mounted noexec,nosuid,nodev and
+unmounted again after each job unless it was already mounted.
+"""
+import datetime as dt
+import glob
+import hashlib
+import json
+import os
+import re
+import shutil
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import time
+
+ROOT = "/opt/chedam"
+DATA = ROOT + "/pb_data"
+DB = DATA + "/data.db"
+BK = DATA + "/backup"
+KEYDIR = ROOT + "/keys"
+KEY = KEYDIR + "/backup-key.txt"
+MNT = "/mnt/chedam-backup"
+SVC = "chedam-hub"
+TMP = "/var/tmp/chedam-backup"
+FOLDER = "Chedam-Backups"
+NAME_RE = re.compile(r"^chedam-(\d{8})-(\d{6})-([a-z_]+)\.db\.gz\.age$")
+SUPPORTED = {"vfat", "exfat", "ntfs", "ext4", "ext3", "ext2", "btrfs", "xfs"}
+CHECK_TABLES = ["users", "roles", "permissions", "settings", "modules", "devices", "events", "business", "storage_areas", "tasks"]
+
+
+class Fail(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
+def sh(*args, check=True, input=None, capture=True):
+    r = subprocess.run(list(args), input=input, capture_output=capture, text=input is None or isinstance(input, str))
+    if check and r.returncode != 0:
+        raise Fail("command_failed", "%s failed: %s" % (args[0], (r.stderr or r.stdout or "").strip()[:400]))
+    return r
+
+
+def write_json(path, data, owner_readable=True):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.chmod(tmp, 0o640)
+    shutil.chown(tmp, SVC, SVC)   # the hub may read and delete it (key results)
+    os.replace(tmp, path)
+
+
+# ---- Drives -------------------------------------------------------------------------------------
+
+def usb_partitions():
+    out = json.loads(sh("lsblk", "-J", "-b", "-o", "NAME,PATH,SIZE,TYPE,FSTYPE,LABEL,UUID,MOUNTPOINT,TRAN,MODEL,VENDOR").stdout)
+    found = []
+
+    def walk(dev, tran, model):
+        tran = dev.get("tran") or tran
+        model = (dev.get("model") or model or "").strip()
+        if tran == "usb" and dev.get("fstype") and dev.get("uuid") and dev.get("type") in ("part", "disk"):
+            found.append({"path": dev["path"], "uuid": dev["uuid"], "label": dev.get("label") or "", "fstype": dev["fstype"],
+                          "size_bytes": int(dev.get("size") or 0), "model": model, "mountpoint": dev.get("mountpoint") or "",
+                          "supported": dev["fstype"] in SUPPORTED})
+        for ch in dev.get("children") or []:
+            walk(ch, tran, model)
+
+    for d in out.get("blockdevices", []):
+        if d.get("name", "").startswith(("mmcblk", "zram", "loop")):
+            continue
+        walk(d, d.get("tran"), d.get("model"))
+    return found
+
+
+def find_drive(uuid):
+    for p in usb_partitions():
+        if p["uuid"] == uuid:
+            return p
+    raise Fail("drive_missing", "The backup drive is not plugged in (or not found).")
+
+
+class Mounted:
+    """Mounts the drive at /mnt/chedam-backup unless it is already mounted; unmounts on exit."""
+
+    def __init__(self, drive, readonly=False):
+        self.drive, self.readonly, self.ours = drive, readonly, False
+        self.path = drive["mountpoint"]
+
+    def __enter__(self):
+        if self.path:
+            return self.path
+        if not self.drive["supported"]:
+            raise Fail("unsupported_fs", "This drive's format (%s) is not supported." % self.drive["fstype"])
+        os.makedirs(MNT, exist_ok=True)
+        opts = "noexec,nosuid,nodev" + (",ro" if self.readonly else "")
+        fs = self.drive["fstype"]
+        if fs in ("vfat", "exfat"):
+            opts += ",uid=0,gid=0,umask=077"
+        r = sh("mount", "-o", opts, "UUID=" + self.drive["uuid"], MNT, check=False)
+        if r.returncode != 0 and fs == "ntfs":
+            r = sh("mount", "-t", "ntfs-3g", "-o", opts, "UUID=" + self.drive["uuid"], MNT, check=False)
+        if r.returncode != 0:
+            raise Fail("mount_failed", "Could not open the drive: " + (r.stderr or "").strip()[:300])
+        self.ours, self.path = True, MNT
+        return MNT
+
+    def __exit__(self, *exc):
+        if self.ours:
+            sh("sync", check=False)
+            sh("umount", MNT, check=False)
+
+
+def free_bytes(path):
+    st = os.statvfs(path)
+    return st.f_bavail * st.f_frsize
+
+
+def action_drives(req):
+    drives = usb_partitions()
+    for d in drives:
+        d["free_bytes"] = None
+        if d["supported"]:
+            try:
+                with Mounted(d, readonly=True) as m:
+                    d["free_bytes"] = free_bytes(m)
+            except Fail:
+                pass
+    return {"drives": drives}
+
+
+# ---- Key ----------------------------------------------------------------------------------------
+
+def recipient():
+    if not os.path.exists(KEY):
+        raise Fail("no_key", "The backup key has not been made yet.")
+    return sh("age-keygen", "-y", KEY).stdout.strip()
+
+
+def secret():
+    with open(KEY) as f:
+        return next(l.strip() for l in f if l.startswith("AGE-SECRET-KEY-"))
+
+
+def action_key_init(req):
+    created = False
+    if not os.path.exists(KEY):
+        os.makedirs(KEYDIR, mode=0o700, exist_ok=True)
+        old = os.umask(0o077)
+        try:
+            sh("age-keygen", "-o", KEY)
+        finally:
+            os.umask(old)
+        created = True
+    rec = recipient()
+    with open(BK + "/recipient.txt", "w") as f:
+        f.write(rec + "\n")
+    return {"created": created, "recipient": rec, "secret": secret()}
+
+
+def action_key_show(req):
+    return {"recipient": recipient(), "secret": secret()}
+
+
+# ---- Backup -------------------------------------------------------------------------------------
+
+def counts(path):
+    con = sqlite3.connect("file:%s?mode=ro" % path, uri=True)
+    try:
+        ok = con.execute("PRAGMA integrity_check").fetchone()[0]
+        c = {}
+        for t in CHECK_TABLES:
+            try:
+                c[t] = con.execute('SELECT count(*) FROM "%s"' % t).fetchone()[0]
+            except sqlite3.Error:
+                pass
+        return ok, c
+    finally:
+        con.close()
+
+
+def snapshot(dest):
+    # SQLite online backup: consistent while PocketBase keeps writing (WAL)
+    src = sqlite3.connect("file:%s?mode=ro" % DB, uri=True, timeout=30)
+    dst = sqlite3.connect(dest)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+
+
+def decrypt_to(enc_path, out_db, keyfile=KEY):
+    with open(out_db, "wb") as out:
+        age = subprocess.Popen(["age", "-d", "-i", keyfile, enc_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        gz = subprocess.run(["gzip", "-dc"], stdin=age.stdout, stdout=out, stderr=subprocess.PIPE)
+        age.stdout.close()
+        err = age.stderr.read().decode()
+        if age.wait() != 0 or gz.returncode != 0:
+            raise Fail("decrypt_failed", "Could not read the backup back: " + (err or gz.stderr.decode()).strip()[:300])
+
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
+def retention(files, now):
+    """files: names matching NAME_RE. Returns the names to delete."""
+    dated = []
+    for n in files:
+        m = NAME_RE.match(n)
+        if m:
+            dated.append((dt.datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S"), n))
+    dated.sort(reverse=True)
+    keep = {n for _, n in dated[:3]}
+    days, weeks, months = {}, {}, {}
+    for t, n in dated:
+        days.setdefault(t.date(), n)
+        weeks.setdefault(tuple(t.isocalendar()[:2]), n)
+        months.setdefault((t.year, t.month), n)
+    keep |= set(list(days.values())[:14]) | set(list(weeks.values())[:8]) | set(list(months.values())[:12])
+    return [n for _, n in dated if n not in keep]
+
+
+def action_run(req):
+    if not os.path.exists(DB):
+        raise Fail("no_database", "The hub database was not found.")
+    rec = recipient()
+    drive = find_drive(req.get("drive", ""))
+    store = re.sub(r"[^a-z0-9]", "", str(req.get("store") or "store").lower())[:20] or "store"
+    kind = req.get("kind") if req.get("kind") in ("scheduled", "manual", "pre_update", "first_backup") else "manual"
+    shutil.rmtree(TMP, ignore_errors=True)
+    os.makedirs(TMP, mode=0o700)
+    try:
+        snap = TMP + "/snapshot.db"
+        snapshot(snap)
+        ok, before = counts(snap)
+        if ok != "ok":
+            raise Fail("integrity_failed", "The database check failed: " + ok)
+        with Mounted(drive) as mnt:
+            folder = os.path.join(mnt, FOLDER, store)
+            os.makedirs(folder, exist_ok=True)
+            name = "chedam-%s-%s.db.gz.age" % (dt.datetime.now().strftime("%Y%m%d-%H%M%S"), kind)
+            final = os.path.join(folder, name)
+            part = final + ".part"
+            with open(part, "wb") as out:
+                gz = subprocess.Popen(["gzip", "-6", "-c", snap], stdout=subprocess.PIPE)
+                age = subprocess.run(["age", "-r", rec], stdin=gz.stdout, stdout=out, stderr=subprocess.PIPE)
+                gz.stdout.close()
+                if gz.wait() != 0 or age.returncode != 0:
+                    raise Fail("write_failed", "Could not write the backup: " + age.stderr.decode().strip()[:300])
+                out.flush()
+                os.fsync(out.fileno())
+            os.replace(part, final)
+            digest = sha256(final)
+            with open(final + ".sha256", "w") as f:
+                f.write("%s  %s\n" % (digest, name))
+            sh("sync", check=False)
+
+            # Verify: read the copy back from the drive, decrypt, check, compare
+            check = TMP + "/verify.db"
+            decrypt_to(final, check)
+            ok2, after = counts(check)
+            if ok2 != "ok" or after != before:
+                raise Fail("verify_failed", "The copy on the drive did not check out (%s)." % ok2)
+
+            existing = [os.path.basename(p) for p in glob.glob(os.path.join(folder, "chedam-*.db.gz.age"))]
+            removed = retention(existing, dt.datetime.now())
+            for n in removed:
+                for p in (os.path.join(folder, n), os.path.join(folder, n + ".sha256")):
+                    if os.path.exists(p):
+                        os.remove(p)
+            size = os.path.getsize(final)
+            free = free_bytes(mnt)
+        return {"file_name": "%s/%s/%s" % (FOLDER, store, name), "size_bytes": size, "sha256": digest,
+                "verified": True, "counts": before, "removed": removed, "free_bytes": free,
+                "drive": {"uuid": drive["uuid"], "label": drive["label"]}}
+    finally:
+        shutil.rmtree(TMP, ignore_errors=True)
+
+
+def action_test_restore(req):
+    drive = find_drive(req.get("drive", ""))
+    store = re.sub(r"[^a-z0-9]", "", str(req.get("store") or "store").lower())[:20] or "store"
+    shutil.rmtree(TMP, ignore_errors=True)
+    os.makedirs(TMP, mode=0o700)
+    try:
+        t0 = time.time()
+        with Mounted(drive, readonly=True) as mnt:
+            folder = os.path.join(mnt, FOLDER, store)
+            files = sorted(glob.glob(os.path.join(folder, "chedam-*.db.gz.age")))
+            if req.get("file"):
+                files = [f for f in files if os.path.basename(f) == os.path.basename(req["file"])]
+            if not files:
+                raise Fail("no_backups", "No backups found on the drive.")
+            src = files[-1]
+            side = src + ".sha256"
+            if os.path.exists(side):
+                with open(side) as f:
+                    if f.read().split()[0] != sha256(src):
+                        raise Fail("checksum_failed", "The backup file is damaged (checksum differs).")
+            restored = TMP + "/restored.db"
+            decrypt_to(src, restored)
+        ok, got = counts(restored)
+        _, live = counts(DB)
+        if ok != "ok":
+            raise Fail("integrity_failed", "The restored copy failed the database check: " + ok)
+        # The live store only grows (append-only log), so every restored table must be <= live
+        behind = {t: [got[t], live.get(t)] for t in got if live.get(t) is not None and got[t] > live[t]}
+        return {"file_name": os.path.basename(src), "restored_counts": got, "live_counts": live,
+                "consistent": not behind, "seconds": round(time.time() - t0, 1)}
+    finally:
+        shutil.rmtree(TMP, ignore_errors=True)
+
+
+# ---- Request handling ---------------------------------------------------------------------------
+
+ACTIONS = {"drives": action_drives, "key-init": action_key_init, "key-show": action_key_show,
+           "run": action_run, "test-restore": action_test_restore}
+
+
+def handle():
+    path = BK + "/request.json"
+    done = set()
+    while True:
+        try:
+            with open(path) as f:
+                req = json.load(f)
+        except (OSError, ValueError):
+            return
+        rid = str(req.get("id", ""))
+        if not rid or rid in done:
+            return
+        done.add(rid)
+        res = {"id": rid, "action": req.get("action"), "started_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+        try:
+            fn = ACTIONS.get(req.get("action"))
+            if not fn:
+                raise Fail("unknown_action", "Unknown action.")
+            res.update(fn(req))
+            res["ok"] = True
+        except Fail as e:
+            res.update(ok=False, code=e.code, error=str(e))
+        except Exception as e:  # noqa: BLE001 - any failure must reach the hub as a result
+            res.update(ok=False, code="error", error=str(e)[:500])
+        res["finished_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+        write_json(BK + "/result.json", res)
+
+
+def restore(argv):
+    """Technician restore: chedam-backup restore FILE --key KEYFILE [--yes]"""
+    if len(argv) < 1 or "--key" not in argv:
+        print(__doc__)
+        sys.exit(2)
+    src = argv[0]
+    keyfile = argv[argv.index("--key") + 1]
+    os.makedirs(TMP, mode=0o700, exist_ok=True)
+    restored = TMP + "/restore.db"
+    decrypt_to(src, restored, keyfile)
+    ok, c = counts(restored)
+    print("Backup check:", ok, c)
+    if ok != "ok":
+        sys.exit(1)
+    if "--yes" not in argv and input("Replace the live store database with this backup? Type YES: ") != "YES":
+        print("Cancelled.")
+        sys.exit(1)
+    ts = dt.datetime.now().strftime("%Y%m%dT%H%M%S")
+    sh("systemctl", "stop", "chedam-hub")
+    os.makedirs(ROOT + "/backups", exist_ok=True)
+    if os.path.exists(DB):
+        shutil.copy2(DB, "%s/backups/pre-restore-%s.db" % (ROOT, ts))
+    for ext in ("", "-wal", "-shm"):
+        if os.path.exists(DB + ext):
+            os.remove(DB + ext)
+    shutil.move(restored, DB)
+    shutil.chown(DB, SVC, SVC)
+    os.chmod(DB, 0o640)
+    sh("systemctl", "start", "chedam-hub")
+    print("Restored. The previous database is in %s/backups/pre-restore-%s.db" % (ROOT, ts))
+
+
+if __name__ == "__main__":
+    if os.geteuid() != 0 and "--self-test" not in sys.argv:
+        sys.exit("Run as root.")
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if cmd == "handle":
+        handle()
+    elif cmd == "restore":
+        restore(sys.argv[2:])
+    elif cmd in ACTIONS:
+        print(json.dumps(ACTIONS[cmd]({"drive": sys.argv[2] if len(sys.argv) > 2 else ""}), indent=2))
+    else:
+        print(__doc__)

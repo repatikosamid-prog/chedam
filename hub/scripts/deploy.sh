@@ -32,7 +32,7 @@ ssh "$HOST" "rm -rf ~/$STAGE && mkdir -p ~/$STAGE/pb_migrations"
 scp -q -r "$HUB/pb_hooks" "$HOST:$STAGE/"
 scp -q -r "$HUB/pb_public" "$HOST:$STAGE/"
 scp -q "$HUB"/pb_migrations/*.js "$HOST:$STAGE/pb_migrations/"
-scp -q "$HUB/system/Caddyfile" "$HUB/system/chedam-console.path" "$HUB/system/chedam-console.service" "$HOST:$STAGE/"
+scp -q "$HUB/system/Caddyfile" "$HUB/system/chedam-console.path" "$HUB/system/chedam-console.service"   "$HUB/system/chedam-backup" "$HUB/system/chedam-backup.path" "$HUB/system/chedam-backup.service" "$HOST:$STAGE/"
 if [ "$SAMPLE" -eq 1 ]; then
   scp -q "$HUB"/pb_migrations_dev/*.js "$HOST:$STAGE/pb_migrations/"
 fi
@@ -85,6 +85,16 @@ for u in chedam-console.path chedam-console.service; do
 done
 [ "$(readlink /etc/issue.d/chedam.issue)" = "$ROOT/pb_data/console.issue" ] || { sudo ln -sfn "$ROOT/pb_data/console.issue" /etc/issue.d/chedam.issue; changed=1; }
 if [ "$changed" -eq 1 ]; then sudo systemctl daemon-reload; sudo systemctl enable --now chedam-console.path >/dev/null; echo "installed"; else echo "unchanged"; fi
+
+echo "== Backup helper"
+command -v age >/dev/null || { sudo apt-get install -y age >/dev/null && echo "installed age"; }
+sudo install -d -m 750 -o chedam-hub -g chedam-hub $ROOT/pb_data/backup
+changed=0
+sudo cmp -s ~/"$STAGE/chedam-backup" $ROOT/bin/chedam-backup || { sudo install -m 755 -o root -g root ~/"$STAGE/chedam-backup" $ROOT/bin/chedam-backup; changed=1; }
+for u in chedam-backup.path chedam-backup.service; do
+  sudo cmp -s ~/"$STAGE/$u" /etc/systemd/system/$u || { sudo install -m 644 ~/"$STAGE/$u" /etc/systemd/system/$u; changed=1; }
+done
+if [ "$changed" -eq 1 ]; then sudo systemctl daemon-reload; sudo systemctl enable --now chedam-backup.path >/dev/null; echo "installed"; else echo "unchanged"; fi
 
 echo "== Restart"
 sudo systemctl restart chedam-hub

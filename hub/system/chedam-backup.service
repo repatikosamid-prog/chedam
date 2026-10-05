@@ -1,0 +1,10 @@
+[Unit]
+Description=Chedam backup helper (USB drive list, encrypted backup, verify, restore test)
+
+[Service]
+Type=oneshot
+ExecStart=/opt/chedam/bin/chedam-backup handle
+# Low priority so selling is never slowed by a backup
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=30min

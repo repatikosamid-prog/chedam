@@ -16,7 +16,8 @@ export function notify(text, kind = "") { s.notice = { text, kind }; }
 
 export function go(screen) {
   s.screen = screen;
-  const hash = screen === "devices" ? "#devices" : screen === "wizard" ? "#setup" : "";
+  const HASH = { devices: "#devices", wizard: "#setup", backups: "#backups" };
+  const hash = HASH[screen] || "";
   if (location.hash !== hash) history.replaceState(null, "", location.pathname + location.search + hash);
 }
 
@@ -75,9 +76,10 @@ async function loadMe() {
   applyPrefs(s.me.user);
   if (s.me.user.pin_must_change) return go("newpin");
   await loadAutoLock();
-  const want = location.hash === "#devices" || s.screen === "devices" ? "devices" : location.hash === "#setup" || s.screen === "wizard" ? "wizard" : "home";
-  if (want === "devices" && can("devices.view")) return go("devices");
-  if (want === "wizard" && can("setup.run")) return go("wizard");
+  const FROM_HASH = { "#devices": "devices", "#setup": "wizard", "#backups": "backups" };
+  const NEEDS = { devices: "devices.view", wizard: "setup.run", backups: "backups.view" };
+  const want = NEEDS[s.screen] ? s.screen : FROM_HASH[location.hash];
+  if (want && can(NEEDS[want])) return go(want);
   return go("home");
 }
 

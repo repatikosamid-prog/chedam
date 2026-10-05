@@ -95,6 +95,12 @@
           <span class="text-sm text-muted">Profile, logo, team, features</span>
         </button>
       {/if}
+      {#if can("backups.view")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("backups")}>
+          <span class="font-semibold">Backups</span>
+          <span class="text-sm text-muted">Last backup, back up now</span>
+        </button>
+      {/if}
       {#if can("devices.view")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("devices")}>
           <span class="font-semibold">Devices</span>

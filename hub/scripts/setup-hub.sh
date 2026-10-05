@@ -32,7 +32,7 @@ log() { printf '\n== %s\n' "$*"; }
 
 log "Packages"
 export DEBIAN_FRONTEND=noninteractive
-apt-get -y install chrony sqlite3 ufw caddy avahi-daemon >/dev/null
+apt-get -y install chrony sqlite3 ufw caddy avahi-daemon age >/dev/null
 
 log "Service user and folders ($ROOT)"
 id "$SVC_USER" >/dev/null 2>&1 || useradd --system --home "$ROOT" --shell /usr/sbin/nologin "$SVC_USER"
@@ -50,6 +50,11 @@ fi
 
 log "PocketBase service"
 install -m 644 "$SYS/chedam-hub.service" /etc/systemd/system/chedam-hub.service
+
+log "Backup helper (USB backups, root side; DL-48)"
+install -m 755 -o root -g root "$SYS/chedam-backup" "$ROOT/bin/chedam-backup"
+install -d -m 750 -o "$SVC_USER" -g "$SVC_USER" "$ROOT/pb_data/backup"
+install -m 644 "$SYS/chedam-backup.path" "$SYS/chedam-backup.service" /etc/systemd/system/
 
 log "Monitor message (setup code on a new hub, DL-44)"
 install -m 644 "$SYS/chedam-console.path" "$SYS/chedam-console.service" /etc/systemd/system/
@@ -102,7 +107,7 @@ log "Start services"
 systemctl daemon-reload
 systemctl enable --now chrony avahi-daemon >/dev/null
 systemctl enable chedam-hub caddy >/dev/null
-systemctl enable --now chedam-console.path >/dev/null
+systemctl enable --now chedam-console.path chedam-backup.path >/dev/null
 systemctl restart chedam-hub caddy
 systemctl restart systemd-journald
 

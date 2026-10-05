@@ -1,0 +1,10 @@
+[Unit]
+Description=Chedam backup requests from the hub
+
+[Path]
+# The hub (no root rights) writes a request here; chedam-backup.service does the work as root
+PathChanged=/opt/chedam/pb_data/backup/request.json
+Unit=chedam-backup.service
+
+[Install]
+WantedBy=multi-user.target
