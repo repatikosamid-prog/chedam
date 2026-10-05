@@ -17,7 +17,7 @@
       <span class="inline-block h-2.5 w-2.5 rounded-full {look.dot}" aria-hidden="true"></span>
       {look.text}
     </span>
-    <button class="min-h-8 rounded-lg px-2 underline" onclick={checkNow}>Check</button>
+    <button class="min-h-8 rounded-lg px-2 underline" onclick={checkNow} disabled={net.busy}>{net.busy ? "Checking…" : "Check"}</button>
   </div>
   {#if net.hub === "ok" && Math.abs(net.skewMin) >= 2}
     <div class="bg-warn px-4 py-1 text-center text-sm text-bg">

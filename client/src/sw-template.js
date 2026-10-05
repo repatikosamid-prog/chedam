@@ -5,6 +5,13 @@ const BUILD = "__BUILD__";
 const FILES = __FILES__;
 const CACHE = "chedam-shell-" + BUILD;
 
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("timeout")), ms);
+    promise.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
@@ -25,10 +32,9 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_/") || url.pathname === "/device-setup.html" || url.pathname === "/ca.crt") return;
 
   if (req.mode === "navigate") {
-    // Page loads: newest from the hub when it answers, else the cached shell.
-    event.respondWith(
-      fetch(req).catch(() => caches.match("./", { ignoreSearch: true, ignoreVary: true })),
-    );
+    // Page loads: newest from the hub when it answers within 3 s, else the cached shell. The time limit
+    // matters: with the hub switched off, a phone's request does not fail, it just waits.
+    event.respondWith(withTimeout(fetch(req), 3000).catch(() => caches.match("./", { ignoreSearch: true, ignoreVary: true })));
     return;
   }
   // App files are content-hashed: the cache is always right for them. ignoreVary: the hub answers with

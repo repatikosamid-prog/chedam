@@ -41,7 +41,8 @@ export async function refresh() {
   const r = await api("GET", "/api/chedam/devices/me");
   if (r.status === 0) {
     // Hub not answering: keep showing what we had (offline shell); the connectivity bar says why.
-    if (s.screen === "boot") go(s.me ? "home" : "names");
+    // Nobody signed in any more (e.g. signed out while the hub is off): back to the name list.
+    if (!s.me && s.screen !== "names" && s.screen !== "pin" && s.screen !== "pair") go("names");
     return;
   }
   if (r.status === 401) {                       // removed or unknown: pair again
