@@ -95,7 +95,7 @@ Remove the old hub certificate, if it was installed:
 | Pi reserved IP | 192.168.50.101 |
 | Dev PC | DESKTOP-AHG4TD7, 192.168.50.100 |
 | Pi re-flashed, SSH working | 2026-10-03 |
-| Date hub re-setup completed | |
+| Date hub re-setup completed | 2026-10-05 (`--keep-display`) |
 
 ## If something goes wrong
 

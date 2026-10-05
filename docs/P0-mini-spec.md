@@ -30,7 +30,7 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | DL-21 | HTTPS via Caddy with its internal CA generated **on each hub** (one CA per store, never shared). mkcert stays a developer-PC tool only. Certificate covers `chedam.local` and the hub IP |
 | DL-22 | Source repo stays private; signed update packages are published to a separate public repo `chedam-updates` (GitHub Releases) |
 | DL-23 | RTC (DS3231) deferred to the pilot build; dev hub uses network time via chrony. Health page reports clock source |
-| DL-24 | Hub runs headless: GPU, audio, camera, display detection and Bluetooth disabled to free RAM |
+| DL-24 | Display is a switch, not a fixed choice: `setup-hub.sh --keep-display` keeps HDMI on (the dev/pilot default, so the hub can be operated with a monitor and keyboard); without the flag the hub runs headless and saves about 50 MB of RAM. Re-running the script switches either way. Audio, camera detection and Bluetooth are always off. Pi 4 production hubs plan to use the display for direct operation |
 | DL-25 | PocketBase extended with JavaScript hooks (`pb_hooks`), no Go build, so one binary serves Pi and mini PC (NFR-19) |
 
 ## Notes and risks found during setup

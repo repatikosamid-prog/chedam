@@ -61,23 +61,27 @@ install -m 644 "$SYS/watchdog.conf" /etc/systemd/system.conf.d/chedam-watchdog.c
 install -m 644 "$SYS/journald.conf" /etc/systemd/journald.conf.d/chedam.conf
 install -m 644 "$SYS/wifi-powersave-off.conf" /etc/NetworkManager/conf.d/chedam-wifi-powersave-off.conf
 
-log "Headless boot config (frees RAM for the hub)"
+log "Boot config (display mode, audio, camera, Bluetooth)"
 CFG=/boot/firmware/config.txt
 cp -n "$CFG" "$CFG.chedam-orig" || true
 # Always: audio, camera detection and Bluetooth off
 sed -i -e 's/^dtparam=audio=on/dtparam=audio=off/' \
        -e 's/^camera_auto_detect=1/camera_auto_detect=0/' "$CFG"
+# Re-running switches modes in both directions: drop any earlier chedam block, then write the current one.
+sed -i -e '/^# chedam-begin$/,/^# chedam-end$/d' -e '/^# chedam$/d' -e '/^gpu_mem=16$/d' -e '/^dtoverlay=disable-bt$/d' "$CFG"
 if [ "$KEEP_DISPLAY" -eq 1 ]; then
-  # Monitor attached: leave the display driver (vc4-kms-v3d) and display detection on.
+  # Monitor attached: display driver (vc4-kms-v3d) and display detection on. Costs ~50 MB RAM on the Zero 2 W.
   # A blank screen on the Zero 2 W ("vc4-drm: Cannot find any crtc or sizes" in dmesg) is fixed by
   # forcing the output in /boot/firmware/cmdline.txt (single line): video=HDMI-A-1:1280x720@60D
-  echo "--keep-display: HDMI output left on"
-  grep -q '^# chedam$' "$CFG" || printf '\n[all]\n# chedam\ndtoverlay=disable-bt\n' >> "$CFG"
+  echo "--keep-display: HDMI output on"
+  sed -i -e 's/^display_auto_detect=0/display_auto_detect=1/' \
+         -e 's/^#dtoverlay=vc4-kms-v3d  # chedam: headless/dtoverlay=vc4-kms-v3d/' "$CFG"
+  printf '# chedam-begin\n[all]\ndtoverlay=disable-bt\n# chedam-end\n' >> "$CFG"
 else
   # Headless (DL-24): display driver and detection off, minimum GPU memory. HDMI goes dark.
   sed -i -e 's/^display_auto_detect=1/display_auto_detect=0/' \
-         -e 's/^dtoverlay=vc4-kms-v3d/#dtoverlay=vc4-kms-v3d  # chedam: headless/' "$CFG"
-  grep -q '^# chedam$' "$CFG" || printf '\n[all]\n# chedam\ngpu_mem=16\ndtoverlay=disable-bt\n' >> "$CFG"
+         -e 's/^dtoverlay=vc4-kms-v3d$/#dtoverlay=vc4-kms-v3d  # chedam: headless/' "$CFG"
+  printf '# chedam-begin\n[all]\ngpu_mem=16\ndtoverlay=disable-bt\n# chedam-end\n' >> "$CFG"
 fi
 systemctl disable --now hciuart.service bluetooth.service 2>/dev/null || true
 
