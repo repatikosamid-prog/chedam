@@ -99,8 +99,12 @@ try {
   check("owner has every permission", owner.permissions.length === 20);
   const ownerOnly = (await list("permissions", "owner_only=true")).items.map((p) => p.id);
   check("manager holds no owner-only permission (BR-33)", manager.permissions.every((p) => !ownerOnly.includes(p)));
-  const step2Settings = (await list("settings", "key !~ 'devices.'")).totalItems;
-  check("12 default settings (devices.* come with step 4)", step2Settings === 12, String(step2Settings));
+  // The 12 step-2 keys by name (later steps add their own settings)
+  const STEP2_KEYS = ["store.country", "store.province", "store.currency", "store.time_zone", "store.language", "shop_presets",
+    "security.pin_max_attempts", "security.pin_lockout_minutes", "security.auto_lock_minutes", "backup.schedule",
+    "backup.retention", "updates.install_window"];
+  const have = (await list("settings")).items.map((x) => x.key);
+  check("12 default settings", STEP2_KEYS.every((k) => have.includes(k)), STEP2_KEYS.filter((k) => !have.includes(k)).join(","));
 
   console.log("Dev sample data");
   check("sample business + location", counts.business === 1 && counts.locations === 1);

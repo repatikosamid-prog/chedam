@@ -6,6 +6,7 @@
 // ---- Every /api/ request: check the device key, status and who is signed in on it --------------
 routerUse((e) => {
   require(`${__hooks}/lib/devices.js`).verify(e);
+  require(`${__hooks}/lib/auth.js`).pinChangeGate(e);
   return e.next();
 });
 

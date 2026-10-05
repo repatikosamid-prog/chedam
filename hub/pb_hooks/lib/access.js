@@ -34,7 +34,8 @@ const FIELD_LIMITS = {
 
 // Never settable through the generic API (dedicated endpoints only), except by a superuser.
 const PROTECTED = {
-  users: ["pin", "pin_set", "pin_failed_count", "pin_locked_until", "recovery_code", "recovery_code_created_at", "verified", "tokenKey"],
+  users: ["pin", "pin_set", "pin_must_change", "pin_temp_expires_at", "pin_failed_count", "pin_locked_until", "recovery_code",
+    "recovery_code_created_at", "verified", "tokenKey"],
   permission_overrides: ["granted_by"],
   modules: ["enabled_by", "enabled_at", "module", "kind"],
   // Status, keys and sign-in state change only through /api/chedam/devices/... (pairing, approve, lock, revoke)

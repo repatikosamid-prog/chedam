@@ -79,12 +79,15 @@ routerAdd("POST", "/api/chedam/auth/pin", (e) => {
   if (!auth.checkSecret(user, "pin", String(body.pin || ""))) {
     auth.failAndThrow(e.app, user, e, new BadRequestError("Wrong name or PIN."));
   }
+  if (auth.tempPinExpired(user)) throw new BadRequestError("Your temporary PIN has expired. Ask a manager for a new one.");
   auth.registerSuccess(e.app, user, e);
   devices.setUser(e, dev, user.id);
   return $apis.recordAuthResponse(e, user, "pin");
 });
 
 // Set or change a PIN: yourself, or someone below you with users.manage (superuser for setup/tests).
+// A PIN set by someone else is TEMPORARY (forgot-PIN flow): it works for security.temp_pin_hours and
+// the person must choose their own PIN at their next sign-in.
 routerAdd("POST", "/api/chedam/users/{id}/pin", (e) => {
   const access = require(`${__hooks}/lib/access.js`);
   const auth = require(`${__hooks}/lib/auth.js`);
@@ -100,14 +103,21 @@ routerAdd("POST", "/api/chedam/users/{id}/pin", (e) => {
   const pin = String((e.requestInfo().body || {}).pin || "");
   const problem = auth.pinProblem(pin);
   if (problem) throw new BadRequestError(problem);
+  const own = !e.hasSuperuserAuth() && e.auth && e.auth.id === target.id;
+  if (own && target.getBool("pin_must_change") && auth.checkSecret(target, "pin", pin)) {
+    throw new BadRequestError("Choose a new PIN, not the temporary one.");
+  }
   target.set("pin", pin);
   target.set("pin_set", true);
+  target.set("pin_must_change", !own);
+  target.set("pin_temp_expires_at", own ? "" :
+    new Date(Date.now() + auth.setting(e.app, "security.temp_pin_hours", 24) * 3600000).toISOString().replace("T", " "));
   target.set("pin_failed_count", 0);
   target.set("pin_locked_until", "");
   target.set("updated_by", e.auth ? e.auth.collection().name + ":" + e.auth.id : "system:auth");
   target.set("@actor", target.getString("updated_by"));
   e.app.save(target);
-  return e.json(200, { ok: true });
+  return e.json(200, { ok: true, temporary: !own });
 }, $apis.requireAuth());
 
 // Unlock someone locked out by wrong tries (manager above them, or superuser).

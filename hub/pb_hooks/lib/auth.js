@@ -67,6 +67,26 @@ function registerSuccess(app, user, e) {
   app.save(user);
 }
 
+function tempPinExpired(user) {
+  if (!user.getBool("pin_must_change")) return false;
+  const s = user.getString("pin_temp_expires_at");
+  return !!s && new Date(s.replace(" ", "T")) < new Date();
+}
+
+// Someone signed in with a temporary PIN may only set their own new PIN (and read who they are,
+// check the device, sign out) until they do. Called from the request middleware (devices.pb.js).
+function pinChangeGate(e) {
+  const a = e.auth;
+  if (!a || a.collection().name !== "users" || !a.getBool("pin_must_change")) return;
+  const path = e.request.url.path;
+  const m = e.request.method;
+  if (m === "POST" && path === "/api/chedam/users/" + a.id + "/pin") return;
+  if (m === "GET" && (path === "/api/chedam/access/me" || path === "/api/chedam/devices/me")) return;
+  if (m === "POST" && (path === "/api/chedam/devices/me/sign-out" || path === "/api/collections/users/auth-refresh")) return;
+  if (path.indexOf("/api/") !== 0) return;
+  throw new ForbiddenError("Choose your own new PIN first.", { pin: "change_required" });
+}
+
 function canSignIn(user) {
   return user.getString("status") === "active" && !user.getString("deleted_at");
 }
@@ -86,4 +106,4 @@ function newRecoveryCode() {
   return raw.match(/.{5}/g).join("-");
 }
 
-module.exports = { setting, pinProblem, lockedUntil, registerFailure, failAndThrow, registerSuccess, canSignIn, lockedError, checkSecret, newRecoveryCode, stampSystem };
+module.exports = { setting, pinProblem, lockedUntil, registerFailure, failAndThrow, tempPinExpired, pinChangeGate, registerSuccess, canSignIn, lockedError, checkSecret, newRecoveryCode, stampSystem };
