@@ -38,7 +38,7 @@ function startHelper(dir) {
 
 let err = null, timer = null;
 try {
-  await t.start();
+  await t.start({ CHEDAM_TEST_NO_BACKUP_CRON: "1" });   // the test calls the tick itself
   const bdir = join(t.dataDir, "backup");
   mkdirSync(bdir, { recursive: true });
   timer = startHelper(bdir);

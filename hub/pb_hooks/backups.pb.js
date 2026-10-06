@@ -2,6 +2,8 @@
 // Backup endpoints (P0 step 7). Logic: lib/backup.js; privileged work: /opt/chedam/bin/chedam-backup.
 
 cronAdd("chedam_backup", "* * * * *", () => {
+  // Test hubs drive the schedule through /api/chedam/backups/tick instead (no race with the test).
+  if ($os.getenv("CHEDAM_TEST_NO_BACKUP_CRON") === "1") return;
   require(`${__hooks}/lib/backup.js`).tick($app);
 });
 

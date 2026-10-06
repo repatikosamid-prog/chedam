@@ -21,7 +21,7 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | 7. Backups ✅ 2026-10-05: verified backups to the SD card, restore tests passed | USB backup (SQLite online backup, verify, retention 14/8/12), schedule, first backup in wizard, restore procedure to spare card; encrypted cloud copy (Google Drive or OneDrive) once client IDs are provided | FR-1.14, 12.08, NFR-03, 04 |
 | 8. Health page 🔶 built, tested, deployed 2026-10-05 | Uptime, temperature, RAM, disk, last backup, clock source, devices online, queue backlog, versions, pending updates | FR-12.09 |
 | 9. Updates ✅ 2026-10-05: 0.9.0 published; install 1.7 s, automatic rollback 4 s, verified download from GitHub | Signed packages (minisign), published to the public `chedam-releases` repo (DL-54); download when online or from USB; install outside trading hours with backup first and automatic rollback; tax-table packages switch on at effective date | FR-12.01-12.04, NFR-20 |
-| 10. Gate tests 🔶 3-device login ✅, update + rollback ✅, backup + restore ✅, memory under load ✅, power pull ×10 ✅ (2026-10-06); camera over HTTPS to do | 3-device login, power pull mid-write (x10), update + rollback, backup + restore to spare card, memory < 150 MB under load (R6), iOS/Android camera over HTTPS (R5) | Section 13 gate |
+| 10. Gate tests ✅ 2026-10-06: 3-device login ✅, update + rollback ✅, backup + restore ✅, memory under load ✅, power pull ×10 ✅; camera over HTTPS deferred to P1 (DL-63) | 3-device login, power pull mid-write (x10), update + rollback, backup + restore to spare card, memory < 150 MB under load (R6), iOS/Android camera over HTTPS (R5) | Section 13 gate |
 
 ## Decisions made in P0 (to add to the Decision log)
 
@@ -69,6 +69,7 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | DL-60 | **chedam-netguard** (root, every minute): online → keeps an fsync'd spare copy of each valid Wi-Fi profile in `/var/lib/chedam-netguard`; no address for 2 min → restores the spare copies if NetworkManager knows no Wi-Fi network, then reconnects; 10 min → reboot (at most once an hour). Reason: a power cut during boot left `/etc/netplan/90-NM-*.yaml` empty and the hub came back without Wi-Fi |
 | DL-61 | **Durability: writes are on the SD card before they are confirmed.** PocketBase opens SQLite with `synchronous=NORMAL` (WAL), which lost 23 of 1,646 confirmed writes in a power cut. `durability.pb.js` sets `synchronous=FULL` on PocketBase's single write connection (before every request, at start-up, every minute). Cost about 70 ms per write on the Pi Zero. The health page shows "Saved before confirming" |
 | DL-62 | The app warns when a device does not trust the hub's certificate (the person tapped through Chrome's warning): an amber bar with a link to the certificate guide. Detected from the service worker's certificate error |
+| DL-63 | **P0 closed without the camera test** (Sreya, 2026-10-06). Camera over HTTPS (R5) and confirming the certificate trust step on the phones move to P1, where phone barcode scanning is built (FR-3.02, FR-6.02); they are tested there before the P1 gate. The pilot-week gate item waits for a pilot store (open question Q9); P0 has no selling, so P0 and P1 are piloted together |
 
 ## Open items to discuss
 
