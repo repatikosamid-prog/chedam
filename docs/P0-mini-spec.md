@@ -20,7 +20,7 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | 6. Setup wizard 🔶 built, tested, deployed 2026-10-05 | Language, hub time check, business profile, branding (logo, colours from logo, receipt header/footer preview), owner account + printed recovery code, people, storage areas, shop-type preset + module switches, optional external references, backup; resumable, skipped steps become tasks | FR-1.01-1.06, 1.13, 1.15 |
 | 7. Backups 🔶 built + tested on the Pi with a disk image 2026-10-05 (real USB drive pending: Sreya's HDD has read errors) | USB backup (SQLite online backup, verify, retention 14/8/12), schedule, first backup in wizard, restore procedure to spare card; encrypted cloud copy (Google Drive or OneDrive) once client IDs are provided | FR-1.14, 12.08, NFR-03, 04 |
 | 8. Health page 🔶 built, tested, deployed 2026-10-05 | Uptime, temperature, RAM, disk, last backup, clock source, devices online, queue backlog, versions, pending updates | FR-12.09 |
-| 9. Updates | Signed packages (minisign), published to the public `chedam-updates` repo; download when online or from USB; install outside trading hours with backup first and automatic rollback; tax-table packages switch on at effective date | FR-12.01-12.04, NFR-20 |
+| 9. Updates | Signed packages (minisign), published to the public `chedam-releases` repo (DL-54); download when online or from USB; install outside trading hours with backup first and automatic rollback; tax-table packages switch on at effective date | FR-12.01-12.04, NFR-20 |
 | 10. Gate tests | 3-device login, power pull mid-write (x10), update + rollback, backup + restore to spare card, memory < 150 MB under load (R6), iOS/Android camera over HTTPS (R5) | Section 13 gate |
 
 ## Decisions made in P0 (to add to the Decision log)
@@ -28,7 +28,7 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | ID | Decision |
 | --- | --- |
 | DL-21 | HTTPS via Caddy with its internal CA generated **on each hub** (one CA per store, never shared). mkcert stays a developer-PC tool only. Certificate covers `chedam.local` and the hub IP |
-| DL-22 | Source repo stays private; signed update packages are published to a separate public repo `chedam-updates` (GitHub Releases) |
+| DL-22 | Source repo stays private; signed update packages are published to a separate public repo (GitHub Releases); named `chedam-releases` in DL-54 |
 | DL-23 | RTC (DS3231) deferred to the pilot build; dev hub uses network time via chrony. Health page reports clock source |
 | DL-24 | Display is a switch, not a fixed choice: `setup-hub.sh --keep-display` keeps HDMI on (the dev/pilot default, so the hub can be operated with a monitor and keyboard); without the flag the hub runs headless and saves about 50 MB of RAM. Re-running the script switches either way. Audio, camera detection and Bluetooth are always off. Pi 4 production hubs plan to use the display for direct operation |
 | DL-25 | PocketBase extended with JavaScript hooks (`pb_hooks`), no Go build, so one binary serves Pi and mini PC (NFR-19) |
@@ -59,6 +59,8 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | DL-50 | Each backup also saves the hub's HTTPS certificate authority (encrypted). A restore puts it back, so paired phones and tills keep trusting the rebuilt hub with no certificate reinstall |
 | DL-51 | Drive listing never mounts a drive (it stays quick even with a sick drive); mounting has a 90 s limit. Restore test (owner) rebuilds into a temporary copy and leaves live data alone; the real restore is a technician command that keeps a pre-restore copy (`docs/P0-backup-restore.md`) |
 | DL-52 | Testing phase: Sreya's HDD was planned as the backup drive, but it showed read errors (see work log), so nothing was written to it. Use a healthy USB stick or drive for testing. Production: OTG adapter plus a spare SD card or USB SSD |
+| DL-53 | Old browsers (Sreya, 2026-10-05): no extra work for Chrome 98-era phones. The Android 9 test phone (Chrome 98) shows misaligned screens; testing continues on another, up-to-date phone. Supported browsers stay as NFR-18 (current Chrome, Edge, Safari, Firefox) |
+| DL-54 | Update channel repo (Sreya, 2026-10-05): public GitHub repo **`repatikosamid-prog/chedam-releases`** for signed update packages (GitHub Releases). The source repo stays private. The local `chedam-updates/` folder is Sreya's notes repo and is unrelated |
 
 ## Open items to discuss
 
@@ -68,7 +70,7 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 
 - **Android 9 cannot resolve `.local` names**, so it must reach the hub by IP. The hub needs a fixed IP (router DHCP reservation), and the pairing QR code must carry the IP. The TELUS modem doesn't allow reservations, so the dev hub sits behind our own LAN-cabled router (2026-10-03, see `P0-restart-new-network.md`).
 - Android 9's Chrome no longer receives updates (I believe 138 was the last version). Treat that phone as the worst-case browser test.
-- **Found 2026-10-05:** the test Android 9 phone (Honor 9 Lite) actually runs **Chrome 98**. The app's CSS (Tailwind 4) needs Chrome 111+, so screens are misaligned there. Decide: update Chrome on the phone, or support older browsers in the app (open issue in the work log).
+- **Found 2026-10-05:** the test Android 9 phone (Honor 9 Lite) actually runs **Chrome 98**. The app's CSS (Tailwind 4) needs Chrome 111+, so screens are misaligned there. Decided (DL-53): no old-browser work; test on an up-to-date phone.
 - Caddy's hub certificates last 12 hours and renew automatically, so they depend on a correct clock. Without an RTC, a hub that boots offline after a power cut starts with a stale clock. Certificate validity and the BR-30 time rules both depend on the clock, which makes the RTC a hard requirement for the pilot (DL-23).
 - If the hub IP changes, re-run `setup-hub.sh` so the certificate covers the new IP.
 - Windows `curl` (Schannel) fails revocation checks on the private CA. Use `--ssl-no-revoke` for command-line tests; browsers are unaffected.
