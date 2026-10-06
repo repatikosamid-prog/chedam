@@ -112,7 +112,9 @@ function task(app, title, open) {
 // Applies a finished run's result to its record (called from the status endpoint and every minute).
 function consume(app) {
   const res = readJson(dir(app) + "/result.json");
-  if (res && res.action === "run") {
+  // The cron job and the status endpoint can both get here at once: find, save and task run in one
+  // transaction (one writer), so a result is applied once and the record never shows without its task.
+  if (res && res.action === "run") app.runInTransaction((app) => {
     const recs = app.findRecordsByFilter("backups", "job_id = {:j} && status = 'running'", "", 1, 0, { j: String(res.id) });
     if (recs.length) {
       const r = recs[0];
@@ -140,10 +142,10 @@ function consume(app) {
         task(app, res.code === "drive_missing" ? "Backup failed: plug in the backup drive" : "Backup failed: " + String(res.error || "").substring(0, 150), true);
       }
     }
-  }
+  });
   // Jobs that never got an answer (helper missing, hub restarted mid-job)
   const old = new Date(Date.now() - STALE_MIN * 60000).toISOString().replace("T", " ");
-  app.findRecordsByFilter("backups", "status = 'running' && started_at < {:t}", "", 0, 0, { t: old }).forEach((r) => {
+  app.runInTransaction((app) => app.findRecordsByFilter("backups", "status = 'running' && started_at < {:t}", "", 0, 0, { t: old }).forEach((r) => {
     r.set("status", "failed");
     r.set("finished_at", new DateTime());
     r.set("error", "No answer from the backup helper.");
@@ -152,7 +154,7 @@ function consume(app) {
     r.set("updated_by", "system:backup"); r.set("@actor", "system:backup");
     app.save(r);
     task(app, "Backup failed: no answer from the backup helper", true);
-  });
+  }));
 }
 
 // Nightly backup: once per day after backup.schedule (hub clock zone = store time zone); a failed

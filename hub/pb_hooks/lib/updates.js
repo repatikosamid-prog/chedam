@@ -117,29 +117,34 @@ function consume(app) {
     if (res.ok) remember(app, res.packages, "system:update");
     saveSetting(app, "updates.last_check", { at: last.at, ok: !!res.ok, latest: res.latest || "", error: res.error || "" });
   }
+  // The cron job and the status endpoint can both get here at once: find, save and task run in one
+  // transaction (one writer), so a result is applied once and the record never shows without its task.
   if (res && res.action === "install") {
-    const recs = app.findRecordsByFilter("updates", "job_id = {:j} && status = 'installing'", "", 1, 0, { j: String(res.id) });
-    if (recs.length) {
+    app.runInTransaction((tx) => {
+      const recs = tx.findRecordsByFilter("updates", "job_id = {:j} && status = 'installing'", "", 1, 0, { j: String(res.id) });
+      if (!recs.length) return;
       const r = recs[0];
       stamp(r, "system:update");
       if (res.ok) {
         r.set("status", "installed"); r.set("installed_at", new DateTime()); r.set("backup", res.snapshot || "");
-        app.save(r);
-        task(app, "", false);
+        tx.save(r);
+        task(tx, "", false);
       } else {
         r.set("status", res.code === "rolled_back" ? "rolled_back" : "failed");
         if (res.code === "rolled_back") r.set("rolled_back_at", new DateTime());
         r.set("error", String(res.error || "").substring(0, 2000));
-        app.save(r);
-        task(app, res.code === "rollback_failed" ? "Update failed and the hub could not roll back: restore from backup"
+        tx.save(r);
+        task(tx, res.code === "rollback_failed" ? "Update failed and the hub could not roll back: restore from backup"
           : "Update " + r.getString("version") + " failed and was rolled back", true);
       }
-    }
+    });
   }
   const old = new Date(Date.now() - STALE_MIN * 60000).toISOString().replace("T", " ");
-  app.findRecordsByFilter("updates", "status = 'installing' && updated_at < {:t}", "", 0, 0, { t: old }).forEach((r) => {
-    r.set("status", "failed"); r.set("error", "No answer from the update helper."); stamp(r, "system:update"); app.save(r);
-    task(app, "Update " + r.getString("version") + " did not finish", true);
+  app.runInTransaction((tx) => {
+    tx.findRecordsByFilter("updates", "status = 'installing' && updated_at < {:t}", "", 0, 0, { t: old }).forEach((r) => {
+      r.set("status", "failed"); r.set("error", "No answer from the update helper."); stamp(r, "system:update"); tx.save(r);
+      task(tx, "Update " + r.getString("version") + " did not finish", true);
+    });
   });
 }
 
