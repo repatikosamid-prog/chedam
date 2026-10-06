@@ -9,6 +9,7 @@
   let modules = $state([]);
   let tasks = $state([]);
   let setupLeft = $state(0);
+  let health = $state(null);
   let newCode = $state("");
   let installEvent = $state(null);
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -21,6 +22,10 @@
     if (can("tasks.view")) {
       const t = await api("GET", "/api/collections/tasks/records?perPage=20&sort=-created_at&filter=" + encodeURIComponent("status='open' && deleted_at=''"));
       if (t.ok) tasks = t.json.items;
+    }
+    if (can("health.view")) {
+      const h = await api("GET", "/api/chedam/health");
+      if (h.ok) health = h.json;
     }
     if (can("setup.run")) {
       const st = await api("GET", "/api/chedam/setup/status");
@@ -62,6 +67,16 @@
     <button class="btn-ghost" onclick={() => signOut()}>Sign out</button>
   </div>
 
+  {#if health && health.overall === "bad"}
+    <div class="card flex flex-wrap items-center justify-between gap-3 border-bad">
+      <div>
+        <h2 class="font-semibold text-bad">The hub needs attention</h2>
+        <p class="text-sm">{health.items.filter((i) => i.status === "bad").map((i) => i.label + ": " + i.value).join(" · ")}</p>
+      </div>
+      <button class="btn-ghost" onclick={() => go("health")}>Hub health</button>
+    </div>
+  {/if}
+
   {#if can("setup.run") && setupLeft > 0}
     <div class="card flex flex-wrap items-center justify-between gap-3 border-accent">
       <div>
@@ -93,6 +108,12 @@
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("wizard")}>
           <span class="font-semibold">Store setup</span>
           <span class="text-sm text-muted">Profile, logo, team, features</span>
+        </button>
+      {/if}
+      {#if can("health.view")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("health")}>
+          <span class="font-semibold">Hub health {health ? (health.overall === "bad" ? "✗" : health.overall === "warn" ? "!" : "✓") : ""}</span>
+          <span class="text-sm text-muted">Temperature, storage, clock, backups</span>
         </button>
       {/if}
       {#if can("backups.view")}

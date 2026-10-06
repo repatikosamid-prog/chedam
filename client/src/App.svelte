@@ -16,6 +16,7 @@
   import Recovery from "./screens/Recovery.svelte";
   import Wizard from "./screens/Wizard.svelte";
   import Backups from "./screens/Backups.svelte";
+  import Health from "./screens/Health.svelte";
 
   onMount(() => {
     startMonitor();
@@ -82,5 +83,6 @@
   {:else if s.screen === "recovery"}<Recovery />
   {:else if s.screen === "wizard"}<Wizard />
   {:else if s.screen === "backups"}<Backups />
+  {:else if s.screen === "health"}<Health />
   {/if}
 </main>
