@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "chedam-dev",
+      "runtimeExecutable": "C:\\Program Files\\Git\\bin\\bash.exe",
+      "runtimeArgs": [
+        "tools/devhub/dev-hub.sh",
+        "--fresh"
+      ],
+      "port": 8095
+    }
+  ]
+}

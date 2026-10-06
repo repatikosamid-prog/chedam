@@ -53,6 +53,8 @@ These rules apply to every phase. They come from Master Spec Section 10 and NFR-
 - **Third-party code is an npm dependency with an exact version** (the lockfile has the integrity hash). Nothing is loaded from a CDN: the hub has no internet at the till.
 - **The certificate guide** (`client/public/device-setup.html` + `setup.css`) stays a plain page, because it is served over HTTP before the device trusts the hub.
 
+- **Trying screens locally:** `bash tools/devhub/dev-hub.sh [--fresh]` runs a dev hub with the sample store on http://127.0.0.1:8095, serving the last client build (`npm run build` in `client/`). A dev superuser for pairing codes is in `.devhub/superuser.txt` (gitignored). After a rebuild, unregister the service worker or reload twice to see the new build.
+
 ## Migrations
 
 - Location: `hub/pb_migrations/<unix-ts>_<phase>_<what>.js`. P0 uses `17912000xx`, P1 `17913000xx` (dev data `179130010x`). Every migration has a `down` that removes exactly what `up` added (NFR-20).

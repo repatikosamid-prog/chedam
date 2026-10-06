@@ -1,6 +1,6 @@
 <script>
   // Signed-in shell. Modules switched on for this store appear as tiles; their screens arrive in later
-  // phases. P0 has the device manager. My settings: large text, high contrast (NFR-16/17), change PIN.
+  // phases. P0 has the device manager; P1 adds products, categories and tax. My settings: large text, high contrast (NFR-16/17), change PIN.
   import { onMount } from "svelte";
   import { api, load } from "../lib/api.js";
   import { s, go, can, signOut, applyPrefs, handleRefusal } from "../lib/session.svelte.js";
@@ -95,6 +95,7 @@
           <li class="flex min-h-12 items-center justify-between gap-3 py-2">
             <span>{t.title}</span>
             {#if t.kind === "setup_incomplete" && can("setup.run")}<button class="btn-ghost min-h-10 text-sm" onclick={() => go("wizard")}>Do it</button>{/if}
+            {#if t.kind === "draft_products"}<button class="btn-ghost min-h-10 text-sm" onclick={() => { s.productFilter = "draft"; go("products"); }}>Show</button>{/if}
           </li>
         {/each}
       </ul>
@@ -110,6 +111,10 @@
           <span class="text-sm text-muted">Profile, logo, team, features</span>
         </button>
       {/if}
+      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("products")}>
+        <span class="font-semibold">Products</span>
+        <span class="text-sm text-muted">{can("catalogue.edit") ? "Add and edit products, packs, prices" : "Look up products and prices"}</span>
+      </button>
       {#if can("health.view")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("health")}>
           <span class="font-semibold">Hub health {health ? (health.overall === "bad" ? "✗" : health.overall === "warn" ? "!" : "✓") : ""}</span>

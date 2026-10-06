@@ -1,5 +1,6 @@
 // What the app shows, decided from this device's status on the hub and who is signed in.
-// Screens: boot | setup | recovery | pair | wait | names | pin | newpin | owner | home | devices | wizard
+// Screens: boot | setup | recovery | pair | wait | names | pin | newpin | owner | home | devices | wizard |
+// backups | health | updates | products | product | categories | tax
 import { api, load, save } from "./api.js";
 
 export const s = $state({
@@ -10,13 +11,17 @@ export const s = $state({
   notice: { text: "", kind: "" },
   autoLockMin: 5,
   recoveryCode: "",     // shown once after setup (FR-1.03)
+  productId: "",        // product open in the product form ("" = new)
+  productFilter: "",    // status filter the product list opens with (e.g. "draft" from the Drafts task)
 });
 
 export function notify(text, kind = "") { s.notice = { text, kind }; }
 
+const HASH = { devices: "#devices", wizard: "#setup", backups: "#backups", health: "#health", updates: "#updates",
+  products: "#products", product: "#products", categories: "#categories", tax: "#tax" };
+
 export function go(screen) {
   s.screen = screen;
-  const HASH = { devices: "#devices", wizard: "#setup", backups: "#backups", health: "#health", updates: "#updates" };
   const hash = HASH[screen] || "";
   if (location.hash !== hash) history.replaceState(null, "", location.pathname + location.search + hash);
 }
@@ -76,10 +81,15 @@ async function loadMe() {
   applyPrefs(s.me.user);
   if (s.me.user.pin_must_change) return go("newpin");
   await loadAutoLock();
-  const FROM_HASH = { "#devices": "devices", "#setup": "wizard", "#backups": "backups", "#health": "health", "#updates": "updates" };
-  const NEEDS = { devices: "devices.view", wizard: "setup.run", backups: "backups.view", health: "health.view", updates: "updates.view" };
-  const want = NEEDS[s.screen] ? s.screen : FROM_HASH[location.hash];
-  if (want && can(NEEDS[want])) return go(want);
+  const FROM_HASH = { "#devices": "devices", "#setup": "wizard", "#backups": "backups", "#health": "health", "#updates": "updates",
+    "#products": "products", "#categories": "categories", "#tax": "tax" };
+  // "" = any signed-in person may open it (the hub still decides what they can change)
+  const NEEDS = { devices: "devices.view", wizard: "setup.run", backups: "backups.view", health: "health.view", updates: "updates.view",
+    products: "", product: "", categories: "catalogue.edit", tax: "" };
+  // An address typed or linked (#tax) wins over the screen already open.
+  const fromHash = FROM_HASH[location.hash];
+  const want = fromHash && HASH[s.screen] !== location.hash ? fromHash : s.screen in NEEDS ? s.screen : fromHash;
+  if (want && (NEEDS[want] === "" || can(NEEDS[want]))) return go(want);
   return go("home");
 }
 

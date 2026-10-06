@@ -18,12 +18,16 @@
   import Backups from "./screens/Backups.svelte";
   import Health from "./screens/Health.svelte";
   import Updates from "./screens/Updates.svelte";
+  import Products from "./screens/Products.svelte";
+  import ProductEdit from "./screens/ProductEdit.svelte";
+  import Categories from "./screens/Categories.svelte";
+  import Tax from "./screens/Tax.svelte";
 
   onMount(() => {
     startMonitor();
     refresh();
     // Re-check now and then, so a sign-out, lock or removal from the device manager shows here.
-    const busyScreens = ["pin", "owner", "setup", "recovery", "wizard", "newpin"];
+    const busyScreens = ["pin", "owner", "setup", "recovery", "wizard", "newpin", "product", "categories", "tax"];
     const poll = setInterval(() => { if (!busyScreens.includes(s.screen)) refresh(); }, 30000);
     const stop = watchIdle(() => s.autoLockMin, () => !!s.me,
       () => signOut("Locked after " + s.autoLockMin + " minutes without use. Pick your name to continue."));
@@ -86,5 +90,9 @@
   {:else if s.screen === "backups"}<Backups />
   {:else if s.screen === "health"}<Health />
   {:else if s.screen === "updates"}<Updates />
+  {:else if s.screen === "products"}<Products />
+  {:else if s.screen === "product"}{#key s.productId}<ProductEdit />{/key}
+  {:else if s.screen === "categories"}<Categories />
+  {:else if s.screen === "tax"}<Tax />
   {/if}
 </main>

@@ -47,3 +47,6 @@ hub/pb_public/
 
 # Signed update packages (built by tools/release/make-release.sh; published in the chedam-releases repo)
 releases/
+
+# Local dev hub data (tools/devhub/dev-hub.sh)
+.devhub/
