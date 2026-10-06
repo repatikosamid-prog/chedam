@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# chedam-netguard (root, every minute via chedam-netguard.timer). Keeps the hub on the store's Wi-Fi.
+#
+# Why (found in the P0 power-pull test, 2026-10-06): Raspberry Pi OS keeps the Wi-Fi network in
+# /etc/netplan/*.yaml and rewrites it during boot. A power cut while booting left those files EMPTY,
+# and the hub came back with no Wi-Fi at all: every till showed "hub not reachable".
+#
+# What it does:
+#   online  -> keep a spare copy of each working Wi-Fi profile in /var/lib/chedam-netguard (written
+#              with fsync, only from a profile that has an SSID and is not empty)
+#   offline -> after 2 min: if NetworkManager knows no Wi-Fi network, put the spare copies back;
+#              in any case ask NetworkManager to connect again
+#           -> after 10 min: reboot (at most once an hour)
+# Everything it does goes to the journal (journalctl -t chedam-netguard) and to /run/chedam-netguard.json.
+set -u
+STATE=/var/lib/chedam-netguard
+SPARE=$STATE/profiles
+NM_DIR=/etc/NetworkManager/system-connections
+IFACE=wlan0
+mkdir -p "$SPARE" && chmod 700 "$STATE" "$SPARE"
+now=$(date +%s)
+log() { logger -t chedam-netguard "$*"; }
+status() { printf '{"at":%s,"state":"%s","note":"%s"}\n' "$now" "$1" "$2" > /run/chedam-netguard.json; }
+
+has_ip() { ip -4 -o addr show dev "$IFACE" 2>/dev/null | grep -q " inet "; }
+wifi_profiles() { nmcli -t -f TYPE,FILENAME connection show 2>/dev/null | awk -F: '$1=="802-11-wireless"{print $2}'; }
+valid_profile() { [ -s "$1" ] && grep -q '^ssid=' "$1"; }
+
+if has_ip; then
+  rm -f "$STATE/down_since"
+  # Refresh the spare copies from profiles that look right (keyfiles only: netplan YAML is regenerated)
+  for f in $(wifi_profiles); do
+    case "$f" in *.nmconnection) ;; *) continue ;; esac
+    b=$SPARE/$(basename "$f")
+    if valid_profile "$f" && ! cmp -s "$f" "$b"; then
+      cp "$f" "$b.tmp" && sync "$b.tmp" && mv "$b.tmp" "$b" && sync "$SPARE"
+      log "spare copy saved: $(basename "$f")"
+    fi
+  done
+  status online "$(hostname -I | awk '{print $1}')"
+  exit 0
+fi
+
+[ -f "$STATE/down_since" ] || echo "$now" > "$STATE/down_since"
+down=$(( now - $(cat "$STATE/down_since") ))
+[ "$down" -lt 120 ] && { status waiting "no address for ${down}s"; exit 0; }
+
+if [ -z "$(wifi_profiles)" ] && ls "$SPARE"/*.nmconnection >/dev/null 2>&1; then
+  for b in "$SPARE"/*.nmconnection; do
+    install -m 600 -o root -g root "$b" "$NM_DIR/$(basename "$b")"
+  done
+  sync "$NM_DIR"
+  nmcli connection reload
+  log "no Wi-Fi network known after ${down}s without an address: restored spare copies ($(ls "$SPARE" | tr '\n' ' '))"
+fi
+nmcli radio wifi on >/dev/null 2>&1
+nmcli device connect "$IFACE" >/dev/null 2>&1 && log "reconnected $IFACE after ${down}s"
+has_ip && { rm -f "$STATE/down_since"; status online "recovered after ${down}s"; exit 0; }
+
+if [ "$down" -ge 600 ]; then
+  last=$(cat "$STATE/last_reboot" 2>/dev/null || echo 0)
+  if [ $(( now - last )) -ge 3600 ]; then
+    echo "$now" > "$STATE/last_reboot"; sync
+    log "still no address after ${down}s: rebooting"
+    status rebooting "no address for ${down}s"
+    systemctl reboot
+    exit 0
+  fi
+fi
+status offline "no address for ${down}s"

@@ -1,0 +1,7 @@
+[Unit]
+Description=Chedam netguard: keep the hub on the store's Wi-Fi (restore lost profile, reconnect)
+After=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/chedam/bin/chedam-netguard

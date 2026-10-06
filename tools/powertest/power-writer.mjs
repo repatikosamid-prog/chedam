@@ -8,7 +8,7 @@
 //   - both databases pass PRAGMA integrity_check; the store's real hub restarted by itself
 // Usage: node tools/powertest/power-writer.mjs <token-file> [cycles=10] [report-file]
 import { spawn, execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync } from "node:fs";
 
 const [tokenFile, cyclesArg = "10", reportFile = "powertest-report.json"] = process.argv.slice(2);
 const TOKEN = readFileSync(tokenFile, "utf8").trim();
@@ -25,9 +25,11 @@ function openTunnel() {
     "-o", "ConnectTimeout=5", "-L", `${PORT}:127.0.0.1:8199`, "chedam"], { stdio: "ignore" });
 }
 
-async function req(method, path, body) {
+// Writes give up after 4 s (the power may be gone); checks after a reboot get 60 s (a Pi Zero that has
+// just booted needs several seconds to list ~20,000 records)
+async function req(method, path, body, ms = 4000) {
   const r = await fetch(BASE + path, { method, headers: { "Content-Type": "application/json", Authorization: TOKEN },
-    body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(4000) });
+    body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(ms) });
   const json = await r.json().catch(() => null);
   return { status: r.status, json };
 }
@@ -36,6 +38,9 @@ async function req(method, path, body) {
 const run = Date.now().toString(36);
 let seq = 0;
 const acked = new Set();          // names the hub confirmed
+// Every confirmed write is also appended to a file at once, so the proof survives a crash of this script
+const ACKED_FILE = reportFile + ".acked";
+writeFileSync(ACKED_FILE, "");
 let up = false, cutAt = null, outages = [];
 const report = { run, started: new Date().toISOString(), cycles: [] };
 
@@ -45,7 +50,7 @@ async function writer(id) {
     const name = `P${run}-${++seq}`;
     try {
       const r = await req("POST", "/api/collections/storage_areas/records", { name, kind: "shelf", active: true, temp_min_c: seq % 7, temp_max_c: 20 });
-      if (r.status === 200 && r.json && r.json.name === name) acked.add(name);
+      if (r.status === 200 && r.json && r.json.name === name) { acked.add(name); appendFileSync(ACKED_FILE, name + "\n"); }
     } catch { /* hub went away mid-request: not confirmed, so not counted */ }
     await sleep(60 + id * 10);
     if (outages.length >= CYCLES && up) return;
@@ -55,7 +60,7 @@ async function writer(id) {
 async function allNames() {
   const names = [];
   for (let page = 1; ; page++) {
-    const r = await req("GET", `/api/collections/storage_areas/records?perPage=500&page=${page}&fields=name&filter=${encodeURIComponent(`name~'P${run}-'`)}`);
+    const r = await req("GET", `/api/collections/storage_areas/records?perPage=500&page=${page}&fields=name&filter=${encodeURIComponent(`name~'P${run}-'`)}`, null, 60000);
     names.push(...r.json.items.map((x) => x.name));
     if (page >= r.json.totalPages) break;
   }
@@ -71,7 +76,17 @@ function piCheck() {
 }
 
 async function verify(cycle, downAt, upAt) {
-  const names = await allNames();
+  let names = null, lastErr = "";
+  for (let attempt = 1; attempt <= 3 && !names; attempt++) {
+    try { names = await allNames(); } catch (e) { lastErr = String(e.message || e); await sleep(10000); }
+  }
+  if (!names) {
+    const res = { cycle, power_cut_at: downAt, back_at: upAt, pass: false, error: "check failed: " + lastErr };
+    report.cycles.push(res);
+    writeFileSync(reportFile, JSON.stringify(report, null, 2));
+    console.log(`[${now()}] cycle ${cycle}: CHECK FAILED (${lastErr}). The confirmed writes are kept in ${ACKED_FILE}.`);
+    return;
+  }
   const present = new Set(names);
   const lost = [...acked].filter((n) => !present.has(n));
   const dupes = names.length - present.size;

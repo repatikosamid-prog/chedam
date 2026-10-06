@@ -64,6 +64,10 @@ install -d -m 700 "$ROOT/keys"   # also holds the private backup key: root only
 install -m 644 "$SYS/update-signing.pub" "$ROOT/keys/update-signing.pub"
 install -m 644 "$SYS/chedam-update.path" "$SYS/chedam-update.service" /etc/systemd/system/
 
+log "Network guard (restores a lost Wi-Fi profile, reconnects; DL-60)"
+install -m 755 -o root -g root "$SYS/chedam-netguard" "$ROOT/bin/chedam-netguard"
+install -m 644 "$SYS/chedam-netguard.service" "$SYS/chedam-netguard.timer" /etc/systemd/system/
+
 log "Monitor message (setup code on a new hub, DL-44)"
 install -m 644 "$SYS/chedam-console.path" "$SYS/chedam-console.service" /etc/systemd/system/
 ln -sfn "$ROOT/pb_data/console.issue" /etc/issue.d/chedam.issue
@@ -115,7 +119,7 @@ log "Start services"
 systemctl daemon-reload
 systemctl enable --now chrony avahi-daemon >/dev/null
 systemctl enable chedam-hub caddy >/dev/null
-systemctl enable --now chedam-console.path chedam-backup.path chedam-update.path >/dev/null
+systemctl enable --now chedam-console.path chedam-backup.path chedam-update.path chedam-netguard.timer >/dev/null
 systemctl restart chedam-hub caddy
 systemctl restart systemd-journald
 
