@@ -63,6 +63,8 @@ echo "   $NAME  $SIZE bytes  sha256 $SHA  signature ok"
 
 echo "== Channel file"
 mkdir -p "$CHANNEL_REPO/stable" "$CHANNEL_REPO/packages"
+# Signed files must reach GitHub byte for byte: no line-ending conversion in the channel repo
+grep -qx '\* -text' "$CHANNEL_REPO/.gitattributes" 2>/dev/null || { echo "missing '* -text' in $CHANNEL_REPO/.gitattributes"; exit 1; }
 cp "$OUT/$NAME" "$OUT/$NAME.sig" "$CHANNEL_REPO/packages/"
 node -e '
 const fs = require("fs");
