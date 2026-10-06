@@ -67,6 +67,15 @@ function collect(app) {
     items.push(item("memory", "Free memory", mb(free) + " MB of " + mb(mem.MemTotal) + " MB", free < 50 * 1048576 ? "bad" : free < 100 * 1048576 ? "warn" : "ok"));
   }
 
+  // Durability: confirmed writes are on the card before the answer (synchronous=FULL; durability.pb.js)
+  try {
+    const row = new DynamicModel({ synchronous: 0 });
+    app.nonconcurrentDB().newQuery("PRAGMA synchronous").one(row);
+    const full = Number(row.synchronous) >= 2;
+    items.push(item("durability", "Saved before confirming", full ? "Yes" : "No", full ? "ok" : "bad",
+      full ? "" : "Writes could be lost in a power cut (synchronous=" + row.synchronous + ")."));
+  } catch (_) { /* unknown */ }
+
   // Disk (the SD card holding the database)
   const df = cmd("df", "-B1", "--output=size,avail", app.dataDir()).split("\n").pop().trim().split(/\s+/);
   if (df.length === 2 && Number(df[0])) {

@@ -31,6 +31,7 @@ try {
   for (const id of ["uptime", "temperature", "power", "clock", "internet", "backup", "devices", "queue", "versions", "updates"]) {
     check(`item "${id}" present with a status`, !!byId[id] && ["ok", "warn", "bad", "info"].includes(byId[id].status), JSON.stringify(byId[id]));
   }
+  check("writes are saved before they are confirmed (synchronous=FULL)", byId.durability && byId.durability.value === "Yes" && byId.durability.status === "ok", JSON.stringify(byId.durability));
   check("no backup drive yet -> backup is bad and overall is bad", byId.backup.status === "bad" && h.json.overall === "bad");
   check("devices online counts this session's tills", /\d+ of \d+/.test(byId.devices.value) && Number(byId.devices.value.split(" of ")[1]) >= 2);
   check("versions show the schema migration", /Schema 17912000\d\d_/.test(byId.versions.detail), byId.versions.detail);
