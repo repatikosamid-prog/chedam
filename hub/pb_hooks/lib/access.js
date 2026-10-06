@@ -24,6 +24,15 @@ const TABLES = {
   events:               { list: "events.view", view: "events.view", create: null, update: null, delete: null },
   backups:              { list: "backups.view", view: "backups.view", create: null, update: null, delete: null },
   updates:              { list: "updates.view", view: "updates.view", create: null, update: null, delete: null },
+  // P1 catalogue and tax (prices of active products also need prices.edit: SPECIAL below)
+  categories:           { list: ANY, view: ANY, create: "catalogue.edit", update: "catalogue.edit", delete: null },
+  products:             { list: ANY, view: ANY, create: "catalogue.edit", update: "catalogue.edit", delete: null },
+  selling_units:        { list: ANY, view: ANY, create: "catalogue.edit", update: "catalogue.edit", delete: null },
+  price_history:        { list: ANY, view: ANY, create: null, update: null, delete: null },
+  tax_types:            { list: ANY, view: ANY, create: "tax.manage", update: "tax.manage", delete: null },
+  tax_rates:            { list: ANY, view: ANY, create: "tax.manage", update: "tax.manage", delete: null },
+  tax_classes:          { list: ANY, view: ANY, create: "tax.manage", update: "tax.manage", delete: null },
+  deposits_fees:        { list: ANY, view: ANY, create: "tax.manage", update: "tax.manage", delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".
@@ -42,6 +51,8 @@ const PROTECTED = {
   // Status, keys and sign-in state change only through /api/chedam/devices/... (pairing, approve, lock, revoke)
   devices: ["status", "key_hash", "pairing_code_hash", "pairing_expires_at", "current_user", "last_seen_at", "app_version",
     "user_agent", "approved_by", "approved_at", "revoked_at", "paired_via", "paired_at", "deleted_at"],
+  products: ["draft_reasons"],               // computed by the hub (DL-66)
+  selling_units: ["base_qty"],               // computed by the hub (DL-64)
 };
 
 // Common fields are stamped by the event-log hook, so clients sending them changes nothing.
@@ -298,6 +309,48 @@ const SPECIAL = {
   },
 };
 
+// DL-67: what a customer pays changes only with prices.edit: activating a product, or a price on an
+// active product's selling unit.
+function checkPriceChange(app, actor, product, unitPriceChanged) {
+  if (can(app, actor, "prices.edit")) return;
+  if (unitPriceChanged && product && product.getString("status") === "active") forbid("Changing the price of an active product needs prices.edit.");
+}
+
+SPECIAL.products = {
+  create: (e, app, actor) => {
+    if (e.record.getString("status") === "active" && !can(app, actor, "prices.edit")) forbid("Making a product active needs prices.edit.");
+  },
+  update: (e, app, actor) => {
+    const was = e.record.original().getString("status");
+    if (e.record.getString("status") === "active" && was !== "active" && !can(app, actor, "prices.edit")) {
+      forbid("Making a product active needs prices.edit.");
+    }
+  },
+};
+
+// Classes added through the app are custom; the standard ones come from migrations.
+SPECIAL.tax_classes = {
+  create: (e) => { e.record.set("is_custom", true); },
+  update: (e) => { e.record.set("is_custom", e.record.original().getBool("is_custom")); },
+};
+
+SPECIAL.selling_units = {
+  create: (e, app, actor) => {
+    let product = null;
+    try { product = app.findRecordById("products", e.record.getString("product")); } catch (_) { /* validated later */ }
+    checkPriceChange(app, actor, product, true);
+  },
+  update: (e, app, actor) => {
+    const orig = e.record.original();
+    let product = null;
+    try { product = app.findRecordById("products", orig.getString("product")); } catch (_) { /* validated later */ }
+    if (e.record.getString("product") !== orig.getString("product")) forbid("A selling unit cannot move to another product.");
+    const priceChanged = e.record.getInt("price_cents") !== orig.getInt("price_cents")
+      || (!!e.record.getString("deleted_at") && !orig.getString("deleted_at"));
+    checkPriceChange(app, actor, product, priceChanged);
+  },
+};
+
 function overrideCheck(e, app, actor, rec) {
   const targetId = rec.getString("user");
   if (targetId === actor.id) forbid("You cannot change your own access.");
@@ -312,4 +365,4 @@ function overrideCheck(e, app, actor, rec) {
   if (e.record === rec) e.record.set("granted_by", "users:" + actor.id);
 }
 
-module.exports = { TABLES, effective, can, whoCan, guard, isActive, isOwner, levelOf, roleOf, checkTargetUser };
+module.exports = { TABLES, effective, can, whoCan, guard, isActive, isOwner, levelOf, roleOf, checkTargetUser, checkPriceChange };

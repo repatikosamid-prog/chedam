@@ -34,7 +34,7 @@ try {
   check("writes are saved before they are confirmed (synchronous=FULL)", byId.durability && byId.durability.value === "Yes" && byId.durability.status === "ok", JSON.stringify(byId.durability));
   check("no backup drive yet -> backup is bad and overall is bad", byId.backup.status === "bad" && h.json.overall === "bad");
   check("devices online counts this session's tills", /\d+ of \d+/.test(byId.devices.value) && Number(byId.devices.value.split(" of ")[1]) >= 2);
-  check("versions show the schema migration", /Schema 17912000\d\d_/.test(byId.versions.detail), byId.versions.detail);
+  check("versions show the schema migration", /Schema 1791\d{6}_/.test(byId.versions.detail), byId.versions.detail);
   check("readings missing on this PC show as unknown or info, never an error", ["unknown"].includes(byId.temperature.value) || /°C/.test(byId.temperature.value));
 
   console.log("Backup states drive the status");

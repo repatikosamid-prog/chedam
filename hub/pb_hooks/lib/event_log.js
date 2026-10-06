@@ -29,8 +29,8 @@ function changedFields(before, after) {
   return out;
 }
 
-function write(txApp, record, action) {
-  const before = action === "create" ? null : plain(record.original());
+function write(txApp, record, action, stored) {
+  const before = action === "create" ? null : (stored || plain(record.original()));
   const after = action === "delete" ? null : plain(record);
 
   const ev = new Record(txApp.findCollectionByNameOrId("events"));
@@ -50,6 +50,19 @@ function write(txApp, record, action) {
   txApp.save(ev);
 }
 
+// Table rules that run inside the change's transaction: beforeWrite() checks (one writer at a time,
+// so e.g. two tills cannot take the same barcode), afterWrite() writes that commit or roll back
+// with the change (e.g. price history, FR-5.05).
+const SIDE_EFFECTS = { products: "catalogue.js", selling_units: "catalogue.js", tax_rates: "tax.js", tax_classes: "tax.js" };
+
+function sideEffects(txApp, record, action, when) {
+  const lib = SIDE_EFFECTS[record.collection().name];
+  if (!lib) return;
+  const m = require(`${__hooks}/lib/${lib}`);
+  if (when === "before") m.beforeWrite(txApp, record, action);
+  else m.afterWrite(txApp, record, action);
+}
+
 // Wraps a *Execute hook: the change and its event commit or roll back together.
 function wrap(e, action) {
   if (!isLogged(e.record.collection().name)) {
@@ -62,8 +75,16 @@ function wrap(e, action) {
   try {
     outer.runInTransaction((txApp) => {
       e.app = txApp;
+      sideEffects(txApp, e.record, action, "before");
+      // "before" is read from the database: record.original() is stale when one record object is
+      // saved twice (e.g. created, then activated in the same request).
+      let stored = null;
+      if (action !== "create") {
+        try { stored = plain(txApp.findRecordById(e.record.collection().name, e.record.id)); } catch (_) { stored = null; }
+      }
       e.next();
-      write(txApp, e.record, action);
+      write(txApp, e.record, action, stored);
+      sideEffects(txApp, e.record, action, "after");
     });
   } finally {
     e.app = outer;

@@ -92,7 +92,7 @@ try {
   const mods = (await list("modules")).items;
   check("3 core modules, all on", mods.filter((m) => m.kind === "core" && m.enabled).length === 3);
   check("15 switchable modules", mods.filter((m) => m.kind === "switchable").length === 15);
-  check("20 P0 permissions", counts.permissions === 20);
+  check("23 permissions (20 P0, 3 P1 catalogue)", counts.permissions === 23);
   check("5 role templates", counts.roles === 5);
   const owner = (await list("roles", "code='owner'")).items[0];
   const manager = (await list("roles", "code='manager'")).items[0];
@@ -108,7 +108,7 @@ try {
 
   console.log("Dev sample data");
   check("sample business + location", counts.business === 1 && counts.locations === 1);
-  check("4 storage areas, 5 people, 1 setup task", counts.storage_areas === 4 && counts.users === 5 && counts.tasks === 1);
+  check("4 storage areas, 5 people, 2 tasks (setup, Drafts)", counts.storage_areas === 4 && counts.users === 5 && counts.tasks === 2, JSON.stringify(counts));
   const grocery = mods.filter((m) => m.enabled && m.kind === "switchable").map((m) => m.module).sort();
   check("grocery preset modules on (7)", grocery.length === 7, grocery.join(","));
 
@@ -184,13 +184,13 @@ try {
   server = null;
 
   console.log("Reversible migrations (NFR-20)");
-  // Every Chedam migration: dev pins, dev sample, access, reference data, schema
-  const ours = readdirSync(migDir).filter((f) => f.startsWith("17912")).length;
+  // Every Chedam migration (all phases, dev sample data included)
+  const ours = readdirSync(migDir).filter((f) => f.startsWith("1791")).length;
   const down = spawnSync(PB, pbArgs(["migrate", "down", String(ours)]), { input: "y\n", encoding: "utf8" });
   check(`migrate down ${ours} (all Chedam migrations)`, down.status === 0
     && (down.stdout.match(/Reverted/g) || []).length === ours, down.stdout + down.stderr);
   const reup = spawnSync(PB, pbArgs(["migrate", "up"]), { encoding: "utf8" });
-  check("migrate up again", reup.status === 0 && reup.stdout.includes("1791200101"), reup.stdout + reup.stderr);
+  check("migrate up again", reup.status === 0 && reup.stdout.includes("1791300100"), reup.stdout + reup.stderr);
 } catch (err) {
   failed++;
   console.log("  FAIL unexpected error:", err.message);

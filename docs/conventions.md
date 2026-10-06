@@ -22,6 +22,10 @@ These rules apply to every phase. They come from Master Spec Section 10 and NFR-
 - `pb_hooks/event_log.pb.js` writes one `events` row for every create, update or delete on any non-system collection, **in the same transaction**. If the event fails, the change rolls back.
 - Each event has `table_name`, `record_id`, `action`, `actor`, `device_id`, `before`, `after` and `changed` (the field names changed by an update).
 - Events are append-only. Edits and deletes are refused, even for superusers.
+- **Table rules that must not race or must roll back with the change** go in a library listed in `SIDE_EFFECTS` (`lib/event_log.js`): `beforeWrite(txApp, record, action)` checks and may throw; `afterWrite(...)` writes dependent rows (price history, rule tasks). Both run inside the change's transaction, and also during migrations, so sample data follows the same rules.
+- **Previous values:** read them from the database inside the transaction (`txApp.findRecordById`). `record.original()` is stale when the same record object is saved twice.
+- **JSON fields in hooks:** `record.get()` returns raw bytes; use `JSON.parse(record.getString("field"))`.
+- **Errors with data:** PocketBase rewrites the data of thrown errors. To return a list (e.g. what keeps a product a Draft), catch after the transaction and answer with `e.json(400, ...)`.
 - The device is the one verified by `lib/devices.js` (its id + key headers); a bare `X-Chedam-Device` header counts for nothing.
 
 ## Access
@@ -51,7 +55,7 @@ These rules apply to every phase. They come from Master Spec Section 10 and NFR-
 
 ## Migrations
 
-- Location: `hub/pb_migrations/<unix-ts>_<phase>_<what>.js`. Every migration has a `down` that removes exactly what `up` added (NFR-20).
+- Location: `hub/pb_migrations/<unix-ts>_<phase>_<what>.js`. P0 uses `17912000xx`, P1 `17913000xx` (dev data `179130010x`). Every migration has a `down` that removes exactly what `up` added (NFR-20).
 - Reference data (modules, permissions, roles, default settings) goes in migrations. Each later phase adds its own permissions and settings in its own migration.
 - Dev-only sample data goes in `hub/pb_migrations_dev/` (`*_dev_*` file names). It is deployed only with `deploy.sh --sample-data` and never to a store.
 
