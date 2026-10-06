@@ -5,7 +5,9 @@
 // Any request that gets no answer marks the hub down at once (lib/api.js).
 import { api, onHubChange } from "./api.js";
 
-export const net = $state({ hub: "checking", internet: "", skewMin: 0, checkedAt: 0, busy: false });
+// untrusted: the browser does not trust the hub's certificate (the person tapped through the warning);
+// the app works online but offline mode and the camera are refused, and the connection is not verified.
+export const net = $state({ hub: "checking", internet: "", skewMin: 0, checkedAt: 0, busy: false, untrusted: false });
 
 let timer = null;
 

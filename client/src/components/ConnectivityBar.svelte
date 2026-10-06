@@ -19,6 +19,12 @@
     </span>
     <button class="min-h-8 rounded-lg px-2 underline" onclick={checkNow} disabled={net.busy}>{net.busy ? "Checking…" : "Check"}</button>
   </div>
+  {#if net.untrusted}
+    <div class="bg-warn px-4 py-1.5 text-center text-sm text-bg" role="alert">
+      This device does not trust the hub's certificate yet, so offline mode and the camera will not work.
+      <a class="font-semibold underline" href={"http://" + location.hostname + "/device-setup.html"}>Install the certificate</a>
+    </div>
+  {/if}
   {#if net.hub === "ok" && Math.abs(net.skewMin) >= 2}
     <div class="bg-warn px-4 py-1 text-center text-sm text-bg">
       This device's clock is {Math.abs(net.skewMin)} min {net.skewMin > 0 ? "ahead of" : "behind"} the hub. Please correct it.
