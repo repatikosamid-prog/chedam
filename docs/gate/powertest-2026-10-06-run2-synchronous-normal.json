@@ -1,0 +1,33 @@
+{
+  "run": "muwww973",
+  "started": "2026-10-06T16:47:30.448Z",
+  "cycles": [
+    {
+      "cycle": 1,
+      "power_cut_at": "2026-10-06T16:48:49.185Z",
+      "back_at": "2026-10-06T16:49:51.785Z",
+      "outage_s": 63,
+      "confirmed_writes_so_far": 1646,
+      "records": 1623,
+      "lost_confirmed": 23,
+      "lost_examples": [
+        "Pmuwww973-1624",
+        "Pmuwww973-1625",
+        "Pmuwww973-1626",
+        "Pmuwww973-1627",
+        "Pmuwww973-1628"
+      ],
+      "duplicates": 0,
+      "unconfirmed_but_saved": 0,
+      "audit_entries": 19486,
+      "audit_matches_records": true,
+      "real_hub": "active",
+      "real_integrity": "ok",
+      "test_integrity": "ok",
+      "throttled": "0x0",
+      "new_boot": "185b96b6-acdf-4f7a-b4b6-cc35d16dcfe4",
+      "fsck_note": "EXT4-fs (mmcblk0p2): orphan cleanup on readonly fs",
+      "pass": false
+    }
+  ]
+}
