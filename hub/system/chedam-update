@@ -247,8 +247,23 @@ def action_scan(req):
     return {"installed": current, "packages": found, "errors": errors}
 
 
-def healthy(since, expected_migrations, seconds=90):
+def journal_cursor():
+    """Position at the end of the hub's log, so a check reads only lines written after it."""
+    out = sh("journalctl", "-u", SVC, "-n", "0", "--show-cursor", "--no-pager", check=False).stdout
+    m = re.search(r"-- cursor: (\S+)", out)
+    return m.group(1) if m else ""
+
+
+def healthy(cursor, expected_migrations, seconds=90):
     """The hub answers its health check, logged no migration error, and applied the package's migrations."""
+    fatal = re.compile(r"failed to (apply|run) migration|panic:|Main process exited", re.I)
+
+    def first_fatal():
+        args = ["journalctl", "-u", SVC, "--no-pager", "-o", "cat"] + (["--after-cursor", cursor] if cursor else ["--since", "-2min"])
+        log = sh(*args, check=False).stdout
+        bad = [l for l in log.splitlines() if fatal.search(l)]
+        return bad[0][:200] if bad else ""
+
     end = time.time() + seconds
     ok = False
     while time.time() < end:
@@ -259,13 +274,16 @@ def healthy(since, expected_migrations, seconds=90):
             ok = False
         if ok:
             break
+        # A crash shows in the log within seconds: roll back now instead of waiting out the limit
+        why = first_fatal()
+        if why:
+            return False, why
         time.sleep(1)
     if not ok:
         return False, "The hub did not start within %d s." % seconds
-    log = sh("journalctl", "-u", SVC, "--since", since, "--no-pager", "-o", "cat", check=False).stdout
-    bad = [l for l in log.splitlines() if re.search(r"failed to (apply|run) migration|panic:|Error: ", l, re.I)]
-    if bad:
-        return False, "Errors after start: " + bad[0][:200]
+    why = first_fatal()
+    if why:
+        return False, "Errors after start: " + why
     try:
         con = sqlite3.connect("file:%s?mode=ro" % DB, uri=True, timeout=10)
         applied = {r[0] for r in con.execute("SELECT file FROM _migrations")}
@@ -338,21 +356,22 @@ def action_install(req):
     for d in CODE_DIRS:
         if not os.path.isdir(os.path.join(STAGING, d)):
             raise Fail("bad_package", "The package is missing %s." % d)
-    since = time.strftime("%Y-%m-%d %H:%M:%S")
     t0 = time.time()
     sh("systemctl", "stop", SVC)
+    cursor = journal_cursor()
     copy_code(STAGING, ROOT, owner)
     with open(VERSION_FILE, "w") as f:
         f.write(m["version"] + "\n")
     sh("systemctl", "start", SVC)
 
     # 3. Healthy? Otherwise roll back on our own (NFR-20)
-    ok, why = healthy(since, m.get("migrations", []))
+    ok, why = healthy(cursor, m.get("migrations", []))
     shutil.rmtree(STAGING, ignore_errors=True)
     if ok:
         return {"version": m["version"], "previous": before, "snapshot": os.path.basename(snap), "seconds": round(time.time() - t0, 1)}
 
     sh("systemctl", "stop", SVC, check=False)
+    cursor = journal_cursor()            # judge the rollback only by what happens from here on
     copy_code(PREVIOUS, ROOT, owner)
     for ext in ("-wal", "-shm"):
         if os.path.exists(DB + ext):
@@ -363,7 +382,7 @@ def action_install(req):
     with open(VERSION_FILE, "w") as f:
         f.write(before + "\n")
     sh("systemctl", "start", SVC, check=False)
-    back, why2 = healthy(time.strftime("%Y-%m-%d %H:%M:%S"), [], 90)
+    back, why2 = healthy(cursor, [], 90)
     raise Fail("rolled_back" if back else "rollback_failed",
                ("Update %s failed and was rolled back to %s: %s" % (m["version"], before or "the previous version", why)) if back
                else ("Update %s failed (%s) AND the rollback did not come up: %s. Restore from backup." % (m["version"], why, why2)))

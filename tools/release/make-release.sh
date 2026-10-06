@@ -25,7 +25,8 @@ while [ $# -gt 0 ]; do
 done
 
 [ -f "$KEY" ] || { echo "Signing key not found: $KEY"; exit 1; }
-VER=$(node -p "require('$ROOT/client/package.json').version")
+# (relative path: on Windows, Node cannot resolve Git Bash paths written inside a script)
+VER=$(cd "$ROOT/client" && node -p "require('./package.json').version")
 NAME="chedam-app-$VER.tar.gz"
 OUT="$ROOT/releases/$VER"
 STAGE="$OUT/stage"
