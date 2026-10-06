@@ -68,6 +68,7 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 
 - **Android 9 cannot resolve `.local` names**, so it must reach the hub by IP. The hub needs a fixed IP (router DHCP reservation), and the pairing QR code must carry the IP. The TELUS modem doesn't allow reservations, so the dev hub sits behind our own LAN-cabled router (2026-10-03, see `P0-restart-new-network.md`).
 - Android 9's Chrome no longer receives updates (I believe 138 was the last version). Treat that phone as the worst-case browser test.
+- **Found 2026-10-05:** the test Android 9 phone (Honor 9 Lite) actually runs **Chrome 98**. The app's CSS (Tailwind 4) needs Chrome 111+, so screens are misaligned there. Decide: update Chrome on the phone, or support older browsers in the app (open issue in the work log).
 - Caddy's hub certificates last 12 hours and renew automatically, so they depend on a correct clock. Without an RTC, a hub that boots offline after a power cut starts with a stale clock. Certificate validity and the BR-30 time rules both depend on the clock, which makes the RTC a hard requirement for the pilot (DL-23).
 - If the hub IP changes, re-run `setup-hub.sh` so the certificate covers the new IP.
 - Windows `curl` (Schannel) fails revocation checks on the private CA. Use `--ssl-no-revoke` for command-line tests; browsers are unaffected.
