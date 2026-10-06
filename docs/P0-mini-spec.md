@@ -21,7 +21,7 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | 7. Backups ✅ 2026-10-05: verified backups to the SD card, restore tests passed | USB backup (SQLite online backup, verify, retention 14/8/12), schedule, first backup in wizard, restore procedure to spare card; encrypted cloud copy (Google Drive or OneDrive) once client IDs are provided | FR-1.14, 12.08, NFR-03, 04 |
 | 8. Health page 🔶 built, tested, deployed 2026-10-05 | Uptime, temperature, RAM, disk, last backup, clock source, devices online, queue backlog, versions, pending updates | FR-12.09 |
 | 9. Updates ✅ 2026-10-05: 0.9.0 published; install 1.7 s, automatic rollback 4 s, verified download from GitHub | Signed packages (minisign), published to the public `chedam-releases` repo (DL-54); download when online or from USB; install outside trading hours with backup first and automatic rollback; tax-table packages switch on at effective date | FR-12.01-12.04, NFR-20 |
-| 10. Gate tests | 3-device login, power pull mid-write (x10), update + rollback, backup + restore to spare card, memory < 150 MB under load (R6), iOS/Android camera over HTTPS (R5) | Section 13 gate |
+| 10. Gate tests 🔶 3-device login ✅, update + rollback ✅, backup + restore ✅, memory under load ✅ (2026-10-05); power pull ×10 and camera over HTTPS to do | 3-device login, power pull mid-write (x10), update + rollback, backup + restore to spare card, memory < 150 MB under load (R6), iOS/Android camera over HTTPS (R5) | Section 13 gate |
 
 ## Decisions made in P0 (to add to the Decision log)
 
@@ -65,6 +65,7 @@ A hub that stays up, can be reached safely by any device, is backed up, and can 
 | DL-56 | The update channel is plain files in the public repo (`stable/channel.json`, `packages/…`), published with `git push` and read by hubs from `raw.githubusercontent.com`. No GitHub Releases API or login is needed. Both the channel file and each package are signed; the package must also match the channel's checksum |
 | DL-57 | Installs are done by a root helper (`chedam-update`): signature check → database snapshot + code copy → swap → restart → healthy (health 200, no migration error or crash in the log since a journal cursor, all listed migrations applied) or automatic rollback (old code + snapshot). App packages carry hook code, migrations and the app; dev sample data is never packaged |
 | DL-58 | Updates install "now" (owner) or tonight inside `updates.install_window`. Hubs check once a day when online. USB: folder `chedam-update/`; technicians can use `/opt/chedam/updates/inbox`. Product version = `client/package.json` (0.9.0 for P0 step 9); a developer deploy reports `dev-<commit>` and is older than any release |
+| DL-59 | Per-device rate limits (PocketBase built-in; migration `…10_p0_rate_limits`): `events:list` 10 / 3 s, `*:list` 40 / 3 s, PIN sign-in 15 / 10 s, `/api/` 150 / 3 s. The device's address comes from `X-Forwarded-For` (Caddy sets it and ignores what devices send); 127.0.0.1 (scripts on the hub) is exempt. This keeps one misbehaving device from pushing the hub over 150 MB (NFR-08) |
 
 ## Open items to discuss
 
