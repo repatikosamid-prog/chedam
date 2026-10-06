@@ -14,7 +14,7 @@ Each step: schema migration and sample data first, then hub rules with tests, th
 
 | Step | Delivers | Requirements |
 | --- | --- | --- |
-| 1. Catalogue and tax tables 🔶 hub side built and tested 2026-10-06 (67 tests); screens next | `categories`, `products`, `selling_units` (single, pack, case, by weight; nested), `price_history`, `deposits_fees`, `tax_types`, `tax_rates` (effective dates), `tax_classes`; BR-07 Draft/Active validation; barcode and PLU uniqueness; a task lists Drafts; product + units saved together; barcode lookup; product screens | FR-5.01-5.05, 4.01, 4.02, 4.04, 1.12 (tax part), BR-01, 03, 06-08 |
+| 1. Catalogue and tax tables 🔶 hub side built and tested 2026-10-06 (74 tests); screens next | `categories`, `products`, `selling_units` (single, pack, case, by weight; nested), `price_history`, `deposits_fees`, `tax_types`, `tax_rates` (effective dates), `tax_classes`; BR-07 Draft/Active validation; barcode and PLU uniqueness; a task lists Drafts; product + units saved together; barcode lookup; product screens | FR-5.01-5.05, 4.01, 4.02, 4.04, 1.12 (tax part), BR-01, 03, 06-08 |
 | 2. Stock | `stock_levels`, `stock_lots` (expiry, cost), `stock_movements`; add stock by phone (scan, existing or new product, lot/expiry, torch); "packs or singles?"; bulk add grid; pack break and pack make; damage and loss with reasons and approval; full stock count with variance approval; shrink report. **Camera over HTTPS gate test (R5, DL-63) here** | FR-6.01-6.08, BR-05, 14, 15 |
 | 3. Till and checkout (online) | `tills`, `sales`, `sale_lines`, `payments`, `holds`, `soft_holds`, `tax_exemptions`; open with float by denomination, drops, pay-outs, close with count and Z-report; sales screen (grid, search, USB scan, PLU); cart (discounts, overrides with manager PIN); weighed items; age check; deposits; tax engine (per type per receipt, rounded once); payments (cash with 5¢ rounding, standalone card, store credit, USD cash, split); hold and recall; voids; training mode; FEFO; one-at-a-time hub processing with idempotent sale ids; soft holds | FR-3.01-3.12, 3.15, 3.17, 4.03-4.06, 1.12, BR-10, 11, 13, 16, 18, 21, 22 |
 | 4. Offline selling | Dexie catalogue cache and sale queue on the till, amber offline bar, upload in order on reconnect, duplicates ignored, oversells accepted with an urgent task | FR-3.16, BR-12, Section 8.2, NFR-01, 02 |
@@ -38,6 +38,7 @@ Should-haves (FR-1.16 screen-reader labels, FR-5.04 product autofill) are built 
 | DL-68 | Tax rates are rows with effective dates: GST 5% (federal) and BC PST 7% are seeded; other provinces and HST arrive as tax-table updates (FR-12.03). Tax classes: Standard (GST+PST), GST only, Zero-rated, Exempt; owners can add custom classes. **All tax data stays marked "pending accountant review" until Q1 is answered** |
 | DL-69 | Weighed products need the Weighed Goods module; age limits and deposits/fees need Regulated Items. A product using a switched-off module stays a Draft |
 | DL-70 | Table rules run **inside the change's transaction**: `lib/event_log.js` calls a table's `beforeWrite()` (checks) and `afterWrite()` (dependent writes) around each save, so checks cannot race and dependent writes roll back with the change. The "before" state comes from the database, not `record.original()`, which is stale when one record object is saved twice |
+| DL-72 | **Cashiers do not see costs or margins** (Sreya, 2026-10-06). Permission `costs.view` (owner, manager, accountant, staff, who enter costs when receiving). Without it the hub hides `cost_cents` and the amounts of cost-history rows in every API answer, including realtime |
 | DL-71 | Rule tasks are reused: when the condition returns, the last closed task with that `rule_key` is reopened instead of adding a new one |
 
 ## Open questions carried from the spec
@@ -45,4 +46,5 @@ Should-haves (FR-1.16 screen-reader labels, FR-5.04 product autofill) are built 
 - Q1: tax classes, zero-rated items, deposit/eco-fee tax treatment: accountant to confirm (blocks the P1 release, not the build).
 - Q2: return policy defaults (30 days, $50 cashier limit, store credit without receipt): built as settings with these defaults; Sreya to accept.
 - Q7: pack and single sharing a barcode: supported both ways (DL-65).
-- Who may see costs and margins (cashiers?): P1 shows them to everyone with `catalogue.edit`; field hiding for cashiers to be decided.
+- Who may see costs and margins: decided, DL-72.
+- Q1 accountant review: in progress (Sreya, 2026-10-06).

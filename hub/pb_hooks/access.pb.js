@@ -9,6 +9,9 @@ onRecordCreateRequest((e) => { require(`${__hooks}/lib/access.js`).guard(e, "cre
 onRecordUpdateRequest((e) => { require(`${__hooks}/lib/access.js`).guard(e, "update"); e.next(); });
 onRecordDeleteRequest((e) => { require(`${__hooks}/lib/access.js`).guard(e, "delete"); e.next(); });
 
+// Fields some people may not see (DL-72: costs and margins).
+onRecordEnrich((e) => { require(`${__hooks}/lib/access.js`).hideCosts(e); e.next(); }, "products", "price_history");
+
 // ---- Password sign-in: same lockout as PINs; only active people -------------------------------
 onRecordAuthWithPasswordRequest((e) => {
   const auth = require(`${__hooks}/lib/auth.js`);

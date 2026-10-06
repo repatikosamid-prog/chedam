@@ -244,7 +244,8 @@ function unitView(u) {
     price_cents: u.getInt("price_cents"), sell_at_pos: u.getBool("sell_at_pos"), is_default: u.getBool("is_default"), sort: u.getInt("sort") };
 }
 
-function view(app, id, atIso) {
+// showCosts false (no costs.view, DL-72): no cost, no cost history.
+function view(app, id, atIso, showCosts) {
   const p = app.findRecordById("products", id);
   const units = unitsOf(app, id);
   let taxes = [];
@@ -254,8 +255,10 @@ function view(app, id, atIso) {
   const history = app.findRecordsByFilter("price_history", "product = {:p}", "-created_at", 20, 0, { p: id }).map((h) => ({
     at: h.getString("created_at"), field: h.getString("field"), selling_unit: h.getString("selling_unit"),
     old_cents: h.getInt("old_cents"), new_cents: h.getInt("new_cents"), changed_by: h.getString("changed_by") }));
-  return { product: JSON.parse(JSON.stringify(p.publicExport())), units: units.map(unitView),
-    problems: problems(app, p, units), taxes: taxes, price_history: history };
+  const product = JSON.parse(JSON.stringify(p.publicExport()));
+  if (showCosts === false) delete product.cost_cents;
+  return { product: product, units: units.map(unitView), problems: problems(app, p, units), taxes: taxes,
+    price_history: showCosts === false ? history.filter((h) => h.field !== "cost") : history };
 }
 
 // Barcode, PLU or scale code -> the units it sells (FR-3.02, 6.02, 6.03). Drafts are returned too

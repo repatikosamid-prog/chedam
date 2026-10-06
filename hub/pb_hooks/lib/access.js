@@ -28,7 +28,7 @@ const TABLES = {
   categories:           { list: ANY, view: ANY, create: "catalogue.edit", update: "catalogue.edit", delete: null },
   products:             { list: ANY, view: ANY, create: "catalogue.edit", update: "catalogue.edit", delete: null },
   selling_units:        { list: ANY, view: ANY, create: "catalogue.edit", update: "catalogue.edit", delete: null },
-  price_history:        { list: ANY, view: ANY, create: null, update: null, delete: null },
+  price_history:        { list: ANY, view: ANY, create: null, update: null, delete: null },   // cost rows: hideCosts()
   tax_types:            { list: ANY, view: ANY, create: "tax.manage", update: "tax.manage", delete: null },
   tax_rates:            { list: ANY, view: ANY, create: "tax.manage", update: "tax.manage", delete: null },
   tax_classes:          { list: ANY, view: ANY, create: "tax.manage", update: "tax.manage", delete: null },
@@ -365,4 +365,21 @@ function overrideCheck(e, app, actor, rec) {
   if (e.record === rec) e.record.set("granted_by", "users:" + actor.id);
 }
 
-module.exports = { TABLES, effective, can, whoCan, guard, isActive, isOwner, levelOf, roleOf, checkTargetUser, checkPriceChange };
+// DL-72: costs and margins only for people with costs.view (not cashiers). Applied to every record
+// the API returns (lists, views, realtime) through onRecordEnrich.
+const COST_FIELDS = { products: ["cost_cents"], price_history: ["old_cents", "new_cents"] };
+
+function hideCosts(e) {
+  const name = e.record.collection().name;
+  const fields = COST_FIELDS[name];
+  if (!fields) return;
+  if (name === "price_history" && e.record.getString("field") !== "cost") return;
+  const info = e.requestInfo;
+  const auth = info && info.auth;
+  if (info && info.superuserAuth && info.superuserAuth()) return;
+  if (auth && auth.collection().name === "_superusers") return;
+  if (auth && isActive(auth) && can(e.app, auth, "costs.view")) return;
+  fields.forEach((f) => e.record.hide(f));
+}
+
+module.exports = { hideCosts, COST_FIELDS, TABLES, effective, can, whoCan, guard, isActive, isOwner, levelOf, roleOf, checkTargetUser, checkPriceChange };

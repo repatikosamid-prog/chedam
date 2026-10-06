@@ -162,6 +162,19 @@ try {
   const evs = (await t.list("events", `table_name='selling_units' && record_id='${colaSingle.id}' && action='update'`)).items;
   check("price change is in the event log", evs.some((ev) => (ev.changed || []).includes("price_cents") && ev.actor === "users:" + people["Mira Manager"]));
 
+  console.log("Costs hidden from cashiers (DL-72)");
+  const cList = (await as(cashier).get("/api/collections/products/records?perPage=200")).json.items;
+  check("cashier: product list has no cost", cList.length > 0 && cList.every((p) => p.cost_cents === undefined), JSON.stringify(cList[0]));
+  check("cashier: one product has no cost", (await as(cashier).get(`/api/collections/products/records/${colaId}`)).json.cost_cents === undefined);
+  const cView = (await as(cashier).get("/api/chedam/catalogue/products/" + colaId)).json;
+  check("cashier: product view has no cost or cost history", cView.product.cost_cents === undefined && cView.price_history.every((h) => h.field !== "cost") && cView.price_history.length > 0);
+  const cHist = (await as(cashier).get(`/api/collections/price_history/records?perPage=200&filter=${encodeURIComponent(`product='${colaId}'`)}`)).json.items;
+  check("cashier: cost history rows carry no amounts, price rows do", cHist.filter((h) => h.field === "cost").every((h) => h.old_cents === undefined && h.new_cents === undefined)
+    && cHist.filter((h) => h.field === "price").every((h) => typeof h.new_cents === "number"), JSON.stringify(cHist));
+  check("staff sees costs (receiving)", (await as(staff).get(`/api/collections/products/records/${colaId}`)).json.cost_cents === 47);
+  check("manager sees costs in the view", (await as(manager).get("/api/chedam/catalogue/products/" + colaId)).json.product.cost_cents === 47);
+  check("manager holds costs.view; cashier does not", has(await perms(cashier), "costs.view") === false && has(await perms(manager), "costs.view"));
+
   console.log("Tax tables (FR-4.02, FR-12.03)");
   const gst = await one("tax_types", "code='PST'");
   check("cashier cannot add a tax rate (403)", (await as(cashier).post("/api/collections/tax_rates/records", { tax_type: gst.id, province: "BC", rate: 8, effective_from: "2030-01-01 00:00:00.000Z" })).status === 403);

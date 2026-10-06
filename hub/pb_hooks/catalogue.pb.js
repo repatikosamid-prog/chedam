@@ -101,7 +101,7 @@ routerAdd("POST", "/api/chedam/catalogue/products", (e) => {
     if (!refused) throw err;
     return e.json(400, { status: 400, message: "This product cannot be active yet: " + refused.map((x) => x.message).join(" "), data: { problems: refused } });
   }
-  return e.json(200, require(`${__hooks}/lib/catalogue.js`).view(e.app, productId));
+  return e.json(200, require(`${__hooks}/lib/catalogue.js`).view(e.app, productId, undefined, su || access.can(e.app, e.auth, "costs.view")));
 });
 
 // Scan or type a code at the till or on a phone: barcode, PLU or scale code. Several units sharing a
@@ -123,5 +123,6 @@ routerAdd("GET", "/api/chedam/catalogue/products/{id}", (e) => {
   try { e.app.findRecordById("products", id); } catch (_) { throw new NotFoundError("No such product."); }
   const at = String(e.request.url.query().get("at") || "");
   if (at && isNaN(new Date(at).getTime())) throw new BadRequestError("Invalid date.");
-  return e.json(200, require(`${__hooks}/lib/catalogue.js`).view(e.app, id, at || undefined));
+  const costs = e.hasSuperuserAuth() || access.can(e.app, e.auth, "costs.view");
+  return e.json(200, require(`${__hooks}/lib/catalogue.js`).view(e.app, id, at || undefined, costs));
 });
