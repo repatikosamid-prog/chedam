@@ -1,7 +1,7 @@
 {
   "name": "chedam-client",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.9.0",
   "description": "Chedam client app (Svelte PWA). Built into hub/pb_public and served by the hub.",
   "type": "module",
   "scripts": {

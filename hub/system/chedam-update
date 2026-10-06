@@ -1,0 +1,422 @@
+#!/usr/bin/env python3
+"""Chedam update helper (P0 step 9, FR-12.02, FR-12.04, NFR-20). Runs as root.
+
+The hub asks through pb_data/update/request.json (chedam-update.path runs "chedam-update handle");
+the answer is written to pb_data/update/result.json. Actions:
+  check      download stable/channel.json (+ signature) from the update channel; if a newer app version
+             is listed, download the package and its signature; keep it only if both check out
+  scan       look for packages on USB drives (folder chedam-update/) and in /opt/chedam/updates/inbox
+  install    install a verified package:
+               1. check signature + checksum again, read manifest.json
+               2. snapshot the database (SQLite online backup + integrity check) and copy the current code
+               3. stop the hub, put the new code in place, start the hub
+               4. healthy within 90 s (health answers, no migration errors, the package's migrations
+                  applied)? -> done.  Otherwise ROLL BACK: old code + database snapshot, start, check.
+Manual use: chedam-update check|scan   |   chedam-update install FILE [--force]
+
+Every package and the channel file must carry a valid Ed25519 signature from the key whose public
+half is /opt/chedam/keys/update-signing.pub (installed by setup-hub.sh / deploy.sh). Nothing unsigned
+is ever kept or installed.
+"""
+import datetime as dt
+import glob
+import hashlib
+import json
+import os
+import re
+import shutil
+import sqlite3
+import subprocess
+import sys
+import tarfile
+import time
+import urllib.request
+
+ROOT = "/opt/chedam"
+DATA = ROOT + "/pb_data"
+DB = DATA + "/data.db"
+REQ_DIR = DATA + "/update"
+UPD = ROOT + "/updates"
+PACKAGES = UPD + "/packages"
+INBOX = UPD + "/inbox"
+PREVIOUS = UPD + "/previous"
+STAGING = UPD + "/staging"
+PUBKEY = ROOT + "/keys/update-signing.pub"
+VERSION_FILE = ROOT + "/VERSION"
+CODE_DIRS = ["pb_hooks", "pb_migrations", "pb_public"]
+SVC = "chedam-hub"
+HEALTH = "http://127.0.0.1:8090/api/health"
+PKG_RE = re.compile(r"^chedam-app-(\d+\.\d+\.\d+)\.tar\.gz$")
+MNT = "/mnt/chedam-update"
+
+
+class Fail(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
+def sh(*args, check=True, timeout=None):
+    r = subprocess.run(list(args), capture_output=True, text=True, timeout=timeout)
+    if check and r.returncode != 0:
+        raise Fail("command_failed", "%s failed: %s" % (args[0], (r.stderr or r.stdout).strip()[:300]))
+    return r
+
+
+def write_json(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.chmod(tmp, 0o640)
+    shutil.chown(tmp, SVC, SVC)
+    os.replace(tmp, path)
+
+
+def vtuple(v):
+    m = re.match(r"^(\d+)\.(\d+)\.(\d+)$", str(v or ""))
+    return tuple(int(x) for x in m.groups()) if m else (0, 0, 0)   # "dev-…" counts as oldest
+
+
+def installed_version():
+    try:
+        with open(VERSION_FILE) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+# ---- Signatures ---------------------------------------------------------------------------------
+
+def verify(path, sig):
+    if not os.path.exists(PUBKEY):
+        raise Fail("no_key", "The update signing key is not installed on this hub.")
+    if not os.path.exists(sig):
+        raise Fail("unsigned", "The package has no signature.")
+    r = sh("openssl", "pkeyutl", "-verify", "-pubin", "-inkey", PUBKEY, "-rawin", "-in", path, "-sigfile", sig, check=False)
+    if r.returncode != 0:
+        raise Fail("bad_signature", "The signature does not match. The package was not made by Chedam or was changed.")
+
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
+def manifest(pkg):
+    with tarfile.open(pkg, "r:gz") as t:
+        names = t.getnames()
+        for n in names:
+            if n.startswith("/") or ".." in n.split("/"):
+                raise Fail("bad_package", "The package contains unsafe paths.")
+        f = t.extractfile("manifest.json")
+        if not f:
+            raise Fail("bad_package", "The package has no manifest.")
+        m = json.load(f)
+    if m.get("kind") != "app" or m.get("format") != 1:
+        raise Fail("unsupported", "This kind of package is not supported yet (%s)." % m.get("kind"))
+    return m
+
+
+def describe(pkg, source):
+    m = manifest(pkg)
+    return {"file": os.path.basename(pkg), "version": m.get("version"), "notes": m.get("notes", ""),
+            "size": os.path.getsize(pkg), "sha256": sha256(pkg), "source": source, "kind": m.get("kind"),
+            "created_at": m.get("created_at", "")}
+
+
+def keep(src, sig, source):
+    """Verify a package from anywhere and keep it in /opt/chedam/updates/packages."""
+    name = os.path.basename(src)
+    if not PKG_RE.match(name):
+        raise Fail("bad_name", "Unexpected file name: " + name)
+    verify(src, sig)
+    os.makedirs(PACKAGES, exist_ok=True)
+    dst = os.path.join(PACKAGES, name)
+    if os.path.abspath(src) != os.path.abspath(dst):
+        shutil.copyfile(src, dst + ".part")
+        shutil.copyfile(sig, dst + ".sig")
+        os.replace(dst + ".part", dst)
+    return describe(dst, source)
+
+
+# ---- Actions --------------------------------------------------------------------------------------
+
+def fetch(url, dest, limit=50 * 1024 * 1024):
+    req = urllib.request.Request(url, headers={"User-Agent": "chedam-hub"})
+    with urllib.request.urlopen(req, timeout=30) as r, open(dest, "wb") as out:
+        total = 0
+        while True:
+            b = r.read(1 << 16)
+            if not b:
+                break
+            total += len(b)
+            if total > limit:
+                raise Fail("too_big", "The download is too large.")
+            out.write(b)
+
+
+def action_check(req):
+    base = str(req.get("channel_url") or "").rstrip("/")
+    if not base.startswith("https://"):
+        raise Fail("bad_channel", "The update channel address must start with https://")
+    tmp = UPD + "/download"
+    shutil.rmtree(tmp, ignore_errors=True)
+    os.makedirs(tmp)
+    try:
+        try:
+            fetch(base + "/stable/channel.json", tmp + "/channel.json", 1024 * 1024)
+            fetch(base + "/stable/channel.json.sig", tmp + "/channel.json.sig", 4096)
+        except (OSError, ValueError) as e:
+            raise Fail("offline", "Could not reach the update channel (%s)." % str(e)[:120])
+        verify(tmp + "/channel.json", tmp + "/channel.json.sig")
+        with open(tmp + "/channel.json") as f:
+            ch = json.load(f)
+        app = ch.get("app") or {}
+        current = installed_version()
+        found = []
+        if app.get("version") and vtuple(app["version"]) > vtuple(current):
+            name = os.path.basename(app.get("file", ""))
+            if not PKG_RE.match(name):
+                raise Fail("bad_channel", "The channel lists an unexpected file.")
+            if not os.path.exists(os.path.join(PACKAGES, name)):
+                fetch(base + "/" + app["file"], tmp + "/" + name)
+                fetch(base + "/" + app["file"] + ".sig", tmp + "/" + name + ".sig", 4096)
+                if sha256(tmp + "/" + name) != app.get("sha256"):
+                    raise Fail("checksum", "The downloaded package does not match the channel's checksum.")
+                keep(tmp + "/" + name, tmp + "/" + name + ".sig", "online")
+            found.append(describe(os.path.join(PACKAGES, name), "online"))
+        return {"installed": current, "latest": app.get("version", ""), "packages": found, "channel_updated_at": ch.get("updated_at", "")}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def usb_partitions():
+    out = json.loads(sh("lsblk", "-J", "-o", "NAME,PATH,FSTYPE,UUID,MOUNTPOINT,TRAN").stdout)
+    found = []
+
+    def walk(dev, tran):
+        tran = dev.get("tran") or tran
+        if tran == "usb" and dev.get("fstype") in ("vfat", "exfat", "ntfs", "ext4"):
+            found.append(dev)
+        for ch in dev.get("children") or []:
+            walk(ch, tran)
+    for d in out.get("blockdevices", []):
+        walk(d, d.get("tran"))
+    return found
+
+
+def action_scan(req):
+    current = installed_version()
+    found, errors = [], []
+
+    def consider(path, source):
+        name = os.path.basename(path)
+        m = PKG_RE.match(name)
+        if not m or vtuple(m.group(1)) <= vtuple(current):
+            return
+        try:
+            found.append(keep(path, path + ".sig", source))
+        except Fail as e:
+            errors.append({"file": name, "error": str(e)})
+
+    os.makedirs(INBOX, exist_ok=True)
+    for p in sorted(glob.glob(INBOX + "/chedam-app-*.tar.gz")):
+        consider(p, "usb")                       # technician copy (scp) counts as offline media
+    for part in usb_partitions():
+        mnt, ours = part.get("mountpoint"), False
+        if not mnt:
+            os.makedirs(MNT, exist_ok=True)
+            try:
+                r = subprocess.run(["mount", "-o", "ro,noexec,nosuid,nodev", part["path"], MNT], capture_output=True, timeout=60)
+            except subprocess.TimeoutExpired:
+                errors.append({"file": part["path"], "error": "drive not responding"})
+                continue
+            if r.returncode != 0:
+                continue
+            mnt, ours = MNT, True
+        try:
+            for p in sorted(glob.glob(os.path.join(mnt, "chedam-update", "chedam-app-*.tar.gz"))):
+                consider(p, "usb")
+        finally:
+            if ours:
+                subprocess.run(["umount", MNT], capture_output=True)
+    return {"installed": current, "packages": found, "errors": errors}
+
+
+def healthy(since, expected_migrations, seconds=90):
+    """The hub answers its health check, logged no migration error, and applied the package's migrations."""
+    end = time.time() + seconds
+    ok = False
+    while time.time() < end:
+        try:
+            with urllib.request.urlopen(HEALTH, timeout=3) as r:
+                ok = r.status == 200
+        except OSError:
+            ok = False
+        if ok:
+            break
+        time.sleep(1)
+    if not ok:
+        return False, "The hub did not start within %d s." % seconds
+    log = sh("journalctl", "-u", SVC, "--since", since, "--no-pager", "-o", "cat", check=False).stdout
+    bad = [l for l in log.splitlines() if re.search(r"failed to (apply|run) migration|panic:|Error: ", l, re.I)]
+    if bad:
+        return False, "Errors after start: " + bad[0][:200]
+    try:
+        con = sqlite3.connect("file:%s?mode=ro" % DB, uri=True, timeout=10)
+        applied = {r[0] for r in con.execute("SELECT file FROM _migrations")}
+        con.close()
+    except sqlite3.Error as e:
+        return False, "Could not read the database: %s" % e
+    missing = [m for m in expected_migrations if m not in applied]
+    if missing:
+        return False, "Migrations not applied: " + ", ".join(missing[:3])
+    return True, ""
+
+
+def copy_code(src_root, dst_root, owner):
+    for d in CODE_DIRS:
+        src, dst = os.path.join(src_root, d), os.path.join(dst_root, d)
+        if not os.path.isdir(src):
+            continue
+        os.makedirs(dst, exist_ok=True)
+        # Dev sample migrations already applied on a dev hub are kept (never deleted)
+        sh("rsync", "-a", "--delete", "--exclude", "*_dev_*", "--chown", owner, src + "/", dst + "/")
+
+
+def snapshot_db(dest):
+    src = sqlite3.connect("file:%s?mode=ro" % DB, uri=True, timeout=30)
+    dst = sqlite3.connect(dest)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+    con = sqlite3.connect(dest)
+    ok = con.execute("PRAGMA integrity_check").fetchone()[0]
+    con.close()
+    if ok != "ok":
+        raise Fail("integrity_failed", "The database check before the update failed: " + ok)
+
+
+def action_install(req):
+    name = os.path.basename(str(req.get("file", "")))
+    pkg = os.path.join(PACKAGES, name)
+    if not PKG_RE.match(name) or not os.path.exists(pkg):
+        raise Fail("not_found", "The update package is not on the hub. Check for updates again.")
+    verify(pkg, pkg + ".sig")
+    m = manifest(pkg)
+    before = installed_version()
+    if vtuple(m["version"]) <= vtuple(before) and not req.get("force"):
+        raise Fail("not_newer", "Version %s is not newer than the installed %s." % (m["version"], before))
+    owner = "%s:%s" % (lambda s: (s.st_uid, s.st_gid))(os.stat(ROOT + "/pb_hooks"))
+    ts = dt.datetime.now().strftime("%Y%m%dT%H%M%S")
+    os.makedirs(ROOT + "/backups", exist_ok=True)
+    snap = "%s/backups/pre-update-%s-%s.db" % (ROOT, m["version"], ts)
+
+    # 1. Safety copies: database snapshot and the current code
+    snapshot_db(snap)
+    shutil.chown(snap, SVC, SVC)
+    os.chmod(snap, 0o640)
+    shutil.rmtree(PREVIOUS, ignore_errors=True)
+    os.makedirs(PREVIOUS)
+    for d in CODE_DIRS:
+        if os.path.isdir(os.path.join(ROOT, d)):
+            shutil.copytree(os.path.join(ROOT, d), os.path.join(PREVIOUS, d), symlinks=True)
+    with open(PREVIOUS + "/VERSION", "w") as f:
+        f.write(before)
+
+    # 2. Unpack and put in place
+    shutil.rmtree(STAGING, ignore_errors=True)
+    os.makedirs(STAGING)
+    with tarfile.open(pkg, "r:gz") as t:
+        t.extractall(STAGING, filter="data")
+    for d in CODE_DIRS:
+        if not os.path.isdir(os.path.join(STAGING, d)):
+            raise Fail("bad_package", "The package is missing %s." % d)
+    since = time.strftime("%Y-%m-%d %H:%M:%S")
+    t0 = time.time()
+    sh("systemctl", "stop", SVC)
+    copy_code(STAGING, ROOT, owner)
+    with open(VERSION_FILE, "w") as f:
+        f.write(m["version"] + "\n")
+    sh("systemctl", "start", SVC)
+
+    # 3. Healthy? Otherwise roll back on our own (NFR-20)
+    ok, why = healthy(since, m.get("migrations", []))
+    shutil.rmtree(STAGING, ignore_errors=True)
+    if ok:
+        return {"version": m["version"], "previous": before, "snapshot": os.path.basename(snap), "seconds": round(time.time() - t0, 1)}
+
+    sh("systemctl", "stop", SVC, check=False)
+    copy_code(PREVIOUS, ROOT, owner)
+    for ext in ("-wal", "-shm"):
+        if os.path.exists(DB + ext):
+            os.remove(DB + ext)
+    shutil.copyfile(snap, DB)
+    shutil.chown(DB, SVC, SVC)
+    os.chmod(DB, 0o640)
+    with open(VERSION_FILE, "w") as f:
+        f.write(before + "\n")
+    sh("systemctl", "start", SVC, check=False)
+    back, why2 = healthy(time.strftime("%Y-%m-%d %H:%M:%S"), [], 90)
+    raise Fail("rolled_back" if back else "rollback_failed",
+               ("Update %s failed and was rolled back to %s: %s" % (m["version"], before or "the previous version", why)) if back
+               else ("Update %s failed (%s) AND the rollback did not come up: %s. Restore from backup." % (m["version"], why, why2)))
+
+
+ACTIONS = {"check": action_check, "scan": action_scan, "install": action_install}
+
+
+def handle():
+    path = REQ_DIR + "/request.json"
+    done = set()
+    while True:
+        try:
+            with open(path) as f:
+                req = json.load(f)
+        except (OSError, ValueError):
+            return
+        rid = str(req.get("id", ""))
+        if not rid or rid in done:
+            return
+        done.add(rid)
+        res = {"id": rid, "action": req.get("action"), "started_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+        try:
+            fn = ACTIONS.get(req.get("action"))
+            if not fn:
+                raise Fail("unknown_action", "Unknown action.")
+            res.update(fn(req))
+            res["ok"] = True
+        except Fail as e:
+            res.update(ok=False, code=e.code, error=str(e))
+        except Exception as e:  # noqa: BLE001 - any failure must reach the hub as a result
+            res.update(ok=False, code="error", error=str(e)[:500])
+        res["installed"] = installed_version()
+        res["finished_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+        write_json(REQ_DIR + "/result.json", res)
+
+
+if __name__ == "__main__":
+    if os.geteuid() != 0:
+        sys.exit("Run as root.")
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if cmd == "handle":
+        handle()
+    elif cmd == "check":
+        print(json.dumps(action_check({"channel_url": sys.argv[2] if len(sys.argv) > 2 else
+                                       "https://raw.githubusercontent.com/repatikosamid-prog/chedam-releases/main"}), indent=2))
+    elif cmd == "scan":
+        print(json.dumps(action_scan({}), indent=2))
+    elif cmd == "install" and len(sys.argv) > 2:
+        try:
+            print(json.dumps(action_install({"file": sys.argv[2], "force": "--force" in sys.argv}), indent=2))
+        except Fail as e:
+            print(json.dumps({"ok": False, "code": e.code, "error": str(e)}, indent=2))
+            sys.exit(1)
+    else:
+        print(__doc__)

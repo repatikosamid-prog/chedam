@@ -32,7 +32,8 @@ ssh "$HOST" "rm -rf ~/$STAGE && mkdir -p ~/$STAGE/pb_migrations"
 scp -q -r "$HUB/pb_hooks" "$HOST:$STAGE/"
 scp -q -r "$HUB/pb_public" "$HOST:$STAGE/"
 scp -q "$HUB"/pb_migrations/*.js "$HOST:$STAGE/pb_migrations/"
-scp -q "$HUB/system/Caddyfile" "$HUB/system/chedam-console.path" "$HUB/system/chedam-console.service"   "$HUB/system/chedam-backup" "$HUB/system/chedam-backup.path" "$HUB/system/chedam-backup.service" "$HOST:$STAGE/"
+scp -q "$HUB/system/Caddyfile" "$HUB/system/chedam-console.path" "$HUB/system/chedam-console.service"   "$HUB/system/chedam-backup" "$HUB/system/chedam-backup.path" "$HUB/system/chedam-backup.service"   "$HUB/system/chedam-update" "$HUB/system/chedam-update.path" "$HUB/system/chedam-update.service"   "$HUB/system/update-signing.pub" "$HOST:$STAGE/"
+echo "dev-$(git -C "$HUB" rev-parse --short HEAD)" > /tmp/chedam-version && scp -q /tmp/chedam-version "$HOST:$STAGE/VERSION"
 if [ "$SAMPLE" -eq 1 ]; then
   scp -q "$HUB"/pb_migrations_dev/*.js "$HOST:$STAGE/pb_migrations/"
 fi
@@ -95,6 +96,21 @@ for u in chedam-backup.path chedam-backup.service; do
   sudo cmp -s ~/"$STAGE/$u" /etc/systemd/system/$u || { sudo install -m 644 ~/"$STAGE/$u" /etc/systemd/system/$u; changed=1; }
 done
 if [ "$changed" -eq 1 ]; then sudo systemctl daemon-reload; sudo systemctl enable --now chedam-backup.path >/dev/null; echo "installed"; else echo "unchanged"; fi
+
+echo "== Update helper and signing key"
+sudo install -d -m 750 -o chedam-hub -g chedam-hub $ROOT/pb_data/update
+sudo install -d -m 755 $ROOT/updates $ROOT/updates/inbox
+sudo install -d -m 700 $ROOT/keys   # also holds the private backup key: root only
+changed=0
+sudo cmp -s ~/"$STAGE/chedam-update" $ROOT/bin/chedam-update || { sudo install -m 755 -o root -g root ~/"$STAGE/chedam-update" $ROOT/bin/chedam-update; changed=1; }
+sudo cmp -s ~/"$STAGE/update-signing.pub" $ROOT/keys/update-signing.pub || { sudo install -m 644 -o root -g root ~/"$STAGE/update-signing.pub" $ROOT/keys/update-signing.pub; changed=1; }
+for u in chedam-update.path chedam-update.service; do
+  sudo cmp -s ~/"$STAGE/$u" /etc/systemd/system/$u || { sudo install -m 644 ~/"$STAGE/$u" /etc/systemd/system/$u; changed=1; }
+done
+if [ "$changed" -eq 1 ]; then sudo systemctl daemon-reload; sudo systemctl enable --now chedam-update.path >/dev/null; echo "installed"; else echo "unchanged"; fi
+# A developer deploy is "dev-<commit>": any signed release counts as newer
+sudo install -m 644 ~/"$STAGE/VERSION" $ROOT/VERSION
+echo "version $(cat $ROOT/VERSION)"
 
 echo "== Restart"
 sudo systemctl restart chedam-hub

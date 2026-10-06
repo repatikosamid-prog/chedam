@@ -44,3 +44,6 @@ chedam-updates/
 
 # Client build output (built by client/ npm run build; deploy.sh builds it)
 hub/pb_public/
+
+# Signed update packages (built by tools/release/make-release.sh; published in the chedam-releases repo)
+releases/

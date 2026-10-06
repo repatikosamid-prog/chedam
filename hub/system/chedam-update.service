@@ -1,0 +1,8 @@
+[Unit]
+Description=Chedam update helper (check, USB scan, install with automatic rollback)
+
+[Service]
+Type=oneshot
+ExecStart=/opt/chedam/bin/chedam-update handle
+# Restarting chedam-hub is part of an install, so this must not be tied to it
+TimeoutStartSec=15min

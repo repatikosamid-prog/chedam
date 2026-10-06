@@ -116,6 +116,12 @@
           <span class="text-sm text-muted">Temperature, storage, clock, backups</span>
         </button>
       {/if}
+      {#if can("updates.view")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("updates")}>
+          <span class="font-semibold">Updates</span>
+          <span class="text-sm text-muted">Check and install</span>
+        </button>
+      {/if}
       {#if can("backups.view")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("backups")}>
           <span class="font-semibold">Backups</span>

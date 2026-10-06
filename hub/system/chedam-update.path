@@ -1,0 +1,10 @@
+[Unit]
+Description=Chedam update requests from the hub
+
+[Path]
+# The hub (no root rights) writes a request here; chedam-update.service does the work as root
+PathChanged=/opt/chedam/pb_data/update/request.json
+Unit=chedam-update.service
+
+[Install]
+WantedBy=multi-user.target
