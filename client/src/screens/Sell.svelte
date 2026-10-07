@@ -8,7 +8,7 @@
   // answer, the till prices the sale itself, prints an offline receipt and queues the sale for upload.
   import { onMount } from "svelte";
   import { api, isHubDown } from "../lib/api.js";
-  import { off, getPack, refreshPack, enqueue, nextOfflineRef, syncQueue } from "../lib/offline.svelte.js";
+  import { off, getPack, refreshPack, enqueue, nextOfflineRef, syncQueue, tillInfo, saveTillInfo, tillWaiting } from "../lib/offline.svelte.js";
   import { quoteOffline, lookupOffline } from "../lib/offline_price.js";
   import { s, go, can, handleRefusal } from "../lib/session.svelte.js";
   import { money, toCents, newId } from "../lib/catalogue.js";
@@ -30,7 +30,6 @@
   let codeInput;
   let qTimer;
   let ix = null;                                 // offline pack (indexed)
-  const TILL_KEY = "chedam.till_info";
   const perms = () => ({ discount: can("sales.discount"), approve: can("sales.approve"), exempt: can("sales.tax_exempt") });
 
   const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(cart)); } catch { /* private mode */ } };
@@ -51,13 +50,20 @@
     return () => clearInterval(t);
   });
 
-  // The till's own open till is remembered, so offline sales still belong to it.
-  async function loadTill() {
+  // The till's own open till is remembered, so offline sales still belong to it. A till opened offline
+  // (DL-90) is uploaded first when the hub answers; until it has arrived, this device's copy counts.
+  async function loadTill(again = true) {
     const r = await api("GET", "/api/chedam/tills/current");
-    if (r.status === 0) { try { info = JSON.parse(localStorage.getItem(TILL_KEY) || "null"); } catch { info = null; } return; }
+    if (r.status === 0) { info = tillInfo(); return; }
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
+    const mine = tillInfo();
+    if (!r.json.till && mine && mine.till && mine.till.offline && (await tillWaiting(mine.till.id))) {
+      if (again) { await syncQueue(); return loadTill(false); }
+      info = { ...r.json, till: mine.till };
+      return;
+    }
     info = r.json;
-    try { localStorage.setItem(TILL_KEY, JSON.stringify({ till: r.json.till ? { id: r.json.till.id, number: r.json.till.number } : null, settings: r.json.settings, business: r.json.business })); } catch { /* private mode */ }
+    saveTillInfo({ till: r.json.till ? { id: r.json.till.id, number: r.json.till.number } : null, settings: r.json.settings, business: r.json.business });
   }
 
   function usePack(p) {
@@ -178,7 +184,7 @@
     error = "";
     if (!quote || !live.length) return;
     if (problems.length) { error = problems[0].message; return; }
-    if (!cart.training && !(info && info.till)) { error = isHubDown() ? "No open till on this device: the till is opened while the hub is reachable." : "Open the till first."; return; }
+    if (!cart.training && !(info && info.till)) { error = "Open the till first (Till, then Open till)."; return; }
     if (quote.needs_approval.length && !cart.approval) { dialog = { kind: "approve", what: quote.needs_approval }; return; }
     payments = []; saleId = newId(); mode = "pay";
   }
@@ -293,7 +299,7 @@
       <button class="min-h-10 text-sm underline" onclick={() => go("home")}>← Back</button>
       <h1 class="text-xl font-bold">Sell</h1>
       {#if off.pending || off.problems}<span class="rounded-lg bg-warn/10 px-2 py-0.5 text-sm text-warn">{off.pending} offline {off.pending === 1 ? "sale" : "sales"} waiting{off.problems ? " · " + off.problems + " need a manager" : ""}</span>{/if}
-      {#if info}<span class="rounded-lg px-2 py-0.5 text-sm {info.till ? 'bg-ok/10 text-ok' : 'bg-warn/10 text-warn'}">{info.till ? "Till " + info.till.number + " open" : "Till closed"}</span>{/if}
+      {#if info}<span class="rounded-lg px-2 py-0.5 text-sm {info.till ? 'bg-ok/10 text-ok' : 'bg-warn/10 text-warn'}">{info.till ? (info.till.number ? "Till " + info.till.number + " open" : "Till open (opened offline)") : "Till closed"}</span>{/if}
     </div>
     <div class="flex flex-wrap gap-2">
       <button class="btn-ghost min-h-10 text-sm" onclick={showHolds}>Recall</button>

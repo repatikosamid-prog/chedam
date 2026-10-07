@@ -133,6 +133,13 @@ routerAdd("POST", "/api/chedam/tills/open", (e) => {
   return h.run(e, (tx) => { const t = require(`${__hooks}/lib/tills.js`); return t.view(tx, t.open(tx, c.body, c)); });
 });
 
+// A till opened while the hub was unreachable (DL-90): uploaded before its offline sales.
+routerAdd("POST", "/api/chedam/tills/offline-open", (e) => {
+  const h = require(`${__hooks}/lib/sales_http.js`);
+  const c = h.ctx(e, "sales.sell");
+  return h.run(e, (tx) => { const t = require(`${__hooks}/lib/tills.js`); const r = t.openOffline(tx, c.body, c); return { duplicate: r.duplicate, till: t.view(tx, r.till) }; });
+});
+
 routerAdd("POST", "/api/chedam/tills/{id}/cash", (e) => {
   const h = require(`${__hooks}/lib/sales_http.js`);
   const c = h.ctx(e, "sales.sell|till.manage");

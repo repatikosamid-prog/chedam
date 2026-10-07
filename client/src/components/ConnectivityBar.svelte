@@ -3,10 +3,10 @@
   import { net, checkNow } from "../lib/connectivity.svelte.js";
   import { off } from "../lib/offline.svelte.js";
 
-  const n = (k) => k + (k === 1 ? " sale" : " sales");
+  const n = (k) => (k ? k + (k === 1 ? " sale" : " sales") : "") + (off.tills ? (k ? " and " : "") + "the till opening" : "");
   const look = $derived(
-    net.hub === "down" ? { text: "Hub not reachable. Selling on this device only" + (off.pending ? " · " + n(off.pending) + " waiting to upload" : "") + ".", cls: "bg-warn text-bg", dot: "bg-bg" }
-    : off.pending ? { text: off.syncing ? "Uploading " + n(off.pending) + "…" : n(off.pending) + " made offline, waiting to upload", cls: "bg-warn/20 text-ink", dot: "bg-warn" }
+    net.hub === "down" ? { text: "Hub not reachable. Selling on this device only" + (off.pending || off.tills ? " · " + n(off.pending) + " waiting to upload" : "") + ".", cls: "bg-warn text-bg", dot: "bg-bg" }
+    : off.pending || off.tills ? { text: off.syncing ? "Uploading " + n(off.pending) + "…" : n(off.pending) + " made offline, waiting to upload", cls: "bg-warn/20 text-ink", dot: "bg-warn" }
     : net.hub === "checking" ? { text: "Checking the connection…", cls: "bg-soft text-ink", dot: "bg-muted" }
     : net.internet === "router" ? { text: "Online (router)", cls: "bg-soft text-ink", dot: "bg-ok" }
     : net.internet === "hotspot" ? { text: "Online (hotspot)", cls: "bg-soft text-ink", dot: "bg-warn" }

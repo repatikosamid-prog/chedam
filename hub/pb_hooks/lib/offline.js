@@ -42,6 +42,7 @@ function pack(app) {
       payment_methods: setting(app, "sales.payment_methods", ["cash", "card"]), cash_rounding: setting(app, "sales.cash_rounding", true),
       usd_rate: setting(app, "sales.usd_rate", 1.35), discount_limit_pct: setting(app, "sales.discount_limit_pct", 10),
       override_limit_pct: setting(app, "sales.override_limit_pct", 10), exempt_reasons: setting(app, "sales.exempt_reasons", {}),
+      float_default_cents: setting(app, "till.float_default_cents", 0), denominations: setting(app, "till.denominations", []),
     },
     categories: rows(app, "categories", "deleted_at = '' && pos_visible = true", ["name", "colour", "sort"]),
     products: rows(app, "products", "deleted_at = '' && status = 'active'",

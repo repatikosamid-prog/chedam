@@ -22,22 +22,66 @@ function countTotal(app, detail) {
   return { total, clean };
 }
 
+function floatOf(app, body) {
+  if (body.float_detail) return countTotal(app, body.float_detail);
+  const c = Number(body.float_cents !== undefined ? body.float_cents : setting(app, "till.float_default_cents", 0));
+  if (!(c >= 0) || c !== Math.floor(c)) bad("The float is not a valid amount.");
+  return { total: c, clean: {} };
+}
+
 function open(app, body, ctx) {
   if (!ctx.device) bad("Tills open on a paired device.");
   if (require(`${__hooks}/lib/sales.js`).openTill(app, ctx.device)) bad("This till is already open.");
-  let float;
-  if (body.float_detail) float = countTotal(app, body.float_detail);
-  else {
-    const c = Number(body.float_cents !== undefined ? body.float_cents : setting(app, "till.float_default_cents", 0));
-    if (!(c >= 0) || c !== Math.floor(c)) bad("The float is not a valid amount.");
-    float = { total: c, clean: {} };
-  }
+  const float = floatOf(app, body);
   const t = new Record(app.findCollectionByNameOrId("tills"));
   t.load({ number: require(`${__hooks}/lib/sales.js`).nextNumber(app, "till", ctx), device: ctx.device, status: "open",
     opened_by: ctx.user ? ctx.user.id : "", opened_at: new DateTime(), float_cents: float.total, float_detail: float.clean });
   st().stamp(t, ctx);
   app.save(t);
   return t;
+}
+
+// A till opened while the hub was unreachable (DL-90). It arrives before its offline sales, with the
+// id the till made, so a repeat is answered with the first result (BR-10). The till has been selling
+// already, so it is recorded even when another till is still open on this device (a task says so).
+function openOffline(app, body, ctx) {
+  if (!ctx.device) bad("Tills open on a paired device.");
+  const id = String(body.id || "");
+  if (!/^[a-z0-9]{15}$/.test(id)) bad("The till needs an id made on the device.");
+  const seen = app.findRecordsByFilter("tills", "id = {:id}", "", 1, 0, { id: id });
+  if (seen.length) {
+    if (seen[0].getString("device") !== ctx.device) bad("That till belongs to another device.");
+    return { duplicate: true, till: seen[0] };
+  }
+  const float = floatOf(app, body);
+  const other = require(`${__hooks}/lib/sales.js`).openTill(app, ctx.device);
+  const note = other ? "Till " + other.getInt("number") + " was still open on this device." : "";
+  let opener = ctx.user;
+  if (body.opened_by) {
+    try {
+      const u = app.findRecordById("users", String(body.opened_by));
+      if (require(`${__hooks}/lib/access.js`).isActive(u) && require(`${__hooks}/lib/access.js`).can(app, u, "sales.sell")) opener = u;
+    } catch (_) { /* unknown: the uploader */ }
+  }
+  // Opened when the till says, if that is plausible (the last 24 hours); otherwise on arrival.
+  let at = new DateTime();
+  const dt = Date.parse(String(body.device_time || ""));
+  if (dt && dt <= Date.now() + 300000 && dt >= Date.now() - 86400000) { try { at = new DateTime(new Date(dt).toISOString()); } catch (_) { at = new DateTime(); } }
+  const t = new Record(app.findCollectionByNameOrId("tills"));
+  t.set("id", id);
+  t.load({ number: require(`${__hooks}/lib/sales.js`).nextNumber(app, "till", ctx), device: ctx.device, status: "open",
+    opened_by: opener ? opener.id : "", opened_at: at, float_cents: float.total, float_detail: float.clean,
+    offline: true, device_time: String(body.device_time || "").substring(0, 40), synced_at: new DateTime(), sync_note: note });
+  st().stamp(t, ctx);
+  app.save(t);
+  if (other) {
+    const task = new Record(app.findCollectionByNameOrId("tasks"));
+    task.load({ title: "Two tills open on one device: till " + other.getInt("number") + " and till " + t.getInt("number") + " (opened offline). Close till " + other.getInt("number") + ".",
+      kind: "till_variance", source: "rule", rule_key: "till:double:" + t.id, status: "open", priority: "normal", link_collection: "tills", link_id: other.id });
+    st().stamp(task, ctx);
+    app.save(task);
+  }
+  return { duplicate: false, till: t };
 }
 
 function till(app, id) {
@@ -151,10 +195,11 @@ function close(app, id, body, ctx) {
 
 function view(app, t) {
   const v = { id: t.id, number: t.getInt("number"), status: t.getString("status"), device: t.getString("device"),
-    opened_at: t.getString("opened_at"), float_cents: t.getInt("float_cents"), closed_at: t.getString("closed_at") };
+    opened_at: t.getString("opened_at"), float_cents: t.getInt("float_cents"), closed_at: t.getString("closed_at"),
+    offline: t.getBool("offline"), device_time: t.getString("device_time"), sync_note: t.getString("sync_note") };
   if (t.getString("status") === "open") v.summary = summary(app, t);
   else { try { v.z_report = JSON.parse(t.getString("z_report") || "null"); } catch (_) { v.z_report = null; } }
   return v;
 }
 
-module.exports = { open, cash, close, summary, view, till, mayUse };
+module.exports = { open, openOffline, cash, close, summary, view, till, mayUse };

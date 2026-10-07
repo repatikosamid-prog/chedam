@@ -1,6 +1,8 @@
 // Dev only: pair a browser on the local dev hub (tools/devhub/dev-hub.sh) and sign in a sample person by
 // PIN; prints {device, token} for the browser's localStorage (chedam.device, chedam.token). Never for a store.
 // Usage: node tools/devhub/dev-login.mjs "Cal Cashier" "Front till"
+import { readFileSync } from "node:fs";
+
 const [,, who, devName] = process.argv;
 const base = "http://127.0.0.1:8095";
 const [email, pw] = readFileSync("C:/Users/Venkata/Desktop/Projects/Chedam/.devhub/superuser.txt", "utf8").trim().split(/\r?\n/);

@@ -124,6 +124,25 @@ try {
   check("arriving after the till closed: kept, noted, task raised", late.status === 200 && /closed/.test(late.json.sale.sync_note)
     && (await t.list("tasks", "kind='offline_sale' && status='open'")).items.length === 1, JSON.stringify(late.json).slice(0, 300));
   check("another device cannot upload into this till", (await M.post("/api/chedam/sales/offline", payload(carts[2][1], (q) => [{ method: "card", amount_cents: q.total_cents }]))).json.sale.till === "");
+
+  console.log("Till opened offline (DL-90)");
+  const tid = sid();
+  const openedAt = new Date(Date.now() - 3600000);
+  const oo = await C.post("/api/chedam/tills/offline-open", { id: tid, float_cents: 15000, opened_by: people["Cal Cashier"], device_time: openedAt.toISOString() });
+  check("opened at the till's time (1 h ago), not on arrival", Math.abs(Date.parse(oo.json.till.opened_at.replace(" ", "T")) - openedAt.getTime()) < 2000, oo.json.till.opened_at);
+  check("recorded with the till's id, a number, its float, offline", oo.status === 200 && oo.json.till.id === tid && oo.json.till.number > 0
+    && oo.json.till.float_cents === 15000 && oo.json.till.offline && oo.json.till.status === "open", JSON.stringify(oo.json));
+  check("uploaded twice: first result", (await C.post("/api/chedam/tills/offline-open", { id: tid, float_cents: 99 })).json.duplicate === true);
+  check("another device cannot claim it", (await M.post("/api/chedam/tills/offline-open", { id: tid, float_cents: 0 })).status === 400);
+  const os = await C.post("/api/chedam/sales/offline", { ...payload(carts[0][1], () => [{ method: "cash", amount_cents: 2000 }]), till: tid });
+  check("its offline sale lands in it, no note", os.status === 200 && os.json.sale.till === tid && !os.json.sale.sync_note, JSON.stringify(os.json).slice(0, 300));
+  const oz = (await C.get("/api/chedam/tills/current")).json.till;
+  check("it is this device's till; float + cash 9.90 expected", oz.id === tid && oz.summary.sales_count === 1 && oz.summary.expected_cash_cents === 15000 + 990, JSON.stringify(oz.summary));
+  const tid2 = sid();
+  const o2 = await C.post("/api/chedam/tills/offline-open", { id: tid2, float_cents: 0 });
+  check("opened offline while another till is open: kept, noted, task", o2.status === 200 && /still open/.test(o2.json.till.sync_note)
+    && (await t.list("tasks", `rule_key='till:double:${tid2}' && status='open'`)).items.length === 1, JSON.stringify(o2.json));
+  check("bad id refused", (await C.post("/api/chedam/tills/offline-open", { id: "x", float_cents: 0 })).status === 400);
 } catch (e) {
   err = e;
 }

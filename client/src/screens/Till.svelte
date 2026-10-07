@@ -3,24 +3,49 @@
   // pay-out (manager), float added, no-sale with reason; close with the count -> Z report and variance.
   // Managers (settings.manage) also set payment methods, float, cash rounding, US rate and limits here.
   import { onMount } from "svelte";
-  import { api } from "../lib/api.js";
-  import { go, can, handleRefusal } from "../lib/session.svelte.js";
+  import { api, isHubDown } from "../lib/api.js";
+  import { s, go, can, handleRefusal } from "../lib/session.svelte.js";
   import { money, toCents } from "../lib/catalogue.js";
   import { METHOD } from "../lib/till.js";
-  import { off, syncQueue, queued, retry, discard } from "../lib/offline.svelte.js";
+  import { off, syncQueue, queued, retry, discard, tillInfo, saveTillInfo, tillWaiting, getPack, openTillOffline } from "../lib/offline.svelte.js";
 
   let info = $state(null), error = $state(""), ok = $state(""), busy = $state(false);
   let count = $state({}), usd = $state(""), cash = $state(null), z = $state(null);
   let sets = $state(null);
+  let offline = $state(false);                  // the hub is not answering: the till opens on this device (DL-90)
+  const DENOMS = [10000, 5000, 2000, 1000, 500, 200, 100, 25, 10, 5];
 
   const denoms = $derived(info ? info.settings.denominations : []);
   const counted = $derived(denoms.reduce((a, d) => a + d * (Number(count[d]) || 0), 0));
   const label = (d) => (d >= 100 ? "$" + d / 100 : d + "¢");
 
-  async function load() {
+  async function load(again = true) {
     const r = await api("GET", "/api/chedam/tills/current");
+    if (r.status === 0) return loadOffline();
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
+    offline = false;
+    const mine = tillInfo();
+    // A till opened offline goes up first, then this screen shows it with the hub's figures.
+    if (!r.json.till && mine && mine.till && mine.till.offline && (await tillWaiting(mine.till.id))) {
+      if (again) { await syncQueue(); loadProblems(); return load(false); }
+      info = { ...r.json, till: mine.till }; count = {};
+      return;
+    }
     info = r.json;
+    saveTillInfo({ till: r.json.till ? { id: r.json.till.id, number: r.json.till.number } : null, settings: r.json.settings, business: r.json.business });
+    count = {};
+  }
+
+  // Hub unreachable: what this device knows (its till, the last settings, the offline pack).
+  async function loadOffline() {
+    offline = true;
+    const mine = tillInfo();
+    const pack = await getPack();
+    const settings = { ...((pack && pack.settings) || {}), ...((mine && mine.settings) || {}) };
+    if (!settings.denominations || !settings.denominations.length) settings.denominations = DENOMS;
+    if (settings.float_default_cents === undefined) settings.float_default_cents = 0;
+    if (!settings.payment_methods) settings.payment_methods = ["cash", "card"];
+    info = { till: (mine && mine.till) || null, settings, business: (mine && mine.business) || (pack && pack.business) || {} };
     count = {};
   }
   onMount(load);
@@ -28,6 +53,14 @@
   async function openTill() {
     busy = true; error = "";
     const body = counted ? { float_detail: Object.fromEntries(Object.entries(count).filter(([, n]) => Number(n))) } : { float_cents: info.settings.float_default_cents };
+    if (offline) {
+      const float = counted || info.settings.float_default_cents;
+      try { await openTillOffline({ ...body, float_cents: float }, s.me.user, $state.snapshot(info.settings), $state.snapshot(info.business)); }
+      catch { busy = false; error = "This device could not save the till opening (storage is full or blocked)."; return; }
+      busy = false;
+      ok = "Till open with " + money(float) + " on this device. The hub records it and gives it a number when it is back.";
+      return loadOffline();
+    }
     const r = await api("POST", "/api/chedam/tills/open", body);
     busy = false;
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
@@ -53,7 +86,7 @@
 
   async function closeTill() {
     // Offline sales must reach the hub first, or the Z report would miss them (DL-88).
-    if (off.pending || off.problems) { error = "Upload the offline sales first (" + (off.pending + off.problems) + " on this till)."; return; }
+    if (off.pending || off.problems || off.tills) { error = "Upload the offline sales first (" + (off.pending + off.problems) + " on this till)."; return; }
     if (!confirm("Close the till with " + money(counted) + " counted?")) return;
     busy = true; error = "";
     const body = { counted_detail: Object.fromEntries(Object.entries(count).filter(([, n]) => Number(n))) };
@@ -120,17 +153,35 @@
     </div>
   {/if}
 
+  {#if offline}
+    <p class="rounded-xl bg-warn/10 px-3 py-2 text-warn" role="status">The hub is not answering. This till works on its own: you can open it and sell. Cash drops, pay-outs and closing wait for the hub.</p>
+  {/if}
   {#if info}
     {#if !info.till}
       <div class="card space-y-3">
         <h2 class="font-semibold">Open the till</h2>
         <p class="text-sm text-muted">Count the float in the drawer, or leave the counts empty to use the default float of {money(info.settings.float_default_cents)}.</p>
+        {#if offline}<p class="text-sm text-warn">Opening on this device only. The hub records the till and its float when it is back, before this till's sales.</p>{/if}
         <div class="grid grid-cols-2 gap-2 sm:grid-cols-5">
           {#each denoms as d (d)}<label class="block"><span class="text-sm text-muted">{label(d)}</span><input class="field" type="number" min="0" step="1" bind:value={count[d]} /></label>{/each}
         </div>
         <p class="font-semibold">Float: {money(counted || info.settings.float_default_cents)}</p>
         <button class="btn" disabled={busy || !can("sales.sell")} onclick={openTill}>Open till</button>
       </div>
+    {:else if !info.till.summary}
+      <div class="card space-y-1">
+        <h2 class="font-semibold">{info.till.number ? "Till " + info.till.number : "Till (opened offline)"} · open since {when(info.till.opened_at)}</h2>
+        {#if info.till.float_cents !== undefined}<p class="flex justify-between"><span>Float</span><span>{money(info.till.float_cents)}</span></p>{/if}
+        {#if off.pending}<p class="flex justify-between"><span>Sales made offline, waiting to upload</span><span>{off.pending}</span></p>{/if}
+        <p class="text-sm text-muted">Running totals, cash drops and closing need the hub.{#if off.tills}{" "}The till opening uploads first.{/if}</p>
+        {#if !isHubDown()}<button class="btn-ghost mt-2" disabled={off.syncing} onclick={async () => { await syncQueue(); loadProblems(); load(false); }}>{off.syncing ? "Uploading…" : "Upload now"}</button>{/if}
+        <button class="btn mt-2" onclick={() => go("sell")}>Sell</button>
+      </div>
+      {#if problemSales.length}
+        <div class="card space-y-2 border-warn">
+          {#each problemSales as q (q.id)}<p class="rounded-xl bg-bad/10 p-2 text-sm"><b>{q.kind === "till_open" ? "Till opening" : q.receipt ? q.receipt.number : q.id}</b>: the hub refused it: {q.error}</p>{/each}
+        </div>
+      {/if}
     {:else}
       {@const sm = info.till.summary}
       <div class="card space-y-1">
@@ -159,7 +210,7 @@
           {#if off.pending}<p>{off.pending} waiting to upload. <button class="underline" disabled={off.syncing} onclick={async () => { await syncQueue(); loadProblems(); }}>{off.syncing ? "Uploading…" : "Upload now"}</button></p>{/if}
           {#each problemSales as q (q.id)}
             <div class="rounded-xl bg-bad/10 p-2 text-sm">
-              <p><b>{q.receipt ? q.receipt.number : q.id}</b> · {money(q.payload.totals.total_cents)}: the hub refused it: {q.error}</p>
+              <p><b>{q.kind === "till_open" ? "Till opening" : q.receipt ? q.receipt.number : q.id}</b>{#if q.payload.totals} · {money(q.payload.totals.total_cents)}{/if}: the hub refused it: {q.error}</p>
               {#if can("till.manage")}<div class="mt-1 flex gap-2"><button class="underline" onclick={async () => { await retry(q.id); loadProblems(); }}>Try again</button>
                 <button class="underline text-bad" onclick={async () => { if (confirm("Remove this offline sale from the till? Record it by hand.")) { await discard(q.id); loadProblems(); } }}>Remove</button></div>
               {:else}<p>A manager must look at it before the till closes.</p>{/if}

@@ -3,16 +3,27 @@
 //   whenever the hub answers.
 // - Sales made while the hub is unreachable wait in a queue on this device and upload in order when it
 //   is back. Each keeps its sale id, so a repeat upload is answered with the first result (BR-10).
+// - A till opened while the hub is unreachable (DL-90) waits in the same queue, ahead of its sales.
 // - A sale the hub refuses (its figures do not add up) stays in the queue marked as a problem for a
 //   manager; the others carry on.
 import Dexie from "dexie";
 import { api, load } from "./api.js";
 import { indexPack } from "./offline_price.js";
+import { newId } from "./catalogue.js";
 
 const db = new Dexie("chedam");
 db.version(1).stores({ kv: "key", queue: "id, created" });
 
-export const off = $state({ pending: 0, problems: 0, syncing: false, packAt: "", lastSync: "", lastError: "" });
+// pending: offline sales waiting; tills: offline till openings waiting.
+export const off = $state({ pending: 0, tills: 0, problems: 0, syncing: false, packAt: "", lastSync: "", lastError: "" });
+
+const URL = { sale: "/api/chedam/sales/offline", till_open: "/api/chedam/tills/offline-open" };
+
+// This device's till as last known ({till: {id, number, offline?}, settings, business}), so offline
+// sales still belong to it.
+const TILL_KEY = "chedam.till_info";
+export function tillInfo() { try { return JSON.parse(localStorage.getItem(TILL_KEY) || "null"); } catch { return null; } }
+export function saveTillInfo(v) { try { localStorage.setItem(TILL_KEY, JSON.stringify(v)); } catch { /* private mode */ } }
 
 let packIx = null;
 
@@ -40,18 +51,33 @@ export function nextOfflineRef() {
   return "OFF-" + dev + "-" + String(n).padStart(4, "0");
 }
 
-export async function enqueue(payload, receipt) {
+export async function enqueue(payload, receipt, kind = "sale") {
   // Plain copies: IndexedDB cannot store Svelte's reactive proxies (DataCloneError).
   const plain = (v) => JSON.parse(JSON.stringify(v));
-  await db.queue.put({ id: payload.id, created: Date.now(), payload: plain(payload), receipt: plain(receipt), status: "pending", error: "" });
+  await db.queue.put({ id: payload.id, kind, created: Date.now(), payload: plain(payload), receipt: plain(receipt || null), status: "pending", error: "" });
   await count();
 }
+
+// Opens the till on this device while the hub is unreachable (DL-90): the float is counted here, the
+// opening waits in the queue ahead of the sales, and the hub gives the till its number on arrival.
+export async function openTillOffline(body, me, settings, business) {
+  const id = newId();
+  const now = new Date().toISOString();
+  await enqueue({ id, ...body, opened_by: me.id, device_time: now }, null, "till_open");
+  const t = { id, number: null, offline: true, opened_at: now, float_cents: body.float_cents, opened_by: me.name };
+  saveTillInfo({ till: t, settings, business });
+  return t;
+}
+
+// True while this device's offline till opening has not reached the hub yet (or was refused).
+export async function tillWaiting(id) { return (await queued()).some((q) => q.kind === "till_open" && q.id === id); }
 
 export async function queued() { try { return await db.queue.orderBy("created").toArray(); } catch { return []; } }
 
 async function count() {
   const all = await queued();
-  off.pending = all.filter((q) => q.status === "pending").length;
+  off.pending = all.filter((q) => q.status === "pending" && q.kind !== "till_open").length;
+  off.tills = all.filter((q) => q.status === "pending" && q.kind === "till_open").length;
   off.problems = all.filter((q) => q.status === "problem").length;
 }
 
@@ -63,7 +89,7 @@ export async function syncQueue() {
   try {
     for (const q of await queued()) {
       if (q.status !== "pending") continue;
-      const r = await api("POST", "/api/chedam/sales/offline", q.payload, { timeout: 20000 });
+      const r = await api("POST", URL[q.kind || "sale"], q.payload, { timeout: 20000 });
       if (r.status === 0) { off.lastError = "The hub is not answering."; break; }
       if (r.ok) { await db.queue.delete(q.id); off.lastSync = new Date().toISOString(); off.lastError = ""; continue; }
       if (r.status === 401 || r.status === 423) { off.lastError = "Sign in again to upload the offline sales."; break; }
@@ -88,7 +114,7 @@ export function startOffline(isSignedIn, hubUp) {
   let lastPack = 0;
   setInterval(async () => {
     if (!isSignedIn() || !hubUp()) return;
-    if (off.pending) syncQueue();
+    if (off.pending || off.tills) syncQueue();
     if (Date.now() - lastPack > 5 * 60000) { lastPack = Date.now(); refreshPack(); }
   }, 10000);
 }
