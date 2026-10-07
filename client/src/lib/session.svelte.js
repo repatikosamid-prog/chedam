@@ -1,6 +1,7 @@
 // What the app shows, decided from this device's status on the hub and who is signed in.
 // Screens: boot | setup | recovery | pair | wait | names | pin | newpin | owner | home | devices | wizard |
-// backups | health | updates | products | product | categories | tax
+// backups | health | updates | products | product | categories | tax | stock | stockitem | receive |
+// counts | approvals | shrink
 import { api, load, save } from "./api.js";
 
 export const s = $state({
@@ -13,12 +14,17 @@ export const s = $state({
   recoveryCode: "",     // shown once after setup (FR-1.03)
   productId: "",        // product open in the product form ("" = new)
   productFilter: "",    // status filter the product list opens with (e.g. "draft" from the Drafts task)
+  stockProductId: "",   // product open on the stock screen
+  receiveProduct: "",   // product to add to the "Add stock" list when it opens
+  newBarcode: "",       // unknown barcode scanned while adding stock: the new product form starts with it
+  returnTo: "",         // screen to go back to from the product form (e.g. "receive")
 });
 
 export function notify(text, kind = "") { s.notice = { text, kind }; }
 
 const HASH = { devices: "#devices", wizard: "#setup", backups: "#backups", health: "#health", updates: "#updates",
-  products: "#products", product: "#products", categories: "#categories", tax: "#tax" };
+  products: "#products", product: "#products", categories: "#categories", tax: "#tax",
+  stock: "#stock", stockitem: "#stock", receive: "#receive", counts: "#counts", approvals: "#approvals", shrink: "#shrink" };
 
 export function go(screen) {
   s.screen = screen;
@@ -82,10 +88,12 @@ async function loadMe() {
   if (s.me.user.pin_must_change) return go("newpin");
   await loadAutoLock();
   const FROM_HASH = { "#devices": "devices", "#setup": "wizard", "#backups": "backups", "#health": "health", "#updates": "updates",
-    "#products": "products", "#categories": "categories", "#tax": "tax" };
+    "#products": "products", "#categories": "categories", "#tax": "tax",
+    "#stock": "stock", "#receive": "receive", "#counts": "counts", "#approvals": "approvals", "#shrink": "shrink" };
   // "" = any signed-in person may open it (the hub still decides what they can change)
   const NEEDS = { devices: "devices.view", wizard: "setup.run", backups: "backups.view", health: "health.view", updates: "updates.view",
-    products: "", product: "", categories: "catalogue.edit", tax: "" };
+    products: "", product: "", categories: "catalogue.edit", tax: "",
+    stock: "", stockitem: "", receive: "stock.receive", counts: "stock.count", approvals: "stock.approve", shrink: "costs.view" };
   // An address typed or linked (#tax) wins over the screen already open.
   const fromHash = FROM_HASH[location.hash];
   const want = fromHash && HASH[s.screen] !== location.hash ? fromHash : s.screen in NEEDS ? s.screen : fromHash;

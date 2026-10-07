@@ -48,3 +48,15 @@ export const STATUS = { draft: "Draft", active: "Active", archived: "Archived" }
 export function splitCodes(text) {
   return String(text || "").split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
 }
+
+// "12", "7.25 kg", "1 item": quantities in the product's base unit.
+export function qty(n, baseUnit) {
+  const v = Math.round(Number(n || 0) * 1000) / 1000;
+  return baseUnit === "each" ? String(v) : v + " " + baseUnit;
+}
+
+// Id of one stock operation, made on the device so a retry is not applied twice (BR-10).
+export function opId() { return "op" + newId(); }
+
+export const MOVES = { receive: "Received", adjust: "Adjusted", damage: "Damaged", loss: "Lost", count: "Counted", pack_break: "Opened packs",
+  pack_make: "Made packs", sale: "Sold", return: "Returned", transfer: "Moved" };

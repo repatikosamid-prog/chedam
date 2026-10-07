@@ -116,6 +116,14 @@ function baseQty(app, unit, depth) {
 
 const CODE = /^[0-9A-Za-z-]{1,48}$/;
 
+// A 12-digit UPC-A and the same code with a leading 0 (EAN-13) are one barcode: scanners and phone
+// cameras report either form (DL-77).
+function codeVariants(c) {
+  if (/^\d{12}$/.test(c)) return [c, "0" + c];
+  if (/^0\d{12}$/.test(c)) return [c, c.substring(1)];
+  return [c];
+}
+
 // Every selling unit save.
 function checkUnit(app, unit) {
   let product;
@@ -151,8 +159,12 @@ function checkUnit(app, unit) {
   }
   if (!unit.getString("deleted_at")) {
     codes.forEach((c) => {
-      const other = app.findRecordsByFilter("selling_units", "product != {:p} && deleted_at = '' && barcodes ~ {:q}", "", 0, 0,
-        { p: unit.getString("product"), q: '"' + c + '"' }).filter((u) => barcodesOf(u).indexOf(c) >= 0);
+      const forms = codeVariants(c);
+      let other = [];
+      forms.forEach((f) => {
+        other = other.concat(app.findRecordsByFilter("selling_units", "product != {:p} && deleted_at = '' && barcodes ~ {:q}", "", 0, 0,
+          { p: unit.getString("product"), q: '"' + f + '"' }).filter((u) => barcodesOf(u).indexOf(f) >= 0));
+      });
       if (other.length) {
         let name = "another product";
         try { name = "'" + app.findRecordById("products", other[0].getString("product")).getString("name") + "'"; } catch (_) { /* keep generic */ }
@@ -251,9 +263,12 @@ function view(app, id, atIso, showCosts) {
 // (the phone opens them to finish), marked sellable: false.
 function lookup(app, code) {
   const matches = [];
-  app.findRecordsByFilter("selling_units", "deleted_at = '' && barcodes ~ {:q}", "sort", 0, 0, { q: '"' + code + '"' })
-    .filter((u) => barcodesOf(u).indexOf(code) >= 0)
-    .forEach((u) => matches.push({ unit: u, via: "barcode" }));
+  const seen = {};
+  codeVariants(code).forEach((c) => {
+    app.findRecordsByFilter("selling_units", "deleted_at = '' && barcodes ~ {:q}", "sort", 0, 0, { q: '"' + c + '"' })
+      .filter((u) => barcodesOf(u).indexOf(c) >= 0 && !seen[u.id])
+      .forEach((u) => { seen[u.id] = true; matches.push({ unit: u, via: "barcode" }); });
+  });
   app.findRecordsByFilter("products", "deleted_at = '' && (plu = {:c} || scale_code = {:c})", "", 0, 0, { c: code }).forEach((p) => {
     unitsOf(app, p.id).filter((u) => u.getBool("sell_at_pos") && (u.getBool("is_default") || u.getString("kind") === "weight" || u.getString("kind") === "single"))
       .slice(0, 1).forEach((u) => matches.push({ unit: u, via: p.getString("plu") === code ? "plu" : "scale_code" }));

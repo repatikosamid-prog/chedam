@@ -515,7 +515,10 @@ function shrink(app, from, to) {
     total += v;
   });
   Object.keys(byProduct).forEach((pid) => {
-    try { byProduct[pid].name = app.findRecordById("products", pid).getString("name"); } catch (_) { byProduct[pid].name = "(removed)"; }
+    try {
+      const pr = app.findRecordById("products", pid);
+      byProduct[pid].name = pr.getString("name"); byProduct[pid].base_unit = pr.getString("base_unit");
+    } catch (_) { byProduct[pid].name = "(removed)"; }
   });
   const sort = (a, b) => b.value_cents - a.value_cents;
   return { from: from, to: to, total_cents: total, entries: rows.length,

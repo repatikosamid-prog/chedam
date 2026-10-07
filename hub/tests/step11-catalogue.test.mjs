@@ -148,6 +148,13 @@ try {
   check("4-pack becomes a 6-pack: the case follows (6 x 6 = 36)", grow.status === 200 && caseNow.base_qty === 36, JSON.stringify(caseNow));
   check("a unit another unit contains cannot be removed", (await as(manager).patch(`/api/collections/selling_units/records/${juiceUnits["4-pack"]}`, { deleted_at: new Date().toISOString() })).status === 400);
   check("nested pack of 1.5 singles refused (BR-03)", (await as(manager).patch(`/api/collections/selling_units/records/${juiceUnits.Case}`, { contains_qty: 1.5 })).status === 400);
+  const upc = await as(manager).post("/api/chedam/catalogue/products", { product: { name: "Imported crackers", base_unit: "each", category: cats.Snacks, tax_class: cls.gst_only },
+    units: [{ name: "Single", kind: "single", barcodes: ["0628915120011"], price_cents: 299, sell_at_pos: true }], activate: true });
+  check("EAN-13 with a leading 0 saved", upc.status === 200, JSON.stringify(upc.json));
+  const l12 = (await as(cashier).get("/api/chedam/catalogue/lookup?code=628915120011")).json;
+  check("scanned as 12-digit UPC-A: same product found (DL-77)", l12.matches.length === 1 && l12.matches[0].product.name === "Imported crackers", JSON.stringify(l12));
+  check("the 12-digit form cannot go on another product", (await as(manager).post("/api/chedam/catalogue/products", { product: { name: "Copy", base_unit: "each" },
+    units: [{ name: "Single", kind: "single", barcodes: ["628915120011"], price_cents: 1 }] })).status === 400);
   check("barcode with odd characters refused", (await as(manager).post("/api/chedam/catalogue/products", { product: { name: "Odd", base_unit: "each" }, units: [{ name: "x", kind: "single", barcodes: ["12 34"], price_cents: 1 }] })).status === 400);
 
   console.log("Price changes (DL-67, FR-5.05)");

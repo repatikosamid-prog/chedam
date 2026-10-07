@@ -13,6 +13,7 @@
   const showCost = can("costs.view");
   const mayPrice = can("prices.edit");
   const isNew = !s.productId;
+  const fromReceive = s.returnTo === "receive";
 
   let p = $state({ name: "", name_fr: "", category: "", base_unit: "each", tax_class: "", plu: "", pos_button: false,
     reorder_point: 0, description: "", tare: 0, scale_code: "", scale_ack: false, perishable: false, shelf_life_days: 0,
@@ -70,6 +71,8 @@
       const std = classes.find((x) => x.code === "standard");
       if (std) p.tax_class = std.id;
       units = [blankUnit("single")];
+      // From "Add stock": an unknown barcode starts a new product with it filled in.
+      if (s.newBarcode) { units[0].codes = s.newBarcode; s.newBarcode = ""; }
     } else {
       await loadProduct();
     }
@@ -155,7 +158,7 @@
 
 <section class="space-y-4">
   <div>
-    <button class="mb-1 min-h-10 text-sm underline" onclick={() => go("products")}>← Products</button>
+    <button class="mb-1 min-h-10 text-sm underline" onclick={() => { const to = s.returnTo || "products"; s.returnTo = ""; go(to); }}>← {s.returnTo === "receive" ? "Add stock" : "Products"}</button>
     <h1 class="text-xl font-bold">{isNew ? "New product" : p.name || "Product"}
       {#if !isNew}<span class="ml-2 rounded-lg px-2 py-0.5 text-sm align-middle {p.status === 'active' ? 'bg-ok/10 text-ok' : p.status === 'draft' ? 'bg-warn/10 text-warn' : 'bg-soft text-muted'}">{STATUS[p.status]}</span>{/if}
     </h1>
@@ -341,6 +344,10 @@
         <button class={mayPrice ? "btn-ghost" : "btn"} disabled={busy} onclick={() => save(false)}>Save as draft</button>
       {/if}
       {#if !isNew && p.status === "active"}<button class="btn-ghost" disabled={busy} onclick={() => setStatus("archived")}>Archive</button>{/if}
+      {#if !isNew && !fromReceive}<button class="btn-ghost" onclick={() => { s.stockProductId = s.productId; go("stockitem"); }}>Stock</button>{/if}
+      {#if s.returnTo === "receive" && s.productId}
+        <button class="btn-ghost" onclick={() => { s.receiveProduct = s.productId; s.returnTo = ""; go("receive"); }}>Add it to the delivery</button>
+      {/if}
       {#if !isNew && p.status === "archived" && mayPrice}<button class="btn-ghost" disabled={busy} onclick={() => setStatus("active")}>Make active again</button>{/if}
     </div>
     {#if p.status !== "active" && !mayPrice}<p class="text-sm text-muted">A manager makes new products active (sets them on sale).</p>{/if}

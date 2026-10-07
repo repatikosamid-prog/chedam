@@ -95,6 +95,7 @@
           <li class="flex min-h-12 items-center justify-between gap-3 py-2">
             <span>{t.title}</span>
             {#if t.kind === "setup_incomplete" && can("setup.run")}<button class="btn-ghost min-h-10 text-sm" onclick={() => go("wizard")}>Do it</button>{/if}
+            {#if t.kind === "stock_approval" && can("stock.approve")}<button class="btn-ghost min-h-10 text-sm" onclick={() => go("approvals")}>Review</button>{/if}
             {#if t.kind === "draft_products"}<button class="btn-ghost min-h-10 text-sm" onclick={() => { s.productFilter = "draft"; go("products"); }}>Show</button>{/if}
           </li>
         {/each}
@@ -114,6 +115,10 @@
       <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("products")}>
         <span class="font-semibold">Products</span>
         <span class="text-sm text-muted">{can("catalogue.edit") ? "Add and edit products, packs, prices" : "Look up products and prices"}</span>
+      </button>
+      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("stock")}>
+        <span class="font-semibold">Stock</span>
+        <span class="text-sm text-muted">{can("stock.receive") ? "Add stock by phone, counts, damage" : "What is in stock"}</span>
       </button>
       {#if can("health.view")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("health")}>

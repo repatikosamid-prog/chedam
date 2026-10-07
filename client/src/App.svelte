@@ -22,12 +22,18 @@
   import ProductEdit from "./screens/ProductEdit.svelte";
   import Categories from "./screens/Categories.svelte";
   import Tax from "./screens/Tax.svelte";
+  import Stock from "./screens/Stock.svelte";
+  import StockItem from "./screens/StockItem.svelte";
+  import Receive from "./screens/Receive.svelte";
+  import Counts from "./screens/Counts.svelte";
+  import Approvals from "./screens/Approvals.svelte";
+  import Shrink from "./screens/Shrink.svelte";
 
   onMount(() => {
     startMonitor();
     refresh();
     // Re-check now and then, so a sign-out, lock or removal from the device manager shows here.
-    const busyScreens = ["pin", "owner", "setup", "recovery", "wizard", "newpin", "product", "categories", "tax"];
+    const busyScreens = ["pin", "owner", "setup", "recovery", "wizard", "newpin", "product", "categories", "tax", "stockitem", "receive", "counts"];
     const poll = setInterval(() => { if (!busyScreens.includes(s.screen)) refresh(); }, 30000);
     const stop = watchIdle(() => s.autoLockMin, () => !!s.me,
       () => signOut("Locked after " + s.autoLockMin + " minutes without use. Pick your name to continue."));
@@ -94,5 +100,11 @@
   {:else if s.screen === "product"}{#key s.productId}<ProductEdit />{/key}
   {:else if s.screen === "categories"}<Categories />
   {:else if s.screen === "tax"}<Tax />
+  {:else if s.screen === "stock"}<Stock />
+  {:else if s.screen === "stockitem"}{#key s.stockProductId}<StockItem />{/key}
+  {:else if s.screen === "receive"}<Receive />
+  {:else if s.screen === "counts"}<Counts />
+  {:else if s.screen === "approvals"}<Approvals />
+  {:else if s.screen === "shrink"}<Shrink />
   {/if}
 </main>
