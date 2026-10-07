@@ -184,7 +184,10 @@ try {
   check("the manager's actions are stamped with their device",
     evs.some((e) => e.record_id === till1.id && e.after && e.after.status === "locked" && e.device_id === office.id));
   const dump = JSON.stringify(evs);
-  check("no device key or code hashes in the log", !dump.includes("key_hash") && !dump.includes("pairing_code_hash"));
+  // Secret fields may be named in "changed" (that they changed), but their values never appear.
+  check("no device key or code hashes in the log", !/[0-9a-f]{64}/.test(dump)
+    && evs.every((e) => !(e.before && "key_hash" in e.before) && !(e.after && ("key_hash" in e.after || "pairing_code_hash" in e.after))));
+  check("a revoked device's erased key shows as a changed field", evs.some((e) => e.record_id === phone.id && (e.changed || []).includes("key_hash")));
 
   console.log("Guessing codes is stopped");
   for (let i = 0; i < 20; i++) await call("POST", "/api/chedam/devices/pair", { code: "ZZZZ-ZZZZ" });

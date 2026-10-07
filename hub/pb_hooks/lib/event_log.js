@@ -29,7 +29,21 @@ function changedFields(before, after) {
   return out;
 }
 
-function write(txApp, record, action, stored) {
+// Hidden fields (PIN, password, recovery code, keys) never go into the log, but that one of them
+// changed does: their names are added to "changed" (e.g. a PIN set from the admin UI).
+function secretValue(rec, f) {
+  const v = rec.getRaw(f);
+  if (v && v.hash !== undefined) return String(v.hash);
+  return v === null || v === undefined ? "" : String(v);
+}
+
+function hiddenChanged(oldRec, record) {
+  if (!oldRec) return [];
+  return record.collection().fields.filter((f) => f.hidden).map((f) => f.name)
+    .filter((n) => secretValue(oldRec, n) !== secretValue(record, n));
+}
+
+function write(txApp, record, action, stored, oldRec) {
   const before = action === "create" ? null : (stored || plain(record.original()));
   const after = action === "delete" ? null : plain(record);
 
@@ -41,7 +55,7 @@ function write(txApp, record, action, stored) {
   ev.set("device_id", record.get("@device") || "");
   ev.set("before", before);
   ev.set("after", after);
-  ev.set("changed", action === "update" ? changedFields(before, after) : null);
+  ev.set("changed", action === "update" ? changedFields(before, after).concat(hiddenChanged(oldRec, record)).sort() : null);
 
   // Test hook for the atomicity test only (hub/tests): simulate a failed event write.
   if ($os.getenv("CHEDAM_TEST_FAIL_EVENTS") === "1") {
@@ -78,12 +92,12 @@ function wrap(e, action) {
       sideEffects(txApp, e.record, action, "before");
       // "before" is read from the database: record.original() is stale when one record object is
       // saved twice (e.g. created, then activated in the same request).
-      let stored = null;
+      let stored = null, oldRec = null;
       if (action !== "create") {
-        try { stored = plain(txApp.findRecordById(e.record.collection().name, e.record.id)); } catch (_) { stored = null; }
+        try { oldRec = txApp.findRecordById(e.record.collection().name, e.record.id); stored = plain(oldRec); } catch (_) { stored = null; }
       }
       e.next();
-      write(txApp, e.record, action, stored);
+      write(txApp, e.record, action, stored, oldRec);
       sideEffects(txApp, e.record, action, "after");
     });
   } finally {

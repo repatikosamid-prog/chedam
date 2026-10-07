@@ -157,6 +157,10 @@ try {
   check("user create logged", uev.length === 1 && uev[0].action === "create");
   check("hidden fields (PIN bcrypt hash) not in log", !dump.includes("$2a$") && !dump.includes("4826"));
   check("password / tokenKey not in log", !dump.includes(pw) && !dump.includes("tokenKey"));
+  await api("PATCH", `/api/collections/users/records/${u.json.id}`, { pin: "5739" });
+  const pev = (await eventsFor("users", u.json.id)).at(-1);
+  check("a PIN changed in the admin UI is logged by name only", pev.action === "update" && pev.changed.includes("pin")
+    && !JSON.stringify(pev).includes("5739") && !JSON.stringify(pev).includes("$2a$"), JSON.stringify(pev.changed));
 
   // Append-only
   const e0 = ev[0].id;

@@ -12,13 +12,17 @@
   import Modules from "./wizard/Modules.svelte";
   import References from "./wizard/References.svelte";
   import Backup from "./wizard/Backup.svelte";
+  import Language from "./wizard/Language.svelte";
+  import Clock from "./wizard/Clock.svelte";
+  import Owner from "./wizard/Owner.svelte";
 
   const LABELS = {
     language: "Language", time: "Clock", owner: "Owner account", business: "Business profile",
     branding: "Logo and receipt", people: "Your team", storage: "Storage areas", modules: "Features",
     references: "References (optional)", backup: "Backups",
   };
-  const VIEWS = { business: Business, branding: Branding, people: People, storage: Storage, modules: Modules, references: References, backup: Backup };
+  // Language, clock and owner are done at first start; they can be opened again here (FR-1.15).
+  const VIEWS = { language: Language, time: Clock, owner: Owner, business: Business, branding: Branding, people: People, storage: Storage, modules: Modules, references: References, backup: Backup };
 
   let steps = $state([]);
   let current = $state("");

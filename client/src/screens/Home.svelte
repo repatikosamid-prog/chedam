@@ -36,6 +36,12 @@
     return () => window.removeEventListener("beforeinstallprompt", onPrompt);
   });
 
+  // Pairing starts a fresh sign-in on this device (one person per device, DL-36).
+  async function pairHere() {
+    await signOut("");
+    go("pair");
+  }
+
   async function setPref(field, value) {
     const r = await api("PATCH", "/api/collections/users/records/" + s.me.user.id, { [field]: value });
     if (r.ok) { s.me.user[field] = value; applyPrefs(s.me.user); }
@@ -66,6 +72,18 @@
     </div>
     <button class="btn-ghost" onclick={() => signOut()}>Sign out</button>
   </div>
+
+  {#if !s.device}
+    <div class="card flex flex-wrap items-center justify-between gap-3 border-warn">
+      <div>
+        <h2 class="font-semibold">This browser is not paired</h2>
+        <p class="text-sm">You are signed in as the owner with your password, which works anywhere. Selling, the till and
+          signing in with a PIN need a paired device. Pairing is remembered per address: use the same address
+          (e.g. https://chedam.local) every time on this device.</p>
+      </div>
+      <button class="btn" onclick={pairHere}>Pair this browser</button>
+    </div>
+  {/if}
 
   {#if health && health.overall === "bad"}
     <div class="card flex flex-wrap items-center justify-between gap-3 border-bad">
@@ -151,7 +169,8 @@
           <span class="text-sm text-muted">Pair, lock, sign out</span>
         </button>
       {/if}
-      {#each modules as m (m.id)}
+      <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
+      {#each modules.filter((m) => m.module !== "sell" && m.module !== "stock") as m (m.id)}
         <div class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-dashed border-line p-3" aria-disabled="true">
           <span class="font-semibold">{m.label}</span>
           <span class="text-sm text-muted">Coming in a later phase</span>
