@@ -46,7 +46,13 @@ SUPPORTED = {"vfat", "exfat", "ntfs", "ext4", "ext3", "ext2", "btrfs", "xfs"}
 # The hub's HTTPS certificate authority (Caddy). Saved with each backup so that a rebuilt hub keeps the
 # same CA and the store's devices keep trusting it (no certificate reinstall on every phone).
 CA_DIR = "/var/lib/caddy/.local/share/caddy/pki/authorities/local"
-CHECK_TABLES = ["users", "roles", "permissions", "settings", "modules", "devices", "events", "business", "storage_areas", "tasks"]
+# Tables compared by the restore test. Rows in them are never deleted (soft deletes, status changes),
+# so a backup can only have as many rows as the live store or fewer. Tables a hub does not have yet are
+# skipped. P1 (2026-10-07): the store's business data, not only setup.
+CHECK_TABLES = ["users", "roles", "permissions", "settings", "modules", "devices", "events", "business", "storage_areas", "tasks",
+                "categories", "products", "selling_units", "price_history", "stock_levels", "stock_lots", "stock_movements",
+                "tills", "cash_movements", "sales", "sale_lines", "payments", "tax_exemptions",
+                "returns", "return_lines", "refunds", "store_credits", "label_batches", "label_batch_items"]
 
 
 class Fail(Exception):
