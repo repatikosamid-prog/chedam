@@ -233,16 +233,24 @@ function stockCheck(app, live, cartId, problems, need) {
 // ---- Payments (FR-3.08, 3.09; BR-16) --------------------------------------------------------------
 
 // relaxed: an offline sale already taken; a method switched off since then is still recorded.
+// opts: {relaxed (offline upload: methods switched off since are kept), ctx, exchange_cents (an exchange:
+// the returned goods pay this much, lib/returns.js)}. Store credit is the store's own: always taken,
+// checked by its code and taken off its balance (FR-3.08).
 function settlePayments(app, total, payments, opts) {
-  const relaxed = !!(opts && opts.relaxed);
-  const methods = relaxed ? ["cash", "card", "usd_cash", "store_credit", "platform"] : setting(app, "sales.payment_methods", ["cash", "card"]) || [];
+  const o = opts || {};
+  const relaxed = !!o.relaxed;
+  const methods = (relaxed ? ["cash", "card", "usd_cash", "store_credit", "platform"] : setting(app, "sales.payment_methods", ["cash", "card"]) || []).concat(["store_credit"]);
+  let exchangeLeft = Number(o.exchange_cents || 0);
   const rounding = setting(app, "sales.cash_rounding", true);
   const rate = Number(setting(app, "sales.usd_rate", 1.35));
   let remaining = total, roundingCents = 0, change = 0;
   const out = [];
   (payments || []).forEach((pm, i) => {
     const method = String(pm.method || "");
-    if (methods.indexOf(method) < 0) bad("Payment " + (i + 1) + ": '" + method + "' is not accepted here.");
+    if (method === "exchange") {
+      if (!exchangeLeft || Number(pm.amount_cents) !== exchangeLeft) bad("Payment " + (i + 1) + ": an exchange is paid only as part of a return.");
+      exchangeLeft = 0;
+    } else if (methods.indexOf(method) < 0) bad("Payment " + (i + 1) + ": '" + method + "' is not accepted here.");
     const status = pm.status === "declined" ? "declined" : "approved";
     const rec = { method, status, amount_cents: 0, tendered_cents: 0, currency: method === "usd_cash" ? "USD" : "CAD", fx_rate: method === "usd_cash" ? rate : 1,
       change_cents: 0, reference: String(pm.reference || "").substring(0, 60), last4: String(pm.last4 || "").substring(0, 4), processor: String(pm.processor || "").substring(0, 40) };
@@ -251,9 +259,10 @@ function settlePayments(app, total, payments, opts) {
     if (!(amt > 0) || amt !== Math.floor(amt)) bad("Payment " + (i + 1) + ": the amount is not valid.");
     if (status === "declined") { rec.tendered_cents = amt; out.push(rec); return; }
     if (remaining <= 0) bad("The sale is already paid; remove payment " + (i + 1) + ".");
-    if (method === "card" || method === "store_credit" || method === "platform") {
+    if (method === "card" || method === "store_credit" || method === "platform" || method === "exchange") {
       if (amt > remaining) bad("A card payment cannot be more than what is left to pay (" + remaining + " cents).");
       rec.amount_cents = amt; rec.tendered_cents = amt; remaining -= amt;
+      if (method === "store_credit") useCredit(app, rec, amt, relaxed, o.ctx);
     } else {
       // Cash (or US cash converted to CAD). Cash that finishes the sale is rounded to 5 cents.
       const value = method === "usd_cash" ? core().roundHalfUp(amt * rate) : amt;
@@ -274,6 +283,22 @@ function settlePayments(app, total, payments, opts) {
   });
   return { payments: out, remaining, rounding_cents: roundingCents, change_cents: change,
     paid_cents: out.filter((x) => x.status === "approved").reduce((a, x) => a + x.amount_cents, 0) };
+}
+
+// Takes `amt` off a store credit. Offline uploads (relaxed) never fail on it: the customer has paid.
+function useCredit(app, rec, amt, relaxed, ctx) {
+  const code = rec.reference.trim().toUpperCase();
+  rec.reference = code;
+  const c = code ? app.findRecordsByFilter("store_credits", "code = {:c}", "", 1, 0, { c: code })[0] : null;
+  if (!c) { if (relaxed) return; bad("Store credit: unknown code '" + code + "'."); }
+  if (c.getString("status") !== "active" || c.getInt("balance_cents") < amt) {
+    if (relaxed) return;
+    bad("Store credit " + code + " has " + c.getInt("balance_cents") + " cents left.");
+  }
+  c.set("balance_cents", c.getInt("balance_cents") - amt);
+  if (c.getInt("balance_cents") === 0) c.set("status", "used");
+  if (ctx) st().stamp(c, ctx);
+  app.save(c);
 }
 
 // ---- Views ---------------------------------------------------------------------------------------
@@ -380,7 +405,8 @@ function openPacksFor(app, l, ctx) {
   }
 }
 
-function complete(app, input, ctx) {
+// internal: {exchange_cents} when lib/returns.js records an exchange (never from the request body).
+function complete(app, input, ctx, internal) {
   const id = String(input.id || "");
   if (!/^[a-z0-9]{15}$/.test(id)) bad("The sale needs an id made on the till (15 letters and digits).");
   const existing = app.findRecordsByFilter("sales", "id = {:id}", "", 1, 0, { id: id });
@@ -398,7 +424,7 @@ function complete(app, input, ctx) {
   // Training sales need no till, but are listed on its Z report when one is open (never in its money).
   const till = openTill(app, ctx.device);
   if (!b.training && !till) return { refused: 409, message: "Open the till before selling.", quote };
-  const pay = settlePayments(app, b.priced.total_cents, input.payments);
+  const pay = settlePayments(app, b.priced.total_cents, input.payments, { ctx, exchange_cents: internal && internal.exchange_cents });
   if (pay.remaining > 0) return { refused: 409, message: "Not paid in full: " + pay.remaining + " cents left.", quote };
 
   const number = (b.training ? "T-" : "S-") + ("000000" + nextNumber(app, b.training ? "training" : "sale", ctx)).slice(-6);
@@ -475,6 +501,8 @@ function voidSale(app, id, body, ctx) {
   let s;
   try { s = app.findRecordById("sales", id); } catch (_) { bad("Unknown sale."); }
   if (s.getString("status") !== "completed") bad("This sale is already voided.");
+  if (app.findRecordsByFilter("payments", "sale = {:s} && method = 'exchange'", "", 1, 0, { s: id }).length) bad("This sale is part of an exchange. Use a return instead.");
+  if (app.findRecordsByFilter("returns", "sale = {:s}", "", 1, 0, { s: id }).length) bad("Items of this sale were returned. Use a return instead.");
   const reason = String(body.reason || "").trim();
   if (!reason) bad("Give a reason for the void.");
   let by = ctx.user;
@@ -510,6 +538,11 @@ function voidSale(app, id, body, ctx) {
     });
   }
   app.findRecordsByFilter("payments", "sale = {:s} && status = 'approved'", "", 0, 0, { s: id }).forEach((p) => {
+    // Store credit spent on the sale goes back on the credit.
+    if (p.getString("method") === "store_credit") {
+      const c = app.findRecordsByFilter("store_credits", "code = {:c}", "", 1, 0, { c: p.getString("reference") })[0];
+      if (c) { c.set("balance_cents", c.getInt("balance_cents") + p.getInt("amount_cents")); c.set("status", "active"); st().stamp(c, ctx); app.save(c); }
+    }
     p.set("status", "voided"); st().stamp(p, ctx); app.save(p);
   });
   s.set("status", "voided"); s.set("voided_by", "users:" + by.id); s.set("voided_at", new DateTime()); s.set("void_reason", reason.substring(0, 300));
@@ -566,4 +599,4 @@ function softHold(app, body, ctx) {
 }
 
 module.exports = { build, quoteView, complete, voidSale, saleView, newApproval, settlePayments, hold, recall, softHold, openTill, nextNumber, business,
-  openPacksForOffline };
+  openPacksForOffline, approvalFor, useApproval };

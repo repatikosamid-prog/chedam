@@ -5,7 +5,7 @@
 //   {t:"feed", n}   {t:"cut"}   {t:"kick"}
 // Receipt printers print plain ASCII safely (code page 437), so other letters are simplified (é -> e).
 
-const METHOD = { cash: "Cash", card: "Card", usd_cash: "US cash", other: "Other" };
+const METHOD = { cash: "Cash", card: "Card", usd_cash: "US cash", store_credit: "Store credit", exchange: "Exchange credit", platform: "Platform", other: "Other" };
 
 function ascii(s) {
   let v = String(s === undefined || s === null ? "" : s);
@@ -118,6 +118,65 @@ function receipt(sale, opts) {
   return L;
 }
 
+// Return slip (P1 step 6): what came back, tax refunded by type, how it was refunded, and any store
+// credit code with its barcode (spent at the till by scanning it).
+function returnReceipt(r, opts) {
+  const o = opts || {};
+  const b = r.business || {};
+  const L = [];
+  const add = (x) => L.push(x);
+  if (o.kick) add({ t: "kick" });
+  if (o.copy) add({ t: "text", s: "*** COPY (reprint " + o.copy + ") ***", align: "center", bold: true });
+  add({ t: "text", s: b.name || "", align: "center", bold: true, big: true });
+  if (b.header) add({ t: "text", s: b.header, align: "center" });
+  else if (b.address && b.address.line1) add({ t: "text", s: b.address.line1 + (b.address.city ? ", " + b.address.city : ""), align: "center" });
+  if (b.phone) add({ t: "text", s: b.phone, align: "center" });
+  if (b.gst_number) add({ t: "text", s: "GST/HST Reg. No. " + b.gst_number, align: "center" });
+  if (b.pst_number) add({ t: "text", s: "PST No. " + b.pst_number, align: "center" });
+  add({ t: "feed", n: 1 });
+  add({ t: "text", s: r.exchange_number ? "EXCHANGE" : "RETURN", align: "center", bold: true, big: true });
+  add({ t: "pair", l: r.number || "", r: when(r.completed_at) });
+  add({ t: "text", s: r.sale_number ? "Original sale " + r.sale_number : "No receipt" });
+  if (o.till_number) add({ t: "text", s: "Till " + o.till_number + (r.cashier ? " - served by " + r.cashier : "") });
+  else if (r.cashier) add({ t: "text", s: "Served by " + r.cashier });
+  add({ t: "rule" });
+  (r.lines || []).forEach((l) => {
+    add({ t: "pair", l: l.name, r: less(l.net_cents) });
+    if (Number(l.qty) !== 1) add({ t: "text", s: "  " + qtyText(l.qty) + " returned" });
+    if (l.deposit_cents) add({ t: "pair", l: "  Deposit/fee", r: less(l.deposit_cents) });
+  });
+  add({ t: "rule" });
+  add({ t: "pair", l: "Goods returned", r: less(r.net_cents) });
+  if (r.deposit_cents) add({ t: "pair", l: "Deposits and fees", r: less(r.deposit_cents) });
+  (r.taxes || []).forEach((x) => add({ t: "pair", l: x.label + " " + x.rate + "%" + (r.tax_mode === "tax_included" ? " (incl.)" : ""), r: less(x.tax_cents) }));
+  if (r.fee_cents) add({ t: "pair", l: "Restocking fee", r: money(r.fee_cents) });
+  add({ t: "pair", l: "REFUND", r: money(r.refund_cents), bold: true, big: true });
+  add({ t: "rule" });
+  (r.refunds || []).forEach((x) => {
+    if (x.method === "exchange") add({ t: "pair", l: "Exchange credit (" + x.reference + ")", r: money(x.amount_cents) });
+    else if (x.method === "store_credit") add({ t: "pair", l: "Store credit " + x.reference, r: money(x.amount_cents) });
+    else add({ t: "pair", l: (METHOD[x.method] || x.method) + (x.last4 ? " ****" + x.last4 : "") + " refunded", r: money(x.amount_cents) });
+  });
+  if (r.rounding_cents) add({ t: "pair", l: "Cash rounding", r: (r.rounding_cents > 0 ? "+" : "") + money(r.rounding_cents) });
+  (r.refunds || []).filter((x) => x.method === "store_credit").forEach((x) => {
+    add({ t: "feed", n: 1 });
+    add({ t: "text", s: "STORE CREDIT " + money(x.amount_cents), align: "center", bold: true, big: true });
+    add({ t: "barcode", s: x.reference });
+    add({ t: "text", s: "Keep this slip: scan it to pay at the till.", align: "center" });
+  });
+  if (r.reason) { add({ t: "feed", n: 1 }); add({ t: "text", s: "Reason: " + r.reason }); }
+  if ((r.refunds || []).some((x) => x.method === "cash" || x.method === "card")) {
+    add({ t: "feed", n: 2 });
+    add({ t: "text", s: "Customer signature: ______________________" });
+  }
+  if (b.footer) { add({ t: "feed", n: 1 }); add({ t: "text", s: b.footer, align: "center" }); }
+  add({ t: "feed", n: 1 });
+  add({ t: "barcode", s: r.number });
+  add({ t: "feed", n: 3 });
+  add({ t: "cut" });
+  return L;
+}
+
 // Z report (closed till) or X report (open till's running figures): same fields from tills.summary().
 function tillReport(z, business, opts) {
   const o = opts || {};
@@ -143,6 +202,12 @@ function tillReport(z, business, opts) {
   p("Voided sales", (z.voided_sales || 0) + " (" + money(z.voided_sales_cents || 0) + ")");
   p("Removed lines / no-sales", (z.voided_lines || 0) + " / " + (z.no_sales || 0));
   p("Exempt / training sales", (z.exempt_sales || 0) + " / " + (z.training_sales || 0));
+  if (z.returns_count) {
+    add({ t: "rule" });
+    p("Returns", z.returns_count + " (" + money(z.returns_cents) + ")", true);
+    (z.refund_taxes || []).forEach((x) => p("  " + x.label + " " + x.rate + "% refunded", less(x.tax_cents)));
+    (z.refunds || []).forEach((x) => p("  Refunded: " + (METHOD[x.method] || x.method) + " (" + x.count + ")", money(x.amount_cents)));
+  }
   add({ t: "rule" });
   p("Float", money(z.float_cents));
   p("Cash taken", money(z.cash_in_cents));
@@ -150,6 +215,7 @@ function tillReport(z, business, opts) {
   p("Cash drops", less(z.drops_cents));
   p("Pay-outs", less(z.payouts_cents));
   p("Float added", money(z.float_added_cents));
+  if (z.cash_refunds_cents) p("Cash refunds", less(z.cash_refunds_cents));
   p("Expected cash", money(z.expected_cash_cents), true);
   if (z.counted_cents !== undefined) {
     p("Counted", money(z.counted_cents), true);
@@ -224,4 +290,4 @@ function escpos(L, chars) {
   return out;
 }
 
-module.exports = { receipt, tillReport, testPage, text, escpos, ascii, money, wrap };
+module.exports = { receipt, returnReceipt, tillReport, testPage, text, escpos, ascii, money, wrap };

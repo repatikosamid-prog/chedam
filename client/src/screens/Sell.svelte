@@ -17,6 +17,9 @@
   import Approve from "../components/Approve.svelte";
   import Receipt from "../components/Receipt.svelte";
   import PrintButtons from "../components/PrintButtons.svelte";
+  import RefundChooser from "../components/RefundChooser.svelte";
+  import ReturnSlip from "../components/ReturnSlip.svelte";
+  import { ex, endExchange } from "../lib/exchange.svelte.js";
 
   const KEY = "chedam.cart";
   let info = $state(null);                       // /tills/current: till, settings, business
@@ -188,6 +191,12 @@
     if (!cart.training && !(info && info.till)) { error = "Open the till first (Till, then Open till)."; return; }
     if (quote.needs_approval.length && !cart.approval) { dialog = { kind: "approve", what: quote.needs_approval }; return; }
     payments = []; saleId = newId(); mode = "pay";
+    // Exchange (FR-4.13): the returned items pay first; the hub records the return and this sale together.
+    if (ex.draft) {
+      if (cart.training) { error = "Switch training off for an exchange."; mode = "sell"; return; }
+      if (isHubDown()) { error = "Exchanges need the hub."; mode = "sell"; return; }
+      payments = [{ method: "exchange", amount_cents: Math.min(ex.draft.credit_cents, quote.total_cents) }];
+    }
   }
 
   function approved(a) { cart.approval = a.approval; dialog = null; keep(); note = "Approved by " + a.by + "."; startPay(); }
@@ -199,7 +208,40 @@
     if (r.remaining <= 0) finish();
   }
 
+  // Exchange: what the customer still pays is in `payments`; refunds: what goes back when the returned
+  // items are worth more than the new ones.
+  let exReturn = $state(null);
+  async function finishExchange(refunds) {
+    busy = true; error = "";
+    const d = ex.draft;
+    const now = new Date().toISOString();
+    const r = await api("POST", "/api/chedam/returns", { id: d.id, ...d.body, refunds: refunds || [], device_time: now, expected_refund_cents: d.credit_cents,
+      exchange: { id: saleId, ...toInput(cart), expected_total_cents: quote.total_cents, payments: payments.filter((p) => p.method !== "exchange"), device_time: now } }, { timeout: 20000 });
+    busy = false;
+    if (!r.ok) {
+      if (await handleRefusal(r)) return;
+      error = r.status === 0 ? "The hub did not answer. Check Sales and Returns before trying again." : r.message;
+      payments = []; mode = "sell";
+      return;
+    }
+    sale = r.json.sale; exReturn = r.json.return;
+    endExchange();
+    mode = "done";
+    cart = newCart(false); quote = null; payments = []; keep();
+    loadTill();
+  }
+
+  // Store credit (FR-3.08): the code from the slip, checked on the hub.
+  async function checkCredit(e) {
+    e.preventDefault();
+    const r = await api("GET", "/api/chedam/store-credits/" + encodeURIComponent(dialog.code.trim()));
+    if (!r.ok) { dialog.error = r.status === 0 ? "Store credit needs the hub." : r.message; return; }
+    if (r.json.status !== "active" || !r.json.balance_cents) { dialog.error = "This store credit is used up."; return; }
+    pay({ method: "store_credit", amount_cents: Math.min(r.json.balance_cents, st.remaining), reference: r.json.code });
+  }
+
   async function finish() {
+    if (ex.draft) return finishExchange([]);
     busy = true; error = "";
     if (quote.offline) { busy = false; return finishOffline(quote); }
     const body = { id: saleId, ...toInput(cart), expected_total_cents: quote.total_cents, payments, device_time: new Date().toISOString() };
@@ -254,7 +296,7 @@
     syncQueue();
   }
 
-  function newSale() { sale = null; mode = "sell"; note = ""; focusCode(); }
+  function newSale() { sale = null; exReturn = null; mode = "sell"; note = ""; focusCode(); }
 
   // ---- Holds -------------------------------------------------------------------------------------
 
@@ -303,6 +345,7 @@
       {#if info}<span class="rounded-lg px-2 py-0.5 text-sm {info.till ? 'bg-ok/10 text-ok' : 'bg-warn/10 text-warn'}">{info.till ? (info.till.number ? "Till " + info.till.number + " open" : "Till open (opened offline)") : "Till closed"}</span>{/if}
     </div>
     <div class="flex flex-wrap gap-2">
+      {#if can("sales.return")}<button class="btn-ghost min-h-10 text-sm" onclick={() => go("returns")}>Return</button>{/if}
       <button class="btn-ghost min-h-10 text-sm" onclick={showHolds}>Recall</button>
       <button class="btn-ghost min-h-10 text-sm" onclick={() => go("sales")}>Sales</button>
       <button class="btn-ghost min-h-10 text-sm" onclick={() => go("till")}>Till</button>
@@ -310,6 +353,10 @@
     </div>
   </div>
   {#if cart.training}<p class="rounded-xl bg-warn/15 px-3 py-2 text-center font-semibold text-warn">TRAINING MODE · practice sales never change stock, money or reports</p>{/if}
+  {#if ex.draft && mode !== "done"}
+    <p class="rounded-xl bg-accent/10 px-3 py-2">Exchange: returned items ({ex.draft.label}) are worth <b>{money(ex.draft.credit_cents)}</b>. Ring up the new items and press Pay.
+      <button class="underline" onclick={() => { if (confirm("Cancel the exchange? Nothing has been returned yet.")) endExchange(); }}>Cancel exchange</button></p>
+  {/if}
   {#if info && !info.till && !cart.training}
     <p class="rounded-xl bg-warn/10 px-3 py-2">The till is closed. <button class="underline" onclick={() => go("till")}>Open the till</button> to sell, or switch on training.</p>
   {/if}
@@ -342,7 +389,14 @@
         </div>
         {#key sale.id}<PrintButtons {sale} auto={true} local={!!sale.offline} />{/key}
       </div>
-      <Receipt {sale} />
+      <div class="space-y-4">
+        {#if exReturn}
+          <div class="card space-y-2 text-center print:hidden"><p>Exchange recorded with return <b>{exReturn.number}</b>{exReturn.paid_cents > (exReturn.refunds.find((x) => x.method === "exchange") || { amount_cents: 0 }).amount_cents ? " · refunded " + money(exReturn.paid_cents - (exReturn.refunds.find((x) => x.method === "exchange") || { amount_cents: 0 }).amount_cents) : ""}.</p>
+            {#key exReturn.id}<PrintButtons sale={exReturn} kind="return" auto={true} />{/key}</div>
+          <ReturnSlip ret={exReturn} />
+        {/if}
+        <Receipt {sale} />
+      </div>
     </div>
   {:else}
   <div class="grid gap-4 lg:grid-cols-[1fr_24rem]">
@@ -508,6 +562,16 @@
           <button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={hold}>Hold</button>
           <button class="btn-ghost min-h-10 text-sm text-bad" disabled={!cart.lines.length} onclick={() => clearCart()}>Clear</button>
         </div>
+      {:else if mode === "pay" && st && ex.draft && ex.draft.credit_cents >= quote.total_cents}
+        <div class="space-y-2 border-t border-line pt-2">
+          <p class="flex justify-between"><span>Returned items</span><span>{money(ex.draft.credit_cents)}</span></p>
+          <p class="flex justify-between"><span>New items</span><span>−{money(quote.total_cents)}</span></p>
+          {#if ex.draft.credit_cents > quote.total_cents}
+            <RefundChooser total={ex.draft.credit_cents - quote.total_cents} receipt={ex.draft.receipt} cardMax={ex.draft.card_max_cents} {busy} onDone={finishExchange} />
+          {:else}<button class="btn" disabled={busy} onclick={() => finishExchange([])}>Complete exchange</button>{/if}
+          <button class="btn-ghost" disabled={busy} onclick={() => { payments = []; mode = "sell"; dialog = null; }}>Back to the sale</button>
+          {#if busy}<p class="text-muted">Saving…</p>{/if}
+        </div>
       {:else if mode === "pay" && st}
         <div class="space-y-2 border-t border-line pt-2">
           {#each payments as p, i (i)}
@@ -528,6 +592,7 @@
           <div class="flex flex-wrap gap-2">
             {#if (settings.payment_methods || []).includes("card")}<button class="btn" disabled={busy} onclick={() => (dialog = { kind: "card", amount: (st.remaining / 100).toFixed(2), last4: "", reference: "" })}>Card</button>{/if}
             {#if (settings.payment_methods || []).includes("usd_cash")}<button class="btn-ghost" disabled={busy} onclick={() => (dialog = { kind: "usd", value: "" })}>US cash</button>{/if}
+            {#if !isHubDown() && !cart.training}<button class="btn-ghost" disabled={busy} onclick={() => (dialog = { kind: "credit", code: "", error: "" })}>Store credit</button>{/if}
           </div>
           {#if dialog && dialog.kind === "card"}
             <div class="space-y-2 rounded-xl border border-accent p-3">
@@ -542,6 +607,13 @@
                 <button class="btn-ghost text-bad" onclick={() => pay({ method: "card", status: "declined", amount_cents: toCents(dialog.amount), last4: dialog.last4 })}>Declined</button>
               </div>
             </div>
+          {:else if dialog && dialog.kind === "credit"}
+            <form class="space-y-2 rounded-xl border border-accent p-3" onsubmit={checkCredit}>
+              <label class="block"><span class="text-sm text-muted">Store credit code (scan the slip's barcode or type it)</span>
+                <input class="field" bind:value={dialog.code} placeholder="SC-XXXX-XXXX" autocomplete="off" use:focusNow /></label>
+              {#if dialog.error}<p class="text-sm text-bad">{dialog.error}</p>{/if}
+              <button class="btn" type="submit">Use the credit</button>
+            </form>
           {:else if dialog && dialog.kind === "usd"}
             <form class="space-y-2 rounded-xl border border-accent p-3" onsubmit={(e) => { e.preventDefault(); const c = toCents(dialog.value); if (c > 0) pay({ method: "usd_cash", amount_cents: c }); }}>
               <label class="block"><span class="text-sm text-muted">US dollars given (1 US = {settings.usd_rate} CAD; change in CAD)</span>

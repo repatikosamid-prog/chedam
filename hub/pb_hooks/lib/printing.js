@@ -98,6 +98,28 @@ function printSale(app, id, opts, ctx) {
   return Object.assign(res, { printer: printer.name, copy, drawer: kick && res.printed });
 }
 
+// Prints a return slip. kick: the drawer opens for a cash refund this device gave in the last 10 minutes, once.
+function printReturn(app, id, opts, ctx) {
+  const returns = require(`${__hooks}/lib/returns.js`);
+  try { app.findRecordById("returns", id); } catch (_) { bad("Unknown return."); }
+  const printer = forDevice(app, ctx.device);
+  if (!printer) return { printed: false, error: "No receipt printer is set up for this device.", no_printer: true };
+  const v = returns.view(app, id, false);
+  let copy = 0, kick = false;
+  app.runInTransaction((tx) => {
+    const r = tx.findRecordById("returns", id);
+    if (opts.reprint) { copy = r.getInt("reprints") + 1; r.set("reprints", copy); }
+    if (opts.kick && !r.getBool("drawer_opened") && printer.drawer !== false) {
+      const tillDevice = (() => { try { return tx.findRecordById("tills", r.getString("till")).getString("device"); } catch (_) { return ""; } })();
+      const recent = Date.now() - new Date(r.getString("completed_at").replace(" ", "T")).getTime() < 10 * 60000;
+      if (v.refunds.some((x) => x.method === "cash") && recent && tillDevice === ctx.device) { kick = true; r.set("drawer_opened", true); }
+    }
+    if (copy || kick) { stamp(r, ctx); tx.save(r); }
+  });
+  const L = layout().returnReceipt(v, { copy, kick, till_number: tillNumber(app, v.till) });
+  return Object.assign(send(app, printer, layout().escpos(L, printer.chars)), { printer: printer.name, copy, drawer: kick });
+}
+
 // Receipt as the printer would print it, for the screen.
 function saleText(app, id, chars, ctx) {
   const sales = require(`${__hooks}/lib/sales.js`);
@@ -170,4 +192,4 @@ function savePrinters(app, list, ctx) {
   return out;
 }
 
-module.exports = { clean, printers, options, forDevice, send, scan, printSale, saleText, printTill, kickNoSale, test, savePrinters };
+module.exports = { clean, printers, options, forDevice, send, scan, printSale, printReturn, saleText, printTill, kickNoSale, test, savePrinters };

@@ -22,6 +22,14 @@ export async function printSale(id, body) {
   return r.ok ? r.json : { printed: false, error: r.message };
 }
 
+// A return slip (P1 step 6). body: {reprint, kick}
+export async function printReturn(id, body) {
+  if (isHubDown()) return down;
+  const r = await api("POST", `/api/chedam/returns/${id}/print`, body, { timeout: 15000 });
+  if (r.status === 0) return down;
+  return r.ok ? r.json : { printed: false, error: r.message };
+}
+
 export async function printTill(id) {
   if (isHubDown()) return down;
   const r = await api("POST", `/api/chedam/tills/${id}/print`, {}, { timeout: 15000 });

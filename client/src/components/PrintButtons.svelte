@@ -2,20 +2,21 @@
   // Receipt printing (FR-3.13) on the store's network printer through the hub; the browser's print is the
   // fallback (sale not on the hub yet, no printer, printer not answering). auto: print once the sale is
   // paid, opening the drawer for cash. From the store's threshold the buyer's name can be added for a
-  // full GST/HST receipt (NFR-14). Reprints are marked COPY and counted on the hub.
+  // full GST/HST receipt (NFR-14). Reprints are marked COPY and counted on the hub. kind "return": a
+  // return slip (the drawer opens for a cash refund).
   import { onMount } from "svelte";
   import { money } from "../lib/catalogue.js";
-  import { pr, loadPrinter, printSale } from "../lib/printer.svelte.js";
+  import { pr, loadPrinter, printSale, printReturn } from "../lib/printer.svelte.js";
 
-  let { sale, auto = false, local = false, reprint = false } = $props();
+  let { sale, auto = false, local = false, reprint = false, kind = "sale" } = $props();
   let msg = $state(""), bad = $state(false), busy = $state(false), printed = $state(0), buyer = $state(null);
 
   const hubPrint = $derived(!local && !!pr.mine);
-  const full = $derived(hubPrint && sale.total_cents >= (pr.options.full_receipt_cents || 15000));
+  const full = $derived(kind === "sale" && hubPrint && sale.total_cents >= (pr.options.full_receipt_cents || 15000));
 
   async function print(body) {
     busy = true;
-    const r = await printSale(sale.id, { reprint: reprint || printed > 0, ...body });
+    const r = await (kind === "return" ? printReturn : printSale)(sale.id, { reprint: reprint || printed > 0, ...body });
     busy = false;
     bad = !r.printed;
     msg = r.printed ? "Printed on " + r.printer + (r.copy ? " (copy " + r.copy + ")" : "") + (r.drawer ? " · drawer opened" : "") : r.error;
@@ -26,7 +27,8 @@
     if (local) return;
     await loadPrinter();
     if (auto && pr.mine && pr.options.auto_print) {
-      const cash = (sale.payments || []).some((p) => (p.method === "cash" || p.method === "usd_cash") && p.status === "approved");
+      const cash = kind === "return" ? (sale.refunds || []).some((x) => x.method === "cash")
+        : (sale.payments || []).some((p) => (p.method === "cash" || p.method === "usd_cash") && p.status === "approved");
       print({ kick: cash });
     }
   });
@@ -34,7 +36,7 @@
 
 <div class="space-y-2 print:hidden">
   <div class="flex flex-wrap justify-center gap-2">
-    {#if hubPrint}<button class="btn-ghost" disabled={busy} onclick={() => print({})}>{busy ? "Printing…" : reprint || printed ? "Reprint" : "Print receipt"}</button>{/if}
+    {#if hubPrint}<button class="btn-ghost" disabled={busy} onclick={() => print({})}>{busy ? "Printing…" : reprint || printed ? "Reprint" : kind === "return" ? "Print return slip" : "Print receipt"}</button>{/if}
     <button class="btn-ghost" onclick={() => window.print()}>{hubPrint ? "Print on this device" : reprint ? "Reprint" : "Print receipt"}</button>
     {#if full && buyer === null}<button class="btn-ghost" onclick={() => (buyer = "")}>Full tax receipt (name)</button>{/if}
   </div>

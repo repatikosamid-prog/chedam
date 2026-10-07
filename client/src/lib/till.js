@@ -30,7 +30,8 @@ export function settle(total, payments, s) {
       currency: p.method === "usd_cash" ? "USD" : "CAD", change_cents: 0, last4: p.last4 || "", reference: p.reference || "" };
     applied.push(rec);
     if (rec.status === "declined" || remaining <= 0) continue;
-    if (p.method === "card") { rec.amount_cents = Math.min(p.amount_cents, remaining); remaining -= rec.amount_cents; continue; }
+    // Card, store credit and exchange credit are exact (no rounding, no change).
+    if (p.method === "card" || p.method === "store_credit" || p.method === "exchange") { rec.amount_cents = Math.min(p.amount_cents, remaining); remaining -= rec.amount_cents; continue; }
     const value = p.method === "usd_cash" ? Math.floor(p.amount_cents * rate + 0.5) : p.amount_cents;
     const due = s.cash_rounding ? cashRound(remaining) : remaining;
     if (value >= due) {
@@ -52,4 +53,4 @@ export function cashSuggestions(due) {
   return out;
 }
 
-export const METHOD = { cash: "Cash", card: "Card", usd_cash: "US cash", store_credit: "Store credit", platform: "Platform" };
+export const METHOD = { cash: "Cash", card: "Card", usd_cash: "US cash", store_credit: "Store credit", platform: "Platform", exchange: "Exchange credit" };

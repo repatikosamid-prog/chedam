@@ -1,6 +1,6 @@
 // Tills (P1 step 3): FR-3.01, 3.11 (no-sale), FR-1.12 (float default). One open till per device.
 // Expected cash = float + cash taken (after change) - change given for US cash - drops - pay-outs
-// + float added. US cash stays in its own count. Closing writes the Z report.
+// + float added - cash refunds. US cash stays in its own count. Closing writes the Z report.
 
 const st = () => require(`${__hooks}/lib/stock.js`);
 function setting(app, key, fallback) { return require(`${__hooks}/lib/auth.js`).setting(app, key, fallback); }
@@ -148,7 +148,27 @@ function summary(app, t) {
   const msum = (type) => mv(type).reduce((a, m) => a + m.getInt("amount_cents"), 0);
   let voidLineCount = 0;
   sales.forEach((s) => app.findRecordsByFilter("sale_lines", "sale = {:s} && voided = true", "", 0, 0, { s: s.id }).forEach(() => { voidLineCount++; }));
-  const expected = t.getInt("float_cents") + cashIn - usdChange - msum("drop") - msum("payout") + msum("float_add");
+  // Returns on this till (P1 step 6): refunds by method; cash refunds leave the drawer.
+  const rets = app.findRecordsByFilter("returns", "till = {:t}", "completed_at", 0, 0, { t: t.id });
+  const refunds = {}, refundTaxes = {};
+  let cashOut = 0, creditIssued = 0;
+  rets.forEach((r) => {
+    app.findRecordsByFilter("refunds", "return = {:r}", "", 0, 0, { r: r.id }).forEach((x) => {
+      const m = x.getString("method");
+      const g = refunds[m] || (refunds[m] = { method: m, count: 0, amount_cents: 0 });
+      g.count++; g.amount_cents += x.getInt("amount_cents");
+      if (m === "cash") cashOut += x.getInt("amount_cents");
+      if (m === "store_credit") creditIssued += x.getInt("amount_cents");
+    });
+    let ts = [];
+    try { ts = JSON.parse(r.getString("taxes") || "[]") || []; } catch (_) { ts = []; }
+    ts.forEach((x) => {
+      const k = x.code + "@" + x.rate;
+      const g = refundTaxes[k] || (refundTaxes[k] = { code: x.code, label: x.label, rate: x.rate, tax_cents: 0 });
+      g.tax_cents += x.tax_cents;
+    });
+  });
+  const expected = t.getInt("float_cents") + cashIn - usdChange - msum("drop") - msum("payout") + msum("float_add") - cashOut;
   return {
     till: t.getInt("number"), opened_at: t.getString("opened_at"), float_cents: t.getInt("float_cents"),
     sales_count: done.length, items: done.reduce((a, s) => a + s.getFloat("items"), 0),
@@ -160,6 +180,8 @@ function summary(app, t) {
     training_sales: sales.filter((s) => s.getBool("training")).length,
     drops_cents: msum("drop"), payouts_cents: msum("payout"), float_added_cents: msum("float_add"), no_sales: mv("no_sale").length,
     cash_in_cents: cashIn, usd_change_cents: usdChange, usd_tendered_cents: usdTendered, expected_cash_cents: expected,
+    returns_count: rets.length, returns_cents: rets.reduce((a, r) => a + r.getInt("refund_cents"), 0), refunds: Object.values(refunds),
+    refund_taxes: Object.values(refundTaxes), cash_refunds_cents: cashOut, store_credit_issued_cents: creditIssued,
   };
 }
 

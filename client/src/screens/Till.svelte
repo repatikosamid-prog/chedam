@@ -159,8 +159,13 @@
       {#each z.payments as p (p.method)}<p class="flex justify-between"><span>{METHOD[p.method]} ({p.count})</span><span>{money(p.amount_cents)}</span></p>{/each}
       <p class="flex justify-between"><span>Voided sales / removed lines / no-sales</span><span>{z.voided_sales} / {z.voided_lines} / {z.no_sales}</span></p>
       <p class="flex justify-between"><span>Declined cards · training sales · exempt sales</span><span>{z.declined_cards} · {z.training_sales} · {z.exempt_sales}</span></p>
+      {#if z.returns_count}
+        <p class="flex justify-between"><span>Returns</span><span>{z.returns_count} · {money(z.returns_cents)}</span></p>
+        {#each z.refund_taxes as x (x.code + x.rate)}<p class="flex justify-between text-sm"><span>{x.label} {x.rate}% refunded</span><span>−{money(x.tax_cents)}</span></p>{/each}
+        {#each z.refunds as x (x.method)}<p class="flex justify-between text-sm"><span>Refunded: {METHOD[x.method] || x.method} ({x.count})</span><span>{money(x.amount_cents)}</span></p>{/each}
+      {/if}
       <hr class="border-line" />
-      <p class="flex justify-between"><span>Float + cash − drops − pay-outs</span><span>{money(z.float_cents)} + {money(z.cash_in_cents)} − {money(z.drops_cents)} − {money(z.payouts_cents)}</span></p>
+      <p class="flex justify-between"><span>Float + cash − drops − pay-outs{z.cash_refunds_cents ? " − cash refunds" : ""}</span><span>{money(z.float_cents)} + {money(z.cash_in_cents)} − {money(z.drops_cents)} − {money(z.payouts_cents)}{z.cash_refunds_cents ? " − " + money(z.cash_refunds_cents) : ""}</span></p>
       <p class="flex justify-between font-semibold"><span>Expected cash</span><span>{money(z.expected_cash_cents)}</span></p>
       <p class="flex justify-between font-semibold"><span>Counted</span><span>{money(z.counted_cents)}</span></p>
       <p class="flex justify-between text-lg font-bold {z.variance_cents < 0 ? 'text-bad' : z.variance_cents > 0 ? 'text-warn' : 'text-ok'}"><span>{z.variance_cents < 0 ? "Short" : z.variance_cents > 0 ? "Over" : "Balanced"}</span><span>{money(Math.abs(z.variance_cents))}</span></p>
@@ -207,6 +212,7 @@
         <h2 class="font-semibold">Till {info.till.number} · open since {when(info.till.opened_at)}</h2>
         <p class="flex justify-between"><span>Sales</span><span>{sm.sales_count} · {money(sm.total_cents + sm.rounding_cents)}</span></p>
         {#each sm.payments as p (p.method)}<p class="flex justify-between text-sm"><span>{METHOD[p.method]} ({p.count})</span><span>{money(p.amount_cents)}</span></p>{/each}
+        {#if sm.returns_count}<p class="flex justify-between"><span>Returns</span><span>{sm.returns_count} · {money(sm.returns_cents)}{sm.cash_refunds_cents ? " (cash " + money(sm.cash_refunds_cents) + ")" : ""}</span></p>{/if}
         <p class="flex justify-between font-semibold"><span>Cash expected in the drawer</span><span>{money(sm.expected_cash_cents)}</span></p>
         <div class="flex flex-wrap gap-2 pt-2">
           <button class="btn-ghost" onclick={() => (cash = { type: "drop", amount: "", reason: "" })}>Cash drop</button>

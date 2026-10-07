@@ -48,6 +48,12 @@ const TABLES = {
   tax_exemptions:       { list: "sales.view", view: "sales.view", create: null, update: null, delete: null },
   holds:                { list: "sales.sell", view: "sales.sell", create: null, update: null, delete: null },
   soft_holds:           { list: "sales.sell", view: "sales.sell", create: null, update: null, delete: null },
+  // P1 returns (step 6): changed only through /api/chedam/returns. Store credit codes are money: the till
+  // checks one code at a time through the hub; only managers and report readers list them.
+  returns:              { list: "sales.sell|sales.view", view: "sales.sell|sales.view", create: null, update: null, delete: null },
+  return_lines:         { list: "sales.sell|sales.view", view: "sales.sell|sales.view", create: null, update: null, delete: null },
+  refunds:              { list: "sales.sell|sales.view", view: "sales.sell|sales.view", create: null, update: null, delete: null },
+  store_credits:        { list: "sales.view|till.manage", view: "sales.view|till.manage", create: null, update: null, delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".
@@ -383,7 +389,8 @@ function overrideCheck(e, app, actor, rec) {
 // DL-72: costs and margins only for people with costs.view (not cashiers). Applied to every record
 // the API returns (lists, views, realtime) through onRecordEnrich.
 const COST_FIELDS = { products: ["cost_cents"], price_history: ["old_cents", "new_cents"], stock_lots: ["cost_cents"],
-  stock_movements: ["cost_cents", "value_cents", "lots_taken"], sales: ["cost_cents"], sale_lines: ["cost_cents", "lots"] };
+  stock_movements: ["cost_cents", "value_cents", "lots_taken"], sales: ["cost_cents"], sale_lines: ["cost_cents", "lots"],
+  returns: ["cost_cents"], return_lines: ["cost_cents"] };
 
 function hideCosts(e) {
   const name = e.record.collection().name;

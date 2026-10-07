@@ -15,6 +15,7 @@
   import Home from "./screens/Home.svelte";
   import Devices from "./screens/Devices.svelte";
   import Printers from "./screens/Printers.svelte";
+  import Returns from "./screens/Returns.svelte";
   import Setup from "./screens/Setup.svelte";
   import Recovery from "./screens/Recovery.svelte";
   import Wizard from "./screens/Wizard.svelte";
@@ -41,7 +42,7 @@
     // Offline sales upload by themselves whenever the hub answers (FR-3.16).
     startOffline(() => !!s.me && can("sales.sell"), () => net.hub === "ok");
     // Re-check now and then, so a sign-out, lock or removal from the device manager shows here.
-    const busyScreens = ["pin", "owner", "setup", "recovery", "wizard", "newpin", "product", "categories", "tax", "stockitem", "receive", "counts", "sell", "till", "sales"];
+    const busyScreens = ["pin", "owner", "setup", "recovery", "wizard", "newpin", "product", "categories", "tax", "stockitem", "receive", "counts", "sell", "till", "sales", "returns"];
     const poll = setInterval(() => { if (!busyScreens.includes(s.screen)) refresh(); }, 30000);
     const stop = watchIdle(() => s.autoLockMin, () => !!s.me,
       () => signOut("Locked after " + s.autoLockMin + " minutes without use. Pick your name to continue."));
@@ -99,6 +100,7 @@
   {:else if s.screen === "home"}<Home />
   {:else if s.screen === "devices"}<Devices />
   {:else if s.screen === "printers"}<Printers />
+  {:else if s.screen === "returns"}<Returns />
   {:else if s.screen === "setup"}<Setup />
   {:else if s.screen === "recovery"}<Recovery />
   {:else if s.screen === "wizard"}<Wizard />
