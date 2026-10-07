@@ -4,8 +4,12 @@
   // the hub's quote after every change (DL-79); manager PIN when needed (DL-81); payments with cash
   // rounding, card on the standalone terminal, US cash, split (DL-82); hold/recall; training mode;
   // tax exemption; receipt. The cart is kept on this device so a reload does not lose the sale.
+  // Offline (FR-3.16, DL-86..89): products and prices come from the offline pack; when the hub does not
+  // answer, the till prices the sale itself, prints an offline receipt and queues the sale for upload.
   import { onMount } from "svelte";
-  import { api } from "../lib/api.js";
+  import { api, isHubDown } from "../lib/api.js";
+  import { off, getPack, refreshPack, enqueue, nextOfflineRef, syncQueue } from "../lib/offline.svelte.js";
+  import { quoteOffline, lookupOffline } from "../lib/offline_price.js";
   import { s, go, can, handleRefusal } from "../lib/session.svelte.js";
   import { money, toCents, newId } from "../lib/catalogue.js";
   import { newCart, toInput, settle, cashSuggestions, cashRound, METHOD } from "../lib/till.js";
@@ -25,37 +29,57 @@
   let scanning = $state(false);
   let codeInput;
   let qTimer;
+  let ix = null;                                 // offline pack (indexed)
+  const TILL_KEY = "chedam.till_info";
+  const perms = () => ({ discount: can("sales.discount"), approve: can("sales.approve"), exempt: can("sales.tax_exempt") });
 
   const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(cart)); } catch { /* private mode */ } };
   const live = $derived(cart.lines.filter((l) => !l.voided));
   const qline = (key) => (quote ? quote.lines.find((l) => l.key === key) : null);
   const problems = $derived(quote ? quote.problems : []);
-  const settings = $derived(info ? info.settings : {});
+  const settings = $derived(info ? info.settings : ix ? ix.settings : {});
   const st = $derived(quote ? settle(quote.total_cents, payments, settings) : null);
 
-  onMount(async () => {
+  onMount(() => {
     try { const c = JSON.parse(localStorage.getItem(KEY) || "null"); if (c && Array.isArray(c.lines)) cart = c; } catch { /* none */ }
-    await Promise.all([loadTill(), loadCatalogue()]);
-    if (cart.lines.length) requote();
-    focusCode();
+    (async () => {
+      await Promise.all([loadTill(), loadCatalogue()]);
+      if (cart.lines.length) requote();
+      focusCode();
+    })();
+    const t = setInterval(() => { if (!isHubDown()) refreshPack().then((p) => p && usePack(p)); }, 120000);
+    return () => clearInterval(t);
   });
 
+  // The till's own open till is remembered, so offline sales still belong to it.
   async function loadTill() {
     const r = await api("GET", "/api/chedam/tills/current");
+    if (r.status === 0) { try { info = JSON.parse(localStorage.getItem(TILL_KEY) || "null"); } catch { info = null; } return; }
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
     info = r.json;
+    try { localStorage.setItem(TILL_KEY, JSON.stringify({ till: r.json.till ? { id: r.json.till.id, number: r.json.till.number } : null, settings: r.json.settings, business: r.json.business })); } catch { /* private mode */ }
   }
 
+  function usePack(p) {
+    ix = p;
+    products = [...p.products].sort((a, b) => a.name.localeCompare(b.name));
+    units = p.unitsOf;
+    cats = [...p.categories].sort((a, b) => (a.sort || 0) - (b.sort || 0) || a.name.localeCompare(b.name));
+    if (!cat && cats[0]) cat = cats[0].id;
+  }
+
+  // Products and prices from the offline pack: the copy on this device first, then the hub's.
   async function loadCatalogue() {
-    const q = (path) => api("GET", path);
-    const [p, u, c] = await Promise.all([
-      q("/api/collections/products/records?perPage=1000&sort=name&fields=id,name,category,base_unit,age_restricted,min_age,plu&filter=" + encodeURIComponent("status='active' && deleted_at=''")),
-      q("/api/collections/selling_units/records?perPage=1000&sort=sort&fields=id,product,name,kind,price_cents,is_default,base_qty&filter=" + encodeURIComponent("sell_at_pos=true && deleted_at=''")),
-      q("/api/collections/categories/records?perPage=200&sort=sort,name&filter=" + encodeURIComponent("pos_visible=true && deleted_at=''")),
-    ]);
-    if (p.ok) products = p.json.items;
-    if (u.ok) { const m = {}; u.json.items.forEach((x) => (m[x.product] ||= []).push(x)); units = m; }
-    if (c.ok) { cats = c.json.items; if (!cat && cats[0]) cat = cats[0].id; }
+    const local = await getPack();
+    if (local) usePack(local);
+    const fresh = await refreshPack();
+    if (fresh) usePack(fresh);
+    if (!ix) error = "This till has no product list yet. Connect to the hub once to download it.";
+  }
+
+  function offlineQuote() {
+    if (!ix) { error = "No product list on this till yet: connect to the hub once."; return null; }
+    return quoteOffline($state.snapshot(cart), ix, perms());
   }
 
   function focusCode() { setTimeout(() => codeInput && codeInput.focus(), 50); }
@@ -68,9 +92,11 @@
 
   async function requote() {
     if (!cart.lines.length) { quote = null; softHolds([]); return; }
+    if (isHubDown()) { quote = offlineQuote(); return; }
     quoting = true;
     const r = await api("POST", "/api/chedam/sales/quote", toInput(cart));
     quoting = false;
+    if (r.status === 0) { quote = offlineQuote(); return; }
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
     error = "";
     quote = r.json;
@@ -78,7 +104,7 @@
   }
 
   function softHolds(items) {
-    if (cart.training) return;
+    if (cart.training || isHubDown()) return;
     api("POST", "/api/chedam/sales/soft-holds", { cart_id: cart.id, items });
   }
 
@@ -104,10 +130,16 @@
     c = String(c || "").trim();
     code = "";
     if (!c) return;
-    const r = await api("GET", "/api/chedam/catalogue/lookup?code=" + encodeURIComponent(c));
-    if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
+    // The till's own list first (fast, and works offline); the hub only to explain a miss.
+    let r = ix ? { ok: true, json: lookupOffline(ix, c) } : null;
+    if ((!r || !r.json.matches.length) && !isHubDown()) {
+      const h = await api("GET", "/api/chedam/catalogue/lookup?code=" + encodeURIComponent(c));
+      if (h.ok || h.status !== 0) r = h;
+      if (!h.ok && h.status !== 0) { if (!(await handleRefusal(h))) error = h.message; return; }
+    }
+    if (!r) { error = "No product list on this till yet: connect to the hub once."; return; }
     const m = r.json.matches.filter((x) => x.sellable);
-    if (!m.length) { error = r.json.matches.length ? "'" + r.json.matches[0].product.name + "' is not for sale yet." : "No product with code " + c + "."; focusCode(); return; }
+    if (!m.length) { error = r.json.matches.length ? "'" + r.json.matches[0].product.name + "' is not for sale yet." : "No product with code " + c + (isHubDown() ? " on this till's list." : "."); focusCode(); return; }
     error = "";
     const asP = (x) => ({ id: x.product.id, name: x.product.name, base_unit: x.product.base_unit, age_restricted: x.product.age_restricted, min_age: x.product.min_age });
     if (m.length > 1) { dialog = { kind: "choose", options: m.map((x) => ({ p: asP(x), u: x.unit })) }; return; }   // packs or singles?
@@ -146,7 +178,7 @@
     error = "";
     if (!quote || !live.length) return;
     if (problems.length) { error = problems[0].message; return; }
-    if (!cart.training && !(info && info.till)) { error = "Open the till first."; return; }
+    if (!cart.training && !(info && info.till)) { error = isHubDown() ? "No open till on this device: the till is opened while the hub is reachable." : "Open the till first."; return; }
     if (quote.needs_approval.length && !cart.approval) { dialog = { kind: "approve", what: quote.needs_approval }; return; }
     payments = []; saleId = newId(); mode = "pay";
   }
@@ -162,12 +194,23 @@
 
   async function finish() {
     busy = true; error = "";
+    if (quote.offline) { busy = false; return finishOffline(quote); }
     const body = { id: saleId, ...toInput(cart), expected_total_cents: quote.total_cents, payments, device_time: new Date().toISOString() };
     const r = await api("POST", "/api/chedam/sales", body, { timeout: 20000 });
     busy = false;
+    if (r.status === 0) {
+      // The hub stopped answering during payment: finish offline with the same sale id. If the hub did
+      // get the sale after all, the upload is answered with that first result (BR-10).
+      const q2 = offlineQuote();
+      if (q2 && !q2.problems.length && q2.total_cents === quote.total_cents) return finishOffline(q2);
+      if (q2) quote = q2;
+      error = "The hub stopped answering and this till prices the sale differently. Check the total and take payment again.";
+      payments = []; mode = "sell";
+      return;
+    }
     if (!r.ok) {
       if (await handleRefusal(r)) return;
-      error = r.status === 0 ? "The hub did not answer; the sale is NOT saved. Try again (it will not be charged twice)." : r.message;
+      error = r.message;
       if (r.status === 409 && r.json && r.json.data && r.json.data.quote) quote = r.json.data.quote;
       if (r.status !== 0) { payments = []; mode = "sell"; }
       return;
@@ -176,6 +219,32 @@
     mode = "done";
     cart = newCart(cart.training); quote = null; payments = []; keep();
     loadTill();
+  }
+
+  // Offline sale (DL-87): offline receipt number, receipt printed from this till's figures, sale queued.
+  async function finishOffline(q) {
+    const st2 = settle(q.total_cents, payments, settings);
+    if (st2.remaining > 0) { error = "Not paid in full."; return; }
+    const ref = nextOfflineRef();
+    const now = new Date();
+    const payload = { id: saleId, offline: true, offline_ref: ref, device_time: now.toISOString(), cashier: s.me.user.id,
+      till: info && info.till ? info.till.id : "", training: cart.training, tax_mode: q.tax_mode, lines: q.upload_lines,
+      cart_discount_cents: q.cart_discount_cents, exempt: q.exempt, exempt_cents: q.exempt_cents,
+      totals: { total_cents: q.total_cents, tax_cents: q.tax_cents, subtotal_cents: q.subtotal_cents, discount_cents: q.discount_cents, deposit_cents: q.deposit_cents },
+      payments: $state.snapshot(payments) };
+    const live2 = q.lines.filter((l) => !l.voided);
+    const receipt = { id: saleId, number: ref, offline: true, offline_ref: ref, status: "completed", training: cart.training, tax_mode: q.tax_mode,
+      completed_at: now.toISOString(), cashier: s.me.user.name, subtotal_cents: q.subtotal_cents, discount_cents: q.discount_cents, tax_cents: q.tax_cents,
+      deposit_cents: q.deposit_cents, total_cents: q.total_cents, rounding_cents: st2.rounding, paid_cents: q.total_cents + st2.rounding, change_cents: st2.change,
+      taxes: q.taxes, exempt: q.exempt, payments: st2.applied, business: (ix && ix.business) || (info && info.business) || {},
+      lines: live2.map((l, i) => ({ ...l, line_no: i + 1 })),
+      savings_cents: live2.reduce((a, l) => a + Math.max(0, Math.round(l.regular_price_cents * l.qty) - l.gross_cents) + l.line_discount_cents + l.cart_discount_cents, 0) };
+    try { await enqueue(payload, receipt); }
+    catch { error = "This device could not save the sale (storage is full or blocked). Do not hand over the goods; try again."; return; }
+    sale = receipt;
+    mode = "done";
+    cart = newCart(cart.training); quote = null; payments = []; keep();
+    syncQueue();
   }
 
   function newSale() { sale = null; mode = "sell"; note = ""; focusCode(); }
@@ -223,6 +292,7 @@
     <div class="flex items-center gap-3">
       <button class="min-h-10 text-sm underline" onclick={() => go("home")}>← Back</button>
       <h1 class="text-xl font-bold">Sell</h1>
+      {#if off.pending || off.problems}<span class="rounded-lg bg-warn/10 px-2 py-0.5 text-sm text-warn">{off.pending} offline {off.pending === 1 ? "sale" : "sales"} waiting{off.problems ? " · " + off.problems + " need a manager" : ""}</span>{/if}
       {#if info}<span class="rounded-lg px-2 py-0.5 text-sm {info.till ? 'bg-ok/10 text-ok' : 'bg-warn/10 text-warn'}">{info.till ? "Till " + info.till.number + " open" : "Till closed"}</span>{/if}
     </div>
     <div class="flex flex-wrap gap-2">
@@ -255,13 +325,14 @@
   {#if mode === "done" && sale}
     <div class="grid gap-4 lg:grid-cols-[1fr_auto]">
       <div class="card space-y-3 text-center">
+        {#if sale.offline}<p class="rounded-xl bg-warn/10 px-3 py-2 text-warn">Saved on this till (hub not reachable). It uploads by itself when the hub is back.</p>{/if}
         {#if sale.change_cents}<p class="text-muted">Change</p><p class="text-5xl font-bold tabular-nums">{money(sale.change_cents)}</p>
         {:else}<p class="text-3xl font-bold">Paid ✓</p>{/if}
         <p class="text-muted">{sale.number} · {money(sale.total_cents + sale.rounding_cents)}</p>
         <div class="flex flex-wrap justify-center gap-2 print:hidden">
           <button class="btn" onclick={newSale}>New sale</button>
           <button class="btn-ghost" onclick={() => window.print()}>Print receipt</button>
-          {#if sale.status === "completed"}<button class="btn-ghost" onclick={() => (dialog = { kind: "void", reason: "" })}>Void</button>{/if}
+          {#if sale.status === "completed" && !sale.offline}<button class="btn-ghost" onclick={() => (dialog = { kind: "void", reason: "" })}>Void</button>{/if}
         </div>
       </div>
       <Receipt {sale} />
@@ -373,7 +444,7 @@
         </div>
       {/if}
 
-      <div class="flex items-center justify-between"><h2 class="font-semibold">Sale</h2>{#if quoting}<span class="text-xs text-muted">pricing…</span>{/if}</div>
+      <div class="flex items-center justify-between"><h2 class="font-semibold">Sale</h2>{#if quoting}<span class="text-xs text-muted">pricing…</span>{:else if quote && quote.offline}<span class="text-xs text-warn">offline prices</span>{/if}</div>
       {#if !live.length}<p class="text-muted">Scan or tap a product.</p>{/if}
       <ul class="divide-y divide-line">
         {#each cart.lines as l (l.key)}

@@ -3,6 +3,7 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 
@@ -29,10 +30,26 @@ function serviceWorker() {
   };
 }
 
+// The till prices offline sales with the hub's own arithmetic (hub/pb_hooks/lib/pricing_core.js, a
+// CommonJS file for the hub's JS engine): served to the app as `virtual:pricing-core` (DL-86).
+function pricingCore() {
+  const file = fileURLToPath(new URL("../hub/pb_hooks/lib/pricing_core.js", import.meta.url));
+  const ID = "\0virtual:pricing-core";
+  return {
+    name: "chedam-pricing-core",
+    resolveId(id) { return id === "virtual:pricing-core" ? ID : null; },
+    load(id) {
+      if (id !== ID) return null;
+      this.addWatchFile(file);
+      return "const module = { exports: {} };\n" + readFileSync(file, "utf8") + "\nexport default module.exports;\n";
+    },
+  };
+}
+
 export default defineConfig({
   base: "./",
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
-  plugins: [svelte(), tailwindcss(), serviceWorker()],
+  plugins: [pricingCore(), svelte(), tailwindcss(), serviceWorker()],
   build: {
     outDir: "../hub/pb_public",
     emptyOutDir: true,

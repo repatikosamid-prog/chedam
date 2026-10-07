@@ -1,7 +1,9 @@
 <script>
   import { onMount } from "svelte";
-  import { s, refresh, signOut, notify } from "./lib/session.svelte.js";
+  import { s, refresh, signOut, notify, can } from "./lib/session.svelte.js";
   import { startMonitor, net } from "./lib/connectivity.svelte.js";
+  import { startOffline, syncQueue, off } from "./lib/offline.svelte.js";
+  import { load } from "./lib/api.js";
   import { watchIdle } from "./lib/idle.js";
   import ConnectivityBar from "./components/ConnectivityBar.svelte";
   import Pair from "./screens/Pair.svelte";
@@ -35,6 +37,8 @@
   onMount(() => {
     startMonitor();
     refresh();
+    // Offline sales upload by themselves whenever the hub answers (FR-3.16).
+    startOffline(() => !!s.me && can("sales.sell"), () => net.hub === "ok");
     // Re-check now and then, so a sign-out, lock or removal from the device manager shows here.
     const busyScreens = ["pin", "owner", "setup", "recovery", "wizard", "newpin", "product", "categories", "tax", "stockitem", "receive", "counts", "sell", "till", "sales"];
     const poll = setInterval(() => { if (!busyScreens.includes(s.screen)) refresh(); }, 30000);
@@ -49,7 +53,7 @@
   let wasDown = false;
   $effect(() => {
     if (net.hub === "down") wasDown = true;
-    else if (net.hub === "ok" && wasDown) { wasDown = false; refresh(); }
+    else if (net.hub === "ok" && wasDown) { wasDown = false; refresh(); if (off.pending) syncQueue(); }
   });
 
   // While waiting for approval or unlock, check more often.
@@ -70,7 +74,7 @@
     </div>
     {#if s.device}
       <span class="truncate text-sm text-muted">{s.device.name}</span>
-    {:else if s.me}
+    {:else if s.me && !load("device")}
       <span class="text-sm text-muted">Not a paired device</span>
     {/if}
   </header>

@@ -19,19 +19,27 @@ export function toInput(cart) {
 
 export const cashRound = (c) => Math.round(c / 5) * 5;
 
-// Same order and rules as the hub (lib/sales.js settlePayments): what is left, rounding and change.
+// Same order and rules as the hub (lib/sales.js settlePayments): what is left, rounding, change, and
+// each payment as the hub would record it (`applied`, for receipts printed offline).
 export function settle(total, payments, s) {
   let remaining = total, rounding = 0, change = 0;
   const rate = Number(s.usd_rate || 1.35);
+  const applied = [];
   for (const p of payments) {
-    if (p.status === "declined" || remaining <= 0) continue;
-    if (p.method === "card") { remaining -= Math.min(p.amount_cents, remaining); continue; }
+    const rec = { method: p.method, status: p.status === "declined" ? "declined" : "approved", amount_cents: 0, tendered_cents: p.amount_cents,
+      currency: p.method === "usd_cash" ? "USD" : "CAD", change_cents: 0, last4: p.last4 || "", reference: p.reference || "" };
+    applied.push(rec);
+    if (rec.status === "declined" || remaining <= 0) continue;
+    if (p.method === "card") { rec.amount_cents = Math.min(p.amount_cents, remaining); remaining -= rec.amount_cents; continue; }
     const value = p.method === "usd_cash" ? Math.floor(p.amount_cents * rate + 0.5) : p.amount_cents;
     const due = s.cash_rounding ? cashRound(remaining) : remaining;
-    if (value >= due) { rounding = due - remaining; change += s.cash_rounding ? cashRound(value - due) : value - due; remaining = 0; }
-    else remaining -= value;
+    if (value >= due) {
+      rounding = due - remaining; rec.amount_cents = due;
+      rec.change_cents = s.cash_rounding ? cashRound(value - due) : value - due;
+      change += rec.change_cents; remaining = 0;
+    } else { rec.amount_cents = value; remaining -= value; }
   }
-  return { remaining, rounding, change, cash_due: s.cash_rounding ? cashRound(remaining) : remaining };
+  return { remaining, rounding, change, applied, cash_due: s.cash_rounding ? cashRound(remaining) : remaining };
 }
 
 // Quick cash buttons: exact (rounded) and the next notes up.

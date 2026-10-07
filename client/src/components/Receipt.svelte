@@ -14,6 +14,7 @@
 
 <div class="receipt mx-auto max-w-sm rounded-xl border border-line bg-white p-4 font-mono text-sm text-black">
   {#if sale.training}<p class="mb-2 border border-black py-1 text-center font-bold">TRAINING · NOT A SALE</p>{/if}
+  {#if sale.offline}<p class="mb-2 text-center text-xs">Offline receipt {sale.offline_ref}{sale.number && sale.number !== sale.offline_ref ? " · recorded as " + sale.number : ""}</p>{/if}
   {#if sale.status === "voided"}<p class="mb-2 border border-black py-1 text-center font-bold">VOIDED{sale.void_reason ? ": " + sale.void_reason : ""}</p>{/if}
   <div class="text-center">
     <p class="font-bold">{b.name}</p>

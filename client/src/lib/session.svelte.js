@@ -41,6 +41,7 @@ export function applyPrefs(user) {
 
 function forgetSignIn() {
   save("token", null);
+  save("me", null);
   s.me = null;
   applyPrefs(null);
 }
@@ -58,6 +59,7 @@ export async function refresh() {
   if (r.status === 0) {
     // Hub not answering: keep showing what we had (offline shell); the connectivity bar says why.
     // Nobody signed in any more (e.g. signed out while the hub is off): back to the name list.
+    if (!s.me && load("token")) return loadMe();   // a reload during an outage: same person, from this device
     if (!s.me && s.screen !== "names" && s.screen !== "pin" && s.screen !== "pair") go("names");
     return;
   }
@@ -76,15 +78,31 @@ export async function refresh() {
   return go(s.screen === "pin" && s.picked ? "pin" : "names");
 }
 
+// The person in the saved sign-in token (its "id"), to check the remembered details belong to them.
+function tokenUser() {
+  try { return JSON.parse(atob(String(load("token")).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).id || ""; } catch { return ""; }
+}
+
 async function loadMe() {
   const r = await api("GET", "/api/chedam/access/me");
-  if (r.status === 0) return go(s.me ? "home" : "names");
+  if (r.status === 0) {
+    // Hub unreachable (DL-89): carry on as the person signed in on this device, if their token is still
+    // valid on its own clock. Signing in anew (PIN) needs the hub.
+    const saved = load("me");
+    let exp = 0;
+    try { exp = JSON.parse(atob(String(load("token")).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).exp || 0; } catch { exp = 0; }
+    if (!s.me && saved && saved.user && saved.user.id === tokenUser() && exp * 1000 > Date.now()) { s.me = saved; applyPrefs(s.me.user); }
+    if (!s.me) return go("names");
+    const want = location.hash === "#sell" || s.screen === "sell" ? "sell" : s.screen && s.screen !== "boot" && s.screen !== "names" ? s.screen : "home";
+    return go(want);
+  }
   if (!r.ok) {
     forgetSignIn();
     if (r.status === 401) notify("You were signed out on this device.");
     return go(load("device") ? "names" : "pair");
   }
   s.me = r.json;
+  save("me", r.json);
   applyPrefs(s.me.user);
   if (s.me.user.pin_must_change) return go("newpin");
   await loadAutoLock();

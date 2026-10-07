@@ -53,7 +53,7 @@ These rules apply to every phase. They come from Master Spec Section 10 and NFR-
 - **Third-party code is an npm dependency with an exact version** (the lockfile has the integrity hash). Nothing is loaded from a CDN: the hub has no internet at the till.
 - **The certificate guide** (`client/public/device-setup.html` + `setup.css`) stays a plain page, because it is served over HTTP before the device trusts the hub.
 
-- **Trying screens locally:** `bash tools/devhub/dev-hub.sh [--fresh]` runs a dev hub with the sample store on http://127.0.0.1:8095, serving the last client build (`npm run build` in `client/`). A dev superuser for pairing codes is in `.devhub/superuser.txt` (gitignored). After a rebuild, unregister the service worker or reload twice to see the new build.
+- **Trying screens locally:** `bash tools/devhub/dev-hub.sh [--fresh]` runs a dev hub with the sample store on http://127.0.0.1:8095, serving the last client build (`npm run build` in `client/`). A dev superuser for pairing codes is in `.devhub/superuser.txt` (gitignored). After a rebuild, unregister the service worker or reload twice to see the new build. `node tools/devhub/dev-login.mjs "Cal Cashier" "Front till"` pairs and signs in a sample person (values for the browser's localStorage). Pricing changes go in `hub/pb_hooks/lib/pricing_core.js` only: the app imports the same file (`virtual:pricing-core`).
 
 ## Migrations
 

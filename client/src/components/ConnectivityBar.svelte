@@ -1,9 +1,12 @@
 <script>
   // FR-12.01: Offline / Online (router) / Online (hotspot), plus "hub not reachable" and a clock warning.
   import { net, checkNow } from "../lib/connectivity.svelte.js";
+  import { off } from "../lib/offline.svelte.js";
 
+  const n = (k) => k + (k === 1 ? " sale" : " sales");
   const look = $derived(
-    net.hub === "down" ? { text: "Hub not reachable. Working on this device only.", cls: "bg-bad text-bg", dot: "bg-bg" }
+    net.hub === "down" ? { text: "Hub not reachable. Selling on this device only" + (off.pending ? " · " + n(off.pending) + " waiting to upload" : "") + ".", cls: "bg-warn text-bg", dot: "bg-bg" }
+    : off.pending ? { text: off.syncing ? "Uploading " + n(off.pending) + "…" : n(off.pending) + " made offline, waiting to upload", cls: "bg-warn/20 text-ink", dot: "bg-warn" }
     : net.hub === "checking" ? { text: "Checking the connection…", cls: "bg-soft text-ink", dot: "bg-muted" }
     : net.internet === "router" ? { text: "Online (router)", cls: "bg-soft text-ink", dot: "bg-ok" }
     : net.internet === "hotspot" ? { text: "Online (hotspot)", cls: "bg-soft text-ink", dot: "bg-warn" }

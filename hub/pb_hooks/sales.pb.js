@@ -16,6 +16,20 @@ routerAdd("POST", "/api/chedam/sales", (e) => {
   return h.run(e, (tx) => require(`${__hooks}/lib/sales.js`).complete(tx, c.body, c));
 });
 
+// Offline selling (FR-3.16): what a till keeps so it can sell while the hub is unreachable.
+routerAdd("GET", "/api/chedam/sales/offline-pack", (e) => {
+  require(`${__hooks}/lib/sales_http.js`).ctx(e, "sales.sell");
+  return e.json(200, require(`${__hooks}/lib/offline.js`).pack(e.app));
+});
+
+// Upload one sale made offline (Section 8.2). The till sends them in order; a repeat id returns the
+// first result (BR-10). Stock may go negative, with an urgent task (BR-12).
+routerAdd("POST", "/api/chedam/sales/offline", (e) => {
+  const h = require(`${__hooks}/lib/sales_http.js`);
+  const c = h.ctx(e, "sales.sell");
+  return h.run(e, (tx) => require(`${__hooks}/lib/offline.js`).complete(tx, c.body, c));
+});
+
 // Manager PIN on the till -> a one-time approval for 5 minutes (BR-18).
 routerAdd("POST", "/api/chedam/sales/approvals", (e) => {
   const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "sales.sell");

@@ -7,6 +7,7 @@
   import { go, can, handleRefusal } from "../lib/session.svelte.js";
   import { money, toCents } from "../lib/catalogue.js";
   import { METHOD } from "../lib/till.js";
+  import { off, syncQueue, queued, retry, discard } from "../lib/offline.svelte.js";
 
   let info = $state(null), error = $state(""), ok = $state(""), busy = $state(false);
   let count = $state({}), usd = $state(""), cash = $state(null), z = $state(null);
@@ -46,7 +47,13 @@
     load();
   }
 
+  let problemSales = $state([]);
+  async function loadProblems() { problemSales = (await queued()).filter((q) => q.status === "problem"); }
+  loadProblems();
+
   async function closeTill() {
+    // Offline sales must reach the hub first, or the Z report would miss them (DL-88).
+    if (off.pending || off.problems) { error = "Upload the offline sales first (" + (off.pending + off.problems) + " on this till)."; return; }
     if (!confirm("Close the till with " + money(counted) + " counted?")) return;
     busy = true; error = "";
     const body = { counted_detail: Object.fromEntries(Object.entries(count).filter(([, n]) => Number(n))) };
@@ -145,6 +152,20 @@
           <label class="block"><span class="text-sm text-muted">Reason{cash.type === "payout" || cash.type === "no_sale" ? "" : " (optional)"}</span><input class="field" bind:value={cash.reason} maxlength="200" required={cash.type === "payout" || cash.type === "no_sale"} /></label>
           <div class="flex gap-2 sm:col-span-2"><button class="btn" type="submit">Save</button><button class="btn-ghost" type="button" onclick={() => (cash = null)}>Cancel</button></div>
         </form>
+      {/if}
+      {#if off.pending || problemSales.length}
+        <div class="card space-y-2 border-warn">
+          <h2 class="font-semibold text-warn">Offline sales on this till</h2>
+          {#if off.pending}<p>{off.pending} waiting to upload. <button class="underline" disabled={off.syncing} onclick={async () => { await syncQueue(); loadProblems(); }}>{off.syncing ? "Uploading…" : "Upload now"}</button></p>{/if}
+          {#each problemSales as q (q.id)}
+            <div class="rounded-xl bg-bad/10 p-2 text-sm">
+              <p><b>{q.receipt ? q.receipt.number : q.id}</b> · {money(q.payload.totals.total_cents)}: the hub refused it: {q.error}</p>
+              {#if can("till.manage")}<div class="mt-1 flex gap-2"><button class="underline" onclick={async () => { await retry(q.id); loadProblems(); }}>Try again</button>
+                <button class="underline text-bad" onclick={async () => { if (confirm("Remove this offline sale from the till? Record it by hand.")) { await discard(q.id); loadProblems(); } }}>Remove</button></div>
+              {:else}<p>A manager must look at it before the till closes.</p>{/if}
+            </div>
+          {/each}
+        </div>
       {/if}
       <div class="card space-y-3">
         <h2 class="font-semibold">Close the till</h2>

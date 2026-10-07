@@ -232,8 +232,10 @@ function stockCheck(app, live, cartId, problems, need) {
 
 // ---- Payments (FR-3.08, 3.09; BR-16) --------------------------------------------------------------
 
-function settlePayments(app, total, payments) {
-  const methods = setting(app, "sales.payment_methods", ["cash", "card"]) || [];
+// relaxed: an offline sale already taken; a method switched off since then is still recorded.
+function settlePayments(app, total, payments, opts) {
+  const relaxed = !!(opts && opts.relaxed);
+  const methods = relaxed ? ["cash", "card", "usd_cash", "store_credit", "platform"] : setting(app, "sales.payment_methods", ["cash", "card"]) || [];
   const rounding = setting(app, "sales.cash_rounding", true);
   const rate = Number(setting(app, "sales.usd_rate", 1.35));
   let remaining = total, roundingCents = 0, change = 0;
@@ -327,6 +329,7 @@ function saleView(app, id, showCost) {
     deposit_cents: s.getInt("deposit_cents"), total_cents: s.getInt("total_cents"), rounding_cents: s.getInt("rounding_cents"),
     paid_cents: s.getInt("paid_cents"), change_cents: s.getInt("change_cents"), taxes: j(s, "taxes", []), exempt: j(s, "exempt", null),
     approvals: j(s, "approvals", []), note: s.getString("note"), void_reason: s.getString("void_reason"),
+    offline: s.getBool("offline"), offline_ref: s.getString("offline_ref"), sync_note: s.getString("sync_note"),
     lines: lines, payments: payments, business: business(app),
     savings_cents: lines.filter((l) => !l.voided).reduce((a, l) => a + Math.max(0, Math.round(l.regular_price_cents * l.qty) - l.gross_cents) + l.line_discount_cents + l.cart_discount_cents, 0),
   };
@@ -350,6 +353,11 @@ function openTill(app, deviceId) {
   if (!deviceId) return null;
   const t = app.findRecordsByFilter("tills", "device = {:d} && status = 'open'", "-opened_at", 1, 0, { d: deviceId });
   return t.length ? t[0] : null;
+}
+
+// Offline sales (BR-12): open what packs there are; a shortfall goes negative instead of failing.
+function openPacksForOffline(app, l, ctx) {
+  try { openPacksFor(app, l, ctx); } catch (_) { /* not enough: the caller lets stock go negative */ }
 }
 
 // Opens packs so a line can be served (FR-3.05): loose units from packs of singles, packs from cases.
@@ -556,4 +564,5 @@ function softHold(app, body, ctx) {
   return { held };
 }
 
-module.exports = { build, quoteView, complete, voidSale, saleView, newApproval, settlePayments, hold, recall, softHold, openTill, nextNumber, business };
+module.exports = { build, quoteView, complete, voidSale, saleView, newApproval, settlePayments, hold, recall, softHold, openTill, nextNumber, business,
+  openPacksForOffline };
