@@ -81,6 +81,8 @@ migrate((app) => {
   const mine = (name) => app.findRecordsByFilter(name, "created_by = {:t}", "", 0, 0, { t: TAG });
   const productIds = mine("products").map((p) => p.id);
   productIds.forEach((id) => app.findRecordsByFilter("price_history", "product = {:p}", "", 0, 0, { p: id }).forEach((r) => app.delete(r)));
+  // Labels queued for these products (P1 step 7), when that table exists
+  try { app.findCollectionByNameOrId("label_batch_items"); productIds.forEach((id) => app.findRecordsByFilter("label_batch_items", "product = {:p}", "", 0, 0, { p: id }).forEach((r) => app.delete(r))); } catch (_) { /* before step 7 */ }
   // inner units last: packs point at singles
   mine("selling_units").sort((a, b) => b.getInt("sort") - a.getInt("sort")).forEach((r) => app.delete(r));
   mine("products").forEach((r) => app.delete(r));

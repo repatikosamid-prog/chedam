@@ -54,6 +54,11 @@ const TABLES = {
   return_lines:         { list: "sales.sell|sales.view", view: "sales.sell|sales.view", create: null, update: null, delete: null },
   refunds:              { list: "sales.sell|sales.view", view: "sales.sell|sales.view", create: null, update: null, delete: null },
   store_credits:        { list: "sales.view|till.manage", view: "sales.view|till.manage", create: null, update: null, delete: null },
+  // P1 labels (step 7): templates and layouts edited in the app; the batch changes through /api/chedam/labels.
+  label_layouts:        { list: "labels.manage", view: "labels.manage", create: "labels.manage", update: "labels.manage", delete: null },
+  label_templates:      { list: "labels.manage", view: "labels.manage", create: "labels.manage", update: "labels.manage", delete: null },
+  label_batches:        { list: "labels.manage", view: "labels.manage", create: null, update: null, delete: null },
+  label_batch_items:    { list: "labels.manage", view: "labels.manage", create: null, update: null, delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".

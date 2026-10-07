@@ -176,7 +176,13 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
-      {#each modules.filter((m) => m.module !== "sell" && m.module !== "stock") as m (m.id)}
+      {#if can("labels.manage") && modules.some((m) => m.module === "labels")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("labels")}>
+          <span class="font-semibold">Labels</span>
+          <span class="text-sm text-muted">Shelf labels: new prices, print, reprint</span>
+        </button>
+      {/if}
+      {#each modules.filter((m) => m.module !== "sell" && m.module !== "stock" && m.module !== "labels") as m (m.id)}
         <div class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-dashed border-line p-3" aria-disabled="true">
           <span class="font-semibold">{m.label}</span>
           <span class="text-sm text-muted">Coming in a later phase</span>

@@ -22,7 +22,8 @@ routerAdd("POST", "/api/chedam/catalogue/products", (e) => {
   const dev = devices.currentId(e);
   const PRODUCT_FIELDS = ["name", "name_fr", "category", "base_unit", "tax_class", "cost_cents", "plu", "pos_button", "reorder_point",
     "description", "tare", "scale_code", "scale_ack", "perishable", "shelf_life_days", "expiry_at_receiving", "storage_area",
-    "age_restricted", "min_age", "deposits_fees", "imported", "hs_code", "origin_country", "non_returnable"];
+    "age_restricted", "min_age", "deposits_fees", "imported", "hs_code", "origin_country", "non_returnable",
+    "size_qty", "size_unit"];
   const UNIT_FIELDS = ["name", "kind", "contains_qty", "contains_unit", "barcodes", "price_cents", "sell_at_pos", "is_default", "sort"];
   const ID = /^[a-z0-9]{15}$/;
   const stamp = (r) => {

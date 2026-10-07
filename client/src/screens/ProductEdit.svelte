@@ -18,7 +18,7 @@
   let p = $state({ name: "", name_fr: "", category: "", base_unit: "each", tax_class: "", plu: "", pos_button: false,
     reorder_point: 0, description: "", tare: 0, scale_code: "", scale_ack: false, perishable: false, shelf_life_days: 0,
     expiry_at_receiving: false, storage_area: "", age_restricted: false, min_age: 19, deposits_fees: [], imported: false,
-    hs_code: "", origin_country: "", non_returnable: false, status: "draft" });
+    hs_code: "", origin_country: "", non_returnable: false, size_qty: 0, size_unit: "", status: "draft" });
   let costText = $state("");
   let units = $state([]);          // { id, saved, name, kind, contains_qty, contains_unit, codes, priceText, sell_at_pos, is_default }
   let removed = $state([]);        // ids of saved units to remove
@@ -116,7 +116,8 @@
     if (!isNew) body.product.id = s.productId;
     if (showCost) body.product.cost_cents = cost ?? 0;
     body.product.min_age = p.age_restricted ? Number(p.min_age) || 0 : 0;
-    ["reorder_point", "tare", "shelf_life_days"].forEach((k) => (body.product[k] = Number(body.product[k]) || 0));
+    ["reorder_point", "tare", "shelf_life_days", "size_qty"].forEach((k) => (body.product[k] = Number(body.product[k]) || 0));
+    if (!body.product.size_qty) body.product.size_unit = "";
     units.forEach((u, i) => body.units.push({ id: u.id, name: u.name, kind: u.kind,
       contains_qty: u.kind === "pack" || u.kind === "case" ? Number(u.contains_qty) || 0 : 0,
       contains_unit: u.kind === "pack" || u.kind === "case" ? u.contains_unit : "",
@@ -181,6 +182,11 @@
         <input class="field" bind:value={p.name} maxlength="160" required /></label>
       <label class="block"><span class="text-sm text-muted">French name (labels, optional)</span>
         <input class="field" bind:value={p.name_fr} maxlength="160" /></label>
+      {#if p.base_unit === "each"}
+        <div class="block"><span class="text-sm text-muted">Size of one (for the unit price on labels, optional)</span>
+          <div class="flex gap-2"><input class="field" type="number" min="0" step="any" bind:value={p.size_qty} aria-label="Size" placeholder="e.g. 200" />
+            <select class="field max-w-28" bind:value={p.size_unit} aria-label="Size unit"><option value="">—</option><option value="g">g</option><option value="kg">kg</option><option value="ml">mL</option><option value="l">L</option><option value="each">items</option></select></div></div>
+      {/if}
       <label class="block"><span class="text-sm text-muted">Category</span>
         <select class="field" bind:value={p.category}>
           <option value="">Choose…</option>
