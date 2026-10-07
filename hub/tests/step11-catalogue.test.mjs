@@ -51,6 +51,15 @@ try {
   check("one open Drafts task (BR-08)", dt.length === 1 && dt[0].title.startsWith("1 product"), JSON.stringify(dt));
   check("cashier can read products", (await as(cashier).get("/api/collections/products/records")).status === 200);
 
+  console.log("Sample stock (dev data, P1 step 2)");
+  const lv = Object.fromEntries((await t.list("stock_levels")).items.map((l) => [l.product, l]));
+  const colaP = prods.find((p) => p.name.startsWith("Cola"));
+  check("sample stock: cola 3 cases + 10 cans = 82", lv[colaP.id] && lv[colaP.id].on_hand === 82, JSON.stringify(lv[colaP.id]));
+  const milkP = prods.find((p) => p.name.startsWith("Milk"));
+  const milkLots = (await t.list("stock_lots", `product='${milkP.id}'`)).items;
+  check("sample stock: milk has an expired lot (FEFO demo) and lots add up", milkLots.some((l) => l.lot_code === "OLD")
+    && milkLots.reduce((a, l) => a + l.qty, 0) === lv[milkP.id].on_hand);
+
   console.log("Lookup (scan)");
   const cola = await as(cashier).get("/api/chedam/catalogue/lookup?code=2000000000022");
   check("cola single: one sellable match", cola.status === 200 && cola.json.matches.length === 1 && cola.json.matches[0].sellable && cola.json.choose === false, JSON.stringify(cola.json));

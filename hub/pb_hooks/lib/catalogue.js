@@ -182,23 +182,9 @@ function history(app, product, unit, field, oldCents, newCents, actor, device) {
 // BR-08: one open task lists the Drafts; it closes when there are none.
 function syncDraftsTask(app) {
   const n = app.countRecords("products", $dbx.exp("status = 'draft' AND (deleted_at = '' OR deleted_at IS NULL)"));
-  const key = "catalogue:drafts";
-  const open = app.findRecordsByFilter("tasks", "rule_key = {:k} && status = 'open' && deleted_at = ''", "", 0, 0, { k: key });
   const title = n === 1 ? "1 product is a Draft and cannot be sold" : n + " products are Drafts and cannot be sold";
-  const stampSys = (t) => { t.set("updated_by", "system:catalogue"); t.set("@actor", "system:catalogue"); };
-  if (n > 0 && !open.length) {
-    // Reopen the last one rather than add a task each time a product passes through Draft.
-    const last = app.findRecordsByFilter("tasks", "rule_key = {:k} && status = 'done' && deleted_at = ''", "-updated_at", 1, 0, { k: key });
-    const t = last.length ? last[0] : new Record(app.findCollectionByNameOrId("tasks"));
-    t.load({ title: title, kind: "draft_products", source: "rule", rule_key: key, status: "open", priority: "normal", link_collection: "products", closed_at: "" });
-    if (t.isNew()) t.set("created_by", "system:catalogue");
-    stampSys(t);
-    app.save(t);
-  } else if (n > 0 && open[0].getString("title") !== title) {
-    open[0].set("title", title); stampSys(open[0]); app.save(open[0]);
-  } else if (n === 0) {
-    open.forEach((t) => { t.set("status", "done"); t.set("closed_at", new DateTime()); stampSys(t); app.save(t); });
-  }
+  require(`${__hooks}/lib/tasks.js`).syncRuleTask(app, "catalogue:drafts", n, title,
+    { kind: "draft_products", link_collection: "products" }, "system:catalogue");
 }
 
 function afterWrite(app, record, action) {

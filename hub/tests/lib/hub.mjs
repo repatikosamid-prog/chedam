@@ -12,7 +12,8 @@ const PB = process.env.PB_BIN || "pocketbase";
 export function rid(n = 6) { return randomBytes(n).toString("hex"); }
 
 export class TestHub {
-  constructor({ port = 8091, sample = true } = {}) {
+  // skipDev: dev sample migrations to leave out (e.g. sample stock, for tests that start from empty shelves)
+  constructor({ port = 8091, sample = true, skipDev = [] } = {}) {
     this.port = port;
     this.base = `http://127.0.0.1:${port}`;
     this.work = mkdtempSync(join(tmpdir(), "chedam-test-"));
@@ -20,7 +21,7 @@ export class TestHub {
     this.migDir = join(this.work, "pb_migrations");
     mkdirSync(this.migDir);
     cpSync(join(HUB, "pb_migrations"), this.migDir, { recursive: true });
-    if (sample) cpSync(join(HUB, "pb_migrations_dev"), this.migDir, { recursive: true });
+    if (sample) cpSync(join(HUB, "pb_migrations_dev"), this.migDir, { recursive: true, filter: (src) => !skipDev.some((f) => src.endsWith(f)) });
     this.server = null;
     this.tokenDevice = new Map();   // token -> device it was signed in on (headers added automatically)
     this.passed = 0;

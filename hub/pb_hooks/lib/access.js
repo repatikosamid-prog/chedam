@@ -33,6 +33,12 @@ const TABLES = {
   tax_rates:            { list: ANY, view: ANY, create: "tax.manage", update: "tax.manage", delete: null },
   tax_classes:          { list: ANY, view: ANY, create: "tax.manage", update: "tax.manage", delete: null },
   deposits_fees:        { list: ANY, view: ANY, create: "tax.manage", update: "tax.manage", delete: null },
+  // P1 stock: read by anyone (costs hidden, DL-72); changed only through /api/chedam/stock/... (BR-10)
+  stock_levels:         { list: ANY, view: ANY, create: null, update: null, delete: null },
+  stock_lots:           { list: ANY, view: ANY, create: null, update: null, delete: null },
+  stock_movements:      { list: ANY, view: ANY, create: null, update: null, delete: null },
+  stock_counts:         { list: ANY, view: ANY, create: null, update: null, delete: null },
+  stock_count_lines:    { list: ANY, view: ANY, create: null, update: null, delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".
@@ -367,7 +373,8 @@ function overrideCheck(e, app, actor, rec) {
 
 // DL-72: costs and margins only for people with costs.view (not cashiers). Applied to every record
 // the API returns (lists, views, realtime) through onRecordEnrich.
-const COST_FIELDS = { products: ["cost_cents"], price_history: ["old_cents", "new_cents"] };
+const COST_FIELDS = { products: ["cost_cents"], price_history: ["old_cents", "new_cents"], stock_lots: ["cost_cents"],
+  stock_movements: ["cost_cents", "value_cents", "lots_taken"] };
 
 function hideCosts(e) {
   const name = e.record.collection().name;
