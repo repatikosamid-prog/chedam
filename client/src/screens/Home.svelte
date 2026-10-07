@@ -96,6 +96,7 @@
             <span>{t.title}</span>
             {#if t.kind === "setup_incomplete" && can("setup.run")}<button class="btn-ghost min-h-10 text-sm" onclick={() => go("wizard")}>Do it</button>{/if}
             {#if t.kind === "stock_approval" && can("stock.approve")}<button class="btn-ghost min-h-10 text-sm" onclick={() => go("approvals")}>Review</button>{/if}
+            {#if t.kind === "till_variance" && can("till.manage")}<button class="btn-ghost min-h-10 text-sm" onclick={() => go("sales")}>Sales</button>{/if}
             {#if t.kind === "draft_products"}<button class="btn-ghost min-h-10 text-sm" onclick={() => { s.productFilter = "draft"; go("products"); }}>Show</button>{/if}
           </li>
         {/each}
@@ -110,6 +111,12 @@
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("wizard")}>
           <span class="font-semibold">Store setup</span>
           <span class="text-sm text-muted">Profile, logo, team, features</span>
+        </button>
+      {/if}
+      {#if can("sales.sell")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-accent p-3 text-left text-accent-ink" onclick={() => go("sell")}>
+          <span class="font-semibold">Sell</span>
+          <span class="text-sm opacity-90">Till, payments, receipts</span>
         </button>
       {/if}
       <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("products")}>

@@ -28,12 +28,15 @@
   import Counts from "./screens/Counts.svelte";
   import Approvals from "./screens/Approvals.svelte";
   import Shrink from "./screens/Shrink.svelte";
+  import Sell from "./screens/Sell.svelte";
+  import Till from "./screens/Till.svelte";
+  import Sales from "./screens/Sales.svelte";
 
   onMount(() => {
     startMonitor();
     refresh();
     // Re-check now and then, so a sign-out, lock or removal from the device manager shows here.
-    const busyScreens = ["pin", "owner", "setup", "recovery", "wizard", "newpin", "product", "categories", "tax", "stockitem", "receive", "counts"];
+    const busyScreens = ["pin", "owner", "setup", "recovery", "wizard", "newpin", "product", "categories", "tax", "stockitem", "receive", "counts", "sell", "till", "sales"];
     const poll = setInterval(() => { if (!busyScreens.includes(s.screen)) refresh(); }, 30000);
     const stop = watchIdle(() => s.autoLockMin, () => !!s.me,
       () => signOut("Locked after " + s.autoLockMin + " minutes without use. Pick your name to continue."));
@@ -59,7 +62,7 @@
 
 <div class="print:hidden"><ConnectivityBar /></div>
 
-<main class="mx-auto w-full max-w-3xl px-4 pt-4 pb-12">
+<main class="mx-auto w-full {s.screen === 'sell' ? 'max-w-6xl' : 'max-w-3xl'} px-4 pt-4 pb-12">
   <header class="mb-4 flex items-center justify-between gap-3 print:hidden">
     <div class="flex items-center gap-2">
       <img src="./icons/icon-192.png" alt="" class="h-8 w-8 rounded-lg" />
@@ -106,5 +109,8 @@
   {:else if s.screen === "counts"}<Counts />
   {:else if s.screen === "approvals"}<Approvals />
   {:else if s.screen === "shrink"}<Shrink />
+  {:else if s.screen === "sell"}<Sell />
+  {:else if s.screen === "till"}<Till />
+  {:else if s.screen === "sales"}<Sales />
   {/if}
 </main>

@@ -1,0 +1,47 @@
+// Till helpers (P1 step 3). The hub prices every sale (DL-79); the till keeps the cart, shows the hub's
+// quote and previews payments with the same rules as the hub (BR-16 cash rounding, DL-82).
+import { newId } from "./catalogue.js";
+
+export function newCart(training = false) {
+  return { id: "c" + newId(), lines: [], cart_discount: null, exempt: null, training, approval: "" };
+}
+
+// What the hub needs for a quote or a sale.
+export function toInput(cart) {
+  return {
+    cart_id: cart.id, training: cart.training,
+    lines: cart.lines.map((l) => ({ key: l.key, product: l.product, selling_unit: l.selling_unit, qty: l.qty, weight: l.weight,
+      price_cents: l.price_cents, override_reason: l.override_reason, discount: l.discount, age_checked: l.age_checked,
+      break_pack: l.break_pack, voided: l.voided })),
+    cart_discount: cart.cart_discount, exempt: cart.exempt, approval: cart.approval || undefined,
+  };
+}
+
+export const cashRound = (c) => Math.round(c / 5) * 5;
+
+// Same order and rules as the hub (lib/sales.js settlePayments): what is left, rounding and change.
+export function settle(total, payments, s) {
+  let remaining = total, rounding = 0, change = 0;
+  const rate = Number(s.usd_rate || 1.35);
+  for (const p of payments) {
+    if (p.status === "declined" || remaining <= 0) continue;
+    if (p.method === "card") { remaining -= Math.min(p.amount_cents, remaining); continue; }
+    const value = p.method === "usd_cash" ? Math.floor(p.amount_cents * rate + 0.5) : p.amount_cents;
+    const due = s.cash_rounding ? cashRound(remaining) : remaining;
+    if (value >= due) { rounding = due - remaining; change += s.cash_rounding ? cashRound(value - due) : value - due; remaining = 0; }
+    else remaining -= value;
+  }
+  return { remaining, rounding, change, cash_due: s.cash_rounding ? cashRound(remaining) : remaining };
+}
+
+// Quick cash buttons: exact (rounded) and the next notes up.
+export function cashSuggestions(due) {
+  const out = [due];
+  for (const n of [500, 1000, 2000, 5000, 10000]) {
+    const up = Math.ceil(due / n) * n;
+    if (up > due && !out.includes(up) && out.length < 5) out.push(up);
+  }
+  return out;
+}
+
+export const METHOD = { cash: "Cash", card: "Card", usd_cash: "US cash", store_credit: "Store credit", platform: "Platform" };
