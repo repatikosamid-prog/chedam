@@ -169,6 +169,12 @@
           <span class="text-sm text-muted">Pair, lock, sign out</span>
         </button>
       {/if}
+      {#if can("settings.manage")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("printers")}>
+          <span class="font-semibold">Receipt printer</span>
+          <span class="text-sm text-muted">Find, test, cash drawer, preview</span>
+        </button>
+      {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
       {#each modules.filter((m) => m.module !== "sell" && m.module !== "stock") as m (m.id)}
         <div class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-dashed border-line p-3" aria-disabled="true">

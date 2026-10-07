@@ -16,6 +16,7 @@
   import Scanner from "../components/Scanner.svelte";
   import Approve from "../components/Approve.svelte";
   import Receipt from "../components/Receipt.svelte";
+  import PrintButtons from "../components/PrintButtons.svelte";
 
   const KEY = "chedam.cart";
   let info = $state(null);                       // /tills/current: till, settings, business
@@ -337,9 +338,9 @@
         <p class="text-muted">{sale.number} · {money(sale.total_cents + sale.rounding_cents)}</p>
         <div class="flex flex-wrap justify-center gap-2 print:hidden">
           <button class="btn" onclick={newSale}>New sale</button>
-          <button class="btn-ghost" onclick={() => window.print()}>Print receipt</button>
           {#if sale.status === "completed" && !sale.offline}<button class="btn-ghost" onclick={() => (dialog = { kind: "void", reason: "" })}>Void</button>{/if}
         </div>
+        {#key sale.id}<PrintButtons {sale} auto={true} local={!!sale.offline} />{/key}
       </div>
       <Receipt {sale} />
     </div>

@@ -5,6 +5,7 @@
   import { onMount } from "svelte";
   import { api, isHubDown } from "../lib/api.js";
   import { s, go, can, handleRefusal } from "../lib/session.svelte.js";
+  import { printTill, openDrawerNoSale } from "../lib/printer.svelte.js";
   import { money, toCents } from "../lib/catalogue.js";
   import { METHOD } from "../lib/till.js";
   import { off, syncQueue, queued, retry, discard, tillInfo, saveTillInfo, tillWaiting, getPack, openTillOffline } from "../lib/offline.svelte.js";
@@ -75,7 +76,13 @@
     if (cash.type !== "no_sale" && !(amount > 0)) { error = "Enter an amount."; return; }
     const r = await api("POST", `/api/chedam/tills/${info.till.id}/cash`, { type: cash.type, amount_cents: amount, reason: cash.reason });
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
-    ok = { drop: "Cash drop recorded.", payout: "Pay-out recorded.", float_add: "Float added.", no_sale: "Drawer opened (no sale) recorded." }[cash.type];
+    ok = { drop: "Cash drop recorded.", payout: "Pay-out recorded.", float_add: "Float added.", no_sale: "No-sale recorded." }[cash.type];
+    if (cash.type === "no_sale") {
+      // The drawer opens for the recorded no-sale (FR-3.11), through the receipt printer.
+      const k = await openDrawerNoSale(r.json.id);
+      if (k.opened) ok = "No-sale recorded. Drawer opened.";
+      else error = "No-sale recorded, but the drawer did not open: " + (k.error || "no printer") + " Open it with the key.";
+    }
     cash = null;
     load();
   }
@@ -94,7 +101,7 @@
     const r = await api("POST", `/api/chedam/tills/${info.till.id}/close`, body);
     busy = false;
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
-    z = r.json.z_report;
+    z = { ...r.json.z_report, till_id: r.json.id };
     ok = "Till closed.";
     load();
   }
@@ -117,6 +124,15 @@
     const bad = all.find((r) => !r.ok);
     if (bad) { error = bad.message; return; }
     ok = "Till settings saved."; sets = null; load();
+  }
+
+  // Z report (closed) or X report (open till) on the receipt printer; the browser prints otherwise.
+  async function tillPrint(id) {
+    error = ""; ok = "";
+    const r = await printTill(id);
+    if (r.printed) ok = "Printed on " + r.printer + ".";
+    else if (r.no_printer) window.print();
+    else error = r.error;
   }
 
   function when(t) { return t ? new Date(t.replace(" ", "T")).toLocaleString() : ""; }
@@ -149,7 +165,10 @@
       <p class="flex justify-between font-semibold"><span>Counted</span><span>{money(z.counted_cents)}</span></p>
       <p class="flex justify-between text-lg font-bold {z.variance_cents < 0 ? 'text-bad' : z.variance_cents > 0 ? 'text-warn' : 'text-ok'}"><span>{z.variance_cents < 0 ? "Short" : z.variance_cents > 0 ? "Over" : "Balanced"}</span><span>{money(Math.abs(z.variance_cents))}</span></p>
       {#if z.usd_tendered_cents}<p class="flex justify-between"><span>US cash expected / counted</span><span>{money(z.usd_tendered_cents)} / {money(z.counted_usd_cents || 0)} US</span></p>{/if}
-      <button class="btn-ghost mt-2 print:hidden" onclick={() => window.print()}>Print Z report</button>
+      <div class="mt-2 flex flex-wrap gap-2 print:hidden">
+        <button class="btn-ghost" onclick={() => tillPrint(z.till_id)}>Print Z report</button>
+        <button class="btn-ghost" onclick={() => window.print()}>Print on this device</button>
+      </div>
     </div>
   {/if}
 
@@ -194,6 +213,7 @@
           <button class="btn-ghost" onclick={() => (cash = { type: "float_add", amount: "", reason: "" })}>Add float</button>
           {#if can("till.manage")}<button class="btn-ghost" onclick={() => (cash = { type: "payout", amount: "", reason: "" })}>Pay-out</button>{/if}
           <button class="btn-ghost" onclick={() => (cash = { type: "no_sale", amount: "", reason: "" })}>No sale (open drawer)</button>
+          <button class="btn-ghost" onclick={() => tillPrint(info.till.id)}>Print X report</button>
         </div>
       </div>
       {#if cash}

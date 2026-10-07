@@ -1,5 +1,6 @@
 <script>
-  // Receipt (FR-3.13, on screen and browser print; the network receipt printer comes in step 5):
+  // Receipt (FR-3.13) on screen and for the browser's print; the network printer prints the same
+  // content from the hub (hub/pb_hooks/lib/receipt_layout.js):
   // store header, GST/PST numbers, lines with discounts, taxes per type, deposits, cash rounding,
   // payments, change, savings. Training sales say so on every copy (FR-3.12).
   import { money } from "../lib/catalogue.js";
@@ -20,8 +21,8 @@
     <p class="font-bold">{b.name}</p>
     {#if b.header}<p class="whitespace-pre-line">{b.header}</p>{:else if b.address && b.address.line1}<p>{b.address.line1}, {b.address.city}</p>{/if}
     {#if b.phone}<p>{b.phone}</p>{/if}
-    {#if b.gst_number}<p>GST {b.gst_number}</p>{/if}
-    {#if b.pst_number}<p>PST {b.pst_number}</p>{/if}
+    {#if b.gst_number}<p>GST/HST Reg. No. {b.gst_number}</p>{/if}
+    {#if b.pst_number}<p>PST No. {b.pst_number}</p>{/if}
   </div>
   <p class="mt-2 flex justify-between"><span>{sale.number}</span><span>{when}</span></p>
   {#if sale.cashier}<p>Served by {sale.cashier}</p>{/if}
@@ -44,8 +45,11 @@
     <p class="flex justify-between"><span>{x.label} {x.rate}%{sale.tax_mode === "tax_included" ? " (included)" : ""}</span><span>{money(x.tax_cents)}</span></p>
   {/each}
   {#if sale.exempt}<p class="text-xs">Tax exempt: {sale.exempt.label} · {sale.exempt.reference}</p>{/if}
-  <p class="flex justify-between text-base font-bold"><span>Total</span><span>{money(sale.total_cents + sale.rounding_cents)}</span></p>
-  {#if sale.rounding_cents}<p class="flex justify-between text-xs"><span>Cash rounding</span><span>{sale.rounding_cents > 0 ? "+" : ""}{money(sale.rounding_cents)}</span></p>{/if}
+  <p class="flex justify-between text-base font-bold"><span>Total</span><span>{money(sale.total_cents)}</span></p>
+  {#if sale.rounding_cents}
+    <p class="flex justify-between text-xs"><span>Cash rounding</span><span>{sale.rounding_cents > 0 ? "+" : ""}{money(sale.rounding_cents)}</span></p>
+    <p class="flex justify-between font-bold"><span>Total in cash</span><span>{money(sale.total_cents + sale.rounding_cents)}</span></p>
+  {/if}
   <hr class="my-2 border-dashed border-black" />
   {#each sale.payments as p, i (i)}
     <p class="flex justify-between"><span>{METHOD[p.method]}{p.last4 ? " ****" + p.last4 : ""}{p.currency === "USD" ? " (US " + money(p.tendered_cents) + ")" : ""}{p.status !== "approved" ? " · " + p.status : ""}</span>

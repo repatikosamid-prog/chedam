@@ -330,6 +330,7 @@ function saleView(app, id, showCost) {
     paid_cents: s.getInt("paid_cents"), change_cents: s.getInt("change_cents"), taxes: j(s, "taxes", []), exempt: j(s, "exempt", null),
     approvals: j(s, "approvals", []), note: s.getString("note"), void_reason: s.getString("void_reason"),
     offline: s.getBool("offline"), offline_ref: s.getString("offline_ref"), sync_note: s.getString("sync_note"),
+    reprints: s.getInt("reprints"),
     lines: lines, payments: payments, business: business(app),
     savings_cents: lines.filter((l) => !l.voided).reduce((a, l) => a + Math.max(0, Math.round(l.regular_price_cents * l.qty) - l.gross_cents) + l.line_discount_cents + l.cart_discount_cents, 0),
   };

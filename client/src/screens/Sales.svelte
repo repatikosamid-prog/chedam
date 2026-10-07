@@ -6,6 +6,7 @@
   import { go, can, handleRefusal } from "../lib/session.svelte.js";
   import { money } from "../lib/catalogue.js";
   import Receipt from "../components/Receipt.svelte";
+  import PrintButtons from "../components/PrintButtons.svelte";
   import Approve from "../components/Approve.svelte";
 
   let list = $state([]), q = $state(""), sale = $state(null), error = $state(""), voiding = $state(null), exempt = $state(null);
@@ -53,7 +54,6 @@
 
   {#if sale}
     <div class="flex flex-wrap gap-2 print:hidden">
-      <button class="btn-ghost" onclick={() => window.print()}>Reprint</button>
       {#if sale.status === "completed" && can("sales.sell")}<button class="btn-ghost text-bad" onclick={() => (voiding = { reason: "" })}>Void sale</button>{/if}
     </div>
     {#if voiding}
@@ -66,6 +66,8 @@
         {/if}
       </div>
     {/if}
+    {#key sale.id}<PrintButtons {sale} reprint={true} />{/key}
+    {#if sale.reprints}<p class="text-center text-sm text-muted">Reprinted {sale.reprints} {sale.reprints === 1 ? "time" : "times"}</p>{/if}
     <Receipt {sale} />
   {:else if exempt}
     <div class="card">

@@ -14,6 +14,7 @@
   import OwnerSignIn from "./screens/OwnerSignIn.svelte";
   import Home from "./screens/Home.svelte";
   import Devices from "./screens/Devices.svelte";
+  import Printers from "./screens/Printers.svelte";
   import Setup from "./screens/Setup.svelte";
   import Recovery from "./screens/Recovery.svelte";
   import Wizard from "./screens/Wizard.svelte";
@@ -97,6 +98,7 @@
   {:else if s.screen === "owner"}<OwnerSignIn />
   {:else if s.screen === "home"}<Home />
   {:else if s.screen === "devices"}<Devices />
+  {:else if s.screen === "printers"}<Printers />
   {:else if s.screen === "setup"}<Setup />
   {:else if s.screen === "recovery"}<Recovery />
   {:else if s.screen === "wizard"}<Wizard />
