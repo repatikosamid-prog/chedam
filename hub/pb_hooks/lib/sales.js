@@ -1,0 +1,559 @@
+// Selling (P1 step 3): FR-3.02-3.12, 3.15, 3.17, 4.03-4.06; BR-03, 10, 11, 13, 14, 15, 16, 18, 21, 22.
+// The till sends the cart; the hub prices it again (pricing_core.js), checks stock, approvals and
+// payments, and completes the sale in one transaction. The sale id is made on the till, so a repeat
+// returns the first result (BR-10).
+//
+// Cart input (quote and complete):
+//   { id, cart_id, training, lines: [{ key, product, selling_unit, qty, weight, price_cents, override_reason,
+//     discount: {type: "pct"|"amount", value}, age_checked, break_pack, voided }],
+//     cart_discount: {type, value}, exempt: {reason, reference}, approval, payments, expected_total_cents,
+//     note, device_time }
+
+const st = () => require(`${__hooks}/lib/stock.js`);
+const core = () => require(`${__hooks}/lib/pricing_core.js`);
+
+function setting(app, key, fallback) { return require(`${__hooks}/lib/auth.js`).setting(app, key, fallback); }
+function can(app, user, code) { return !!user && require(`${__hooks}/lib/access.js`).can(app, user, code); }
+function bad(msg) { throw new BadRequestError(msg); }
+const r3 = (n) => Math.round(n * 1000) / 1000;
+
+// ---- Manager approvals (BR-18) --------------------------------------------------------------------
+// A manager enters their PIN on the till; the hub keeps a one-time approval for 5 minutes.
+
+const APPROVALS = "chedam.sales.approvals";
+
+// The store keeps a copy of what is set, so every change is written back with saveApprovals().
+function approvals(app) {
+  const m = app.store().get(APPROVALS) || {};
+  const now = Date.now();
+  const out = {};
+  Object.keys(m).forEach((k) => { if (m[k].expires >= now) out[k] = m[k]; });
+  return out;
+}
+function saveApprovals(app, m) { app.store().set(APPROVALS, m); }
+
+function newApproval(app, e, body) {
+  const auth = require(`${__hooks}/lib/auth.js`);
+  let user = null;
+  try { user = app.findRecordById("users", String(body.user || "")); } catch (_) { user = null; }
+  if (!user || !auth.canSignIn(user) || !user.getBool("pin_set")) bad("Wrong name or PIN.");
+  const until = auth.lockedUntil(user);
+  if (until) throw auth.lockedError(until);
+  if (!auth.checkSecret(user, "pin", String(body.pin || ""))) auth.failAndThrow(app, user, e, new BadRequestError("Wrong name or PIN."));
+  auth.registerSuccess(app, user, e);
+  const perm = body.permission === "sales.void" ? "sales.void" : "sales.approve";
+  if (!can(app, user, perm)) throw new ForbiddenError(user.getString("name") + " cannot approve this.");
+  const id = $security.randomString(20);
+  const all = approvals(app);
+  all[id] = { user: user.id, name: user.getString("name"), perm: perm, expires: Date.now() + 5 * 60000 };
+  saveApprovals(app, all);
+  return { approval: id, by: user.getString("name"), expires_in: 300 };
+}
+
+function approvalFor(app, id, perm) {
+  const a = id ? approvals(app)[id] : null;
+  if (!a) return null;
+  if (perm === "sales.void" && a.perm !== "sales.void") return null;
+  return a;
+}
+
+function useApproval(app, id) { const all = approvals(app); delete all[id]; saveApprovals(app, all); }
+
+// ---- Building a cart -----------------------------------------------------------------------------
+
+function amountOf(d, gross) {
+  if (!d || !d.value) return 0;
+  const v = Number(d.value);
+  if (!(v >= 0)) bad("A discount cannot be negative.");
+  if (d.type === "pct") {
+    if (v > 100 || Math.abs(r3(v) - v) > 1e-9) bad("A percentage is 0 to 100 with at most 3 decimals (BR-04).");
+    return core().roundHalfUp((gross * v) / 100);
+  }
+  if (v !== Math.floor(v)) bad("Discount amounts are in whole cents.");
+  return Math.min(v, gross);
+}
+
+function ratesOf(app, classId, exemptTypes) {
+  if (!classId) return [];
+  return require(`${__hooks}/lib/tax.js`).ratesFor(app, classId)
+    .filter((t) => exemptTypes.indexOf(t.code) < 0).map((t) => ({ code: t.code, label: t.label, rate: t.rate }));
+}
+
+function moduleOn(app, code) { return require(`${__hooks}/lib/catalogue.js`).moduleOn(app, code); }
+
+// Prices the cart and lists what stops it: problems (fix on the till) and approvals (manager PIN).
+function build(app, input, actor) {
+  const lines = Array.isArray(input.lines) ? input.lines : [];
+  if (lines.length > 300) bad("At most 300 lines in one sale.");
+  const training = !!input.training;
+  const discLimit = Number(setting(app, "sales.discount_limit_pct", 10));
+  const ovLimit = Number(setting(app, "sales.override_limit_pct", 10));
+  const mayApprove = can(app, actor, "sales.approve");
+  const problems = [], needs = [];
+  const need = (what, key) => { if (!mayApprove && needs.indexOf(what) < 0) needs.push(what); };
+
+  // Tax exemption (FR-4.05)
+  let exempt = null, exemptTypes = [];
+  if (input.exempt && input.exempt.reason) {
+    if (!can(app, actor, "sales.tax_exempt")) throw new ForbiddenError("You cannot make tax-exempt sales.");
+    const reasons = setting(app, "sales.exempt_reasons", {}) || {};
+    const r = reasons[input.exempt.reason];
+    if (!r) bad("Unknown exemption reason.");
+    const ref = String(input.exempt.reference || "").trim();
+    if (ref.length < 2) bad("Enter the exemption reference (card or certificate number).");
+    exempt = { reason: input.exempt.reason, label: r.label, reference: ref.substring(0, 60), types: r.types || [] };
+    exemptTypes = exempt.types;
+  }
+
+  const out = [];
+  lines.forEach((ln, i) => {
+    const key = String(ln.key || "l" + i);
+    let p, u;
+    try { p = app.findRecordById("products", String(ln.product || "")); } catch (_) { bad("Line " + (i + 1) + ": unknown product."); }
+    try { u = app.findRecordById("selling_units", String(ln.selling_unit || "")); } catch (_) { bad("Line " + (i + 1) + ": unknown unit."); }
+    if (u.getString("product") !== p.id) bad("Line " + (i + 1) + ": that unit belongs to another product.");
+    const name = p.getString("name") + (u.getString("kind") === "single" || u.getString("kind") === "weight" ? "" : " (" + u.getString("name") + ")");
+    if (ln.voided) { out.push({ key, voided: true, p, u, name, qty: Number(ln.qty) || 0 }); return; }
+    if (p.getString("status") !== "active" || p.getString("deleted_at") || u.getString("deleted_at") || !u.getBool("sell_at_pos")) {
+      problems.push({ key, type: "not_sellable", message: "'" + p.getString("name") + "' cannot be sold (not active)." });
+    }
+    // Quantity (BR-02, BR-03); weighed items: weight minus the product's tare (FR-3.04)
+    let qty, tare = 0;
+    if (u.getString("kind") === "weight") {
+      const w = Number(ln.weight !== undefined ? ln.weight : ln.qty);
+      tare = p.getFloat("tare");
+      qty = r3(w - tare);
+      if (!(w > 0) || Math.abs(r3(w) - w) > 1e-9) bad("Line " + (i + 1) + ": weight is more than 0 with at most 3 decimals.");
+      if (!(qty > 0)) bad("Line " + (i + 1) + ": the weight is not more than the tare.");
+    } else {
+      qty = Number(ln.qty);
+      if (!(qty > 0) || qty !== Math.floor(qty)) bad("Line " + (i + 1) + ": quantity is a whole number above 0.");
+    }
+    const base = r3(qty * (u.getFloat("base_qty") || 1));
+    // Price and override (FR-3.03, BR-18)
+    const regular = u.getInt("price_cents");
+    let price = regular, reason = "";
+    if (ln.price_cents !== undefined && ln.price_cents !== null && ln.price_cents !== "" && Number(ln.price_cents) !== regular) {
+      price = Number(ln.price_cents);
+      if (!(price >= 0) || price !== Math.floor(price)) bad("Line " + (i + 1) + ": the price is not valid.");
+      reason = String(ln.override_reason || "").trim().substring(0, 200);
+      if (!reason) problems.push({ key, type: "override_reason", message: "Give a reason for the new price of '" + p.getString("name") + "'." });
+      if (price < regular * (1 - ovLimit / 100) - 1e-9) need("Price of '" + p.getString("name") + "' lowered by more than " + ovLimit + "%", key);
+    }
+    const gross = core().roundHalfUp(price * qty);
+    const ld = amountOf(ln.discount, gross);
+    if (ld > 0) {
+      if (!can(app, actor, "sales.discount")) throw new ForbiddenError("You cannot give discounts.");
+      if (gross && (ld / gross) * 100 > discLimit + 1e-9) need("Discount on '" + p.getString("name") + "' above " + discLimit + "%", key);
+    }
+    // Age check (FR-3.06)
+    if (p.getBool("age_restricted") && !ln.age_checked) {
+      problems.push({ key, type: "age", message: "Check ID: '" + p.getString("name") + "' is " + p.getInt("min_age") + "+." });
+    }
+    // Deposits and eco fees (FR-3.07), per base unit
+    let deposit = 0, depositRates = [], depositFull = [];
+    const fees = p.get("deposits_fees") || [];
+    if (fees.length && moduleOn(app, "regulated_items")) {
+      app.findRecordsByIds("deposits_fees", fees).forEach((f) => {
+        if (!f.getBool("active") || f.getString("deleted_at")) return;
+        deposit += core().roundHalfUp(f.getInt("amount_cents") * base);
+        depositRates = ratesOf(app, f.getString("tax_class"), exemptTypes);
+        depositFull = ratesOf(app, f.getString("tax_class"), []);
+      });
+    }
+    out.push({ key, p, u, name, qty, base, tare, regular, price, reason, gross, ld, deposit,
+      rates: ratesOf(app, p.getString("tax_class"), exemptTypes), fullRates: ratesOf(app, p.getString("tax_class"), []),
+      depositRates, depositFull,
+      age_checked: !!ln.age_checked, break_pack: !!ln.break_pack });
+  });
+
+  const live = out.filter((l) => !l.voided);
+  const mode = (() => {
+    try { return app.findRecordsByFilter("business", "id != ''", "", 1, 0)[0].getString("tax_display_mode") || "tax_added"; } catch (_) { return "tax_added"; }
+  })();
+  const after = live.reduce((a, l) => a + Math.max(0, l.gross - l.ld), 0);
+  const cartDisc = amountOf(input.cart_discount, after);
+  if (cartDisc > 0) {
+    if (!can(app, actor, "sales.discount")) throw new ForbiddenError("You cannot give discounts.");
+    if (after && (cartDisc / after) * 100 > discLimit + 1e-9) need("Cart discount above " + discLimit + "%");
+  }
+  const priced = core().compute(live.map((l) => ({ key: l.key, gross_cents: l.gross, line_discount_cents: l.ld, rates: l.rates,
+    deposit_cents: l.deposit, deposit_rates: l.depositRates })), { mode: mode, cart_discount_cents: cartDisc });
+  let exemptCents = 0;
+  if (exempt) {
+    const full = core().compute(live.map((l) => ({ key: l.key, gross_cents: l.gross, line_discount_cents: l.ld, rates: l.fullRates,
+      deposit_cents: l.deposit, deposit_rates: l.depositFull })), { mode: mode, cart_discount_cents: cartDisc });
+    exemptCents = full.tax_cents - priced.tax_cents;
+  }
+  if (!live.length) problems.push({ type: "empty", message: "The cart is empty." });
+
+  if (!training) stockCheck(app, live, input.cart_id, problems, need);
+  return { lines: out, live, priced, mode, exempt, exemptCents, problems, needs, training, cartDisc };
+}
+
+// Stock before payment (BR-11): enough on hand (minus other carts' soft holds, BR-13), loose units or
+// sealed packs as the line needs (pack-break prompt, FR-3.05), unexpired lots (BR-14).
+function stockCheck(app, live, cartId, problems, need) {
+  const byProduct = {};
+  live.forEach((l) => { (byProduct[l.p.id] || (byProduct[l.p.id] = [])).push(l); });
+  const now = new Date().toISOString().replace("T", " ");
+  Object.keys(byProduct).forEach((pid) => {
+    const ls = byProduct[pid];
+    const p = ls[0].p;
+    const found = app.findRecordsByFilter("stock_levels", "product = {:p}", "", 1, 0, { p: pid });
+    const onHand = found.length ? found[0].getFloat("on_hand") : 0;
+    const loose = found.length ? found[0].getFloat("loose_qty") : 0;
+    const sealed = found.length ? st().sealedOf(found[0]) : {};
+    const held = app.findRecordsByFilter("soft_holds", "product = {:p} && cart_id != {:c} && expires_at > {:n}", "", 0, 0,
+      { p: pid, c: String(cartId || "-"), n: now }).reduce((a, h) => a + h.getFloat("qty_base"), 0);
+    const want = r3(ls.reduce((a, l) => a + l.base, 0));
+    if (want > r3(onHand - held) + 1e-9) {
+      problems.push({ key: ls[0].key, type: "stock", available: r3(Math.max(0, onHand - held)),
+        message: "Only " + r3(Math.max(0, onHand - held)) + " of '" + p.getString("name") + "' available" + (held ? " (some are in another till's cart)" : "") + "." });
+      return;
+    }
+    // Loose and sealed needs
+    const looseWant = r3(ls.filter((l) => st().isLooseUnit(l.u)).reduce((a, l) => a + l.base, 0));
+    if (looseWant > loose + 1e-9 && !ls.some((l) => l.break_pack)) {
+      problems.push({ key: ls.find((l) => st().isLooseUnit(l.u)).key, type: "pack_break",
+        message: "Only " + r3(loose) + " loose '" + p.getString("name") + "'. Open a pack?" });
+    }
+    ls.filter((l) => !st().isLooseUnit(l.u)).forEach((l) => {
+      if ((sealed[l.u.id] || 0) < l.qty && !l.break_pack) {
+        problems.push({ key: l.key, type: "pack_break", message: "Only " + (sealed[l.u.id] || 0) + " sealed '" + l.u.getString("name") + "'. Open a larger pack?" });
+      }
+    });
+    // Expired lots (BR-14)
+    const fresh = st().fefoLots(app, pid, { allowExpired: false }).reduce((a, x) => a + x.getFloat("qty"), 0);
+    const all = st().fefoLots(app, pid, { allowExpired: true }).reduce((a, x) => a + x.getFloat("qty"), 0);
+    if (want > fresh + 1e-9 && all > fresh + 1e-9) need("Sell expired '" + p.getString("name") + "'");
+  });
+}
+
+// ---- Payments (FR-3.08, 3.09; BR-16) --------------------------------------------------------------
+
+function settlePayments(app, total, payments) {
+  const methods = setting(app, "sales.payment_methods", ["cash", "card"]) || [];
+  const rounding = setting(app, "sales.cash_rounding", true);
+  const rate = Number(setting(app, "sales.usd_rate", 1.35));
+  let remaining = total, roundingCents = 0, change = 0;
+  const out = [];
+  (payments || []).forEach((pm, i) => {
+    const method = String(pm.method || "");
+    if (methods.indexOf(method) < 0) bad("Payment " + (i + 1) + ": '" + method + "' is not accepted here.");
+    const status = pm.status === "declined" ? "declined" : "approved";
+    const rec = { method, status, amount_cents: 0, tendered_cents: 0, currency: method === "usd_cash" ? "USD" : "CAD", fx_rate: method === "usd_cash" ? rate : 1,
+      change_cents: 0, reference: String(pm.reference || "").substring(0, 60), last4: String(pm.last4 || "").substring(0, 4), processor: String(pm.processor || "").substring(0, 40) };
+    if (rec.last4 && !/^[0-9]{4}$/.test(rec.last4)) bad("Card: the last 4 digits are 4 numbers.");
+    const amt = Number(pm.amount_cents);
+    if (!(amt > 0) || amt !== Math.floor(amt)) bad("Payment " + (i + 1) + ": the amount is not valid.");
+    if (status === "declined") { rec.tendered_cents = amt; out.push(rec); return; }
+    if (remaining <= 0) bad("The sale is already paid; remove payment " + (i + 1) + ".");
+    if (method === "card" || method === "store_credit" || method === "platform") {
+      if (amt > remaining) bad("A card payment cannot be more than what is left to pay (" + remaining + " cents).");
+      rec.amount_cents = amt; rec.tendered_cents = amt; remaining -= amt;
+    } else {
+      // Cash (or US cash converted to CAD). Cash that finishes the sale is rounded to 5 cents.
+      const value = method === "usd_cash" ? core().roundHalfUp(amt * rate) : amt;
+      rec.tendered_cents = amt;
+      const due = rounding ? core().cashRound(remaining) : remaining;
+      if (value >= due) {
+        roundingCents = due - remaining;
+        rec.amount_cents = due;
+        rec.change_cents = rounding ? core().cashRound(value - due) : value - due;
+        change += rec.change_cents;
+        remaining = 0;
+      } else {
+        rec.amount_cents = value;
+        remaining -= value;
+      }
+    }
+    out.push(rec);
+  });
+  return { payments: out, remaining, rounding_cents: roundingCents, change_cents: change,
+    paid_cents: out.filter((x) => x.status === "approved").reduce((a, x) => a + x.amount_cents, 0) };
+}
+
+// ---- Views ---------------------------------------------------------------------------------------
+
+function quoteView(b, approval) {
+  const pl = {};
+  b.priced.lines.forEach((l) => { pl[l.key] = l; });
+  return {
+    lines: b.lines.map((l) => l.voided ? { key: l.key, voided: true, name: l.name } : {
+      key: l.key, name: l.name, product: l.p.id, selling_unit: l.u.id, qty: l.qty, base_qty: l.base, tare: l.tare,
+      regular_price_cents: l.regular, price_cents: l.price, gross_cents: l.gross, line_discount_cents: l.ld,
+      cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, taxes: pl[l.key].taxes, deposit_cents: l.deposit,
+      age_restricted: l.p.getBool("age_restricted"), min_age: l.p.getInt("min_age") }),
+    tax_mode: b.mode, subtotal_cents: b.priced.subtotal_cents, discount_cents: b.priced.discount_cents, cart_discount_cents: b.cartDisc,
+    taxes: b.priced.taxes, tax_cents: b.priced.tax_cents, deposit_cents: b.priced.deposit_cents, total_cents: b.priced.total_cents,
+    cash_total_cents: core().cashRound(b.priced.total_cents), exempt: b.exempt, exempt_cents: b.exemptCents,
+    problems: b.problems, needs_approval: approval ? [] : b.needs, training: b.training,
+  };
+}
+
+function business(app) {
+  try {
+    const b = app.findRecordsByFilter("business", "id != ''", "", 1, 0)[0];
+    let addr = {};
+    try { addr = JSON.parse(b.getString("address") || "{}") || {}; } catch (_) { addr = {}; }
+    return { name: b.getString("trade_name") || b.getString("legal_name"), legal_name: b.getString("legal_name"), address: addr,
+      phone: b.getString("phone"), gst_number: b.getString("gst_number"), pst_number: b.getString("pst_number"),
+      header: b.getString("receipt_header"), footer: b.getString("receipt_footer") };
+  } catch (_) { return {}; }
+}
+
+function saleView(app, id, showCost) {
+  const s = app.findRecordById("sales", id);
+  const j = (r, f, d) => { try { return JSON.parse(r.getString(f) || "null") || d; } catch (_) { return d; } };
+  const lines = app.findRecordsByFilter("sale_lines", "sale = {:s}", "line_no", 0, 0, { s: id }).map((l) => {
+    const v = { id: l.id, line_no: l.getInt("line_no"), name: l.getString("name"), product: l.getString("product"), selling_unit: l.getString("selling_unit"),
+      qty: l.getFloat("qty"), base_qty: l.getFloat("base_qty"), regular_price_cents: l.getInt("regular_price_cents"), price_cents: l.getInt("price_cents"),
+      override_reason: l.getString("override_reason"), gross_cents: l.getInt("gross_cents"), line_discount_cents: l.getInt("line_discount_cents"),
+      cart_discount_cents: l.getInt("cart_discount_cents"), net_cents: l.getInt("net_cents"), taxes: j(l, "taxes", []), deposit_cents: l.getInt("deposit_cents"),
+      voided: l.getBool("voided"), age_checked: l.getBool("age_checked") };
+    if (showCost) v.cost_cents = l.getInt("cost_cents");
+    return v;
+  });
+  const payments = app.findRecordsByFilter("payments", "sale = {:s}", "created_at", 0, 0, { s: id }).map((p) => ({
+    method: p.getString("method"), status: p.getString("status"), amount_cents: p.getInt("amount_cents"), tendered_cents: p.getInt("tendered_cents"),
+    currency: p.getString("currency"), fx_rate: p.getFloat("fx_rate"), change_cents: p.getInt("change_cents"), last4: p.getString("last4"), reference: p.getString("reference") }));
+  let cashier = "";
+  try { cashier = app.findRecordById("users", s.getString("cashier")).getString("name"); } catch (_) { cashier = ""; }
+  return {
+    id: s.id, number: s.getString("number"), status: s.getString("status"), training: s.getBool("training"), tax_mode: s.getString("tax_mode"),
+    completed_at: s.getString("completed_at"), cashier: cashier, till: s.getString("till"),
+    subtotal_cents: s.getInt("subtotal_cents"), discount_cents: s.getInt("discount_cents"), tax_cents: s.getInt("tax_cents"),
+    deposit_cents: s.getInt("deposit_cents"), total_cents: s.getInt("total_cents"), rounding_cents: s.getInt("rounding_cents"),
+    paid_cents: s.getInt("paid_cents"), change_cents: s.getInt("change_cents"), taxes: j(s, "taxes", []), exempt: j(s, "exempt", null),
+    approvals: j(s, "approvals", []), note: s.getString("note"), void_reason: s.getString("void_reason"),
+    lines: lines, payments: payments, business: business(app),
+    savings_cents: lines.filter((l) => !l.voided).reduce((a, l) => a + Math.max(0, Math.round(l.regular_price_cents * l.qty) - l.gross_cents) + l.line_discount_cents + l.cart_discount_cents, 0),
+  };
+}
+
+// ---- Completing a sale --------------------------------------------------------------------------
+
+function nextNumber(app, kind, ctx) {
+  const r = app.findFirstRecordByData("settings", "key", "sales.next_number");
+  let v = {};
+  try { v = JSON.parse(r.getString("value") || "{}") || {}; } catch (_) { v = {}; }
+  const n = Number(v[kind] || 1);
+  v[kind] = n + 1;
+  r.set("value", v);
+  r.set("updated_by", ctx.actor); r.set("@actor", ctx.actor); r.set("@device", ctx.device || "");
+  app.save(r);
+  return n;
+}
+
+function openTill(app, deviceId) {
+  if (!deviceId) return null;
+  const t = app.findRecordsByFilter("tills", "device = {:d} && status = 'open'", "-opened_at", 1, 0, { d: deviceId });
+  return t.length ? t[0] : null;
+}
+
+// Opens packs so a line can be served (FR-3.05): loose units from packs of singles, packs from cases.
+function openPacksFor(app, l, ctx) {
+  for (let guard = 0; guard < 30; guard++) {
+    const lv = st().level(app, l.p.id, ctx);
+    const sealed = st().sealedOf(lv);
+    const units = require(`${__hooks}/lib/catalogue.js`).unitsOf(app, l.p.id);
+    const loose = st().isLooseUnit(l.u);
+    if (loose ? lv.getFloat("loose_qty") + 1e-9 >= l.base : (sealed[l.u.id] || 0) >= l.qty) return;
+    // What to open: for loose, a sealed pack that opens into loose units, else a case of packs; for a
+    // pack, a case that holds it.
+    const candidates = units.filter((u) => (sealed[u.id] || 0) > 0 && !st().isLooseUnit(u))
+      .map((u) => ({ u, inner: st().sealedInner(app, u) }))
+      .filter((x) => loose ? true : x.inner === l.u.id)
+      .sort((a, b) => (loose ? (a.inner === "" ? 0 : 1) - (b.inner === "" ? 0 : 1) : 0) || a.u.getFloat("base_qty") - b.u.getFloat("base_qty"));
+    if (!candidates.length) bad("Not enough '" + l.name + "' even after opening packs.");
+    st().packBreak(app, { product: l.p.id, selling_unit: candidates[0].u.id, count: 1 }, Object.assign({}, ctx, { op: "" }));
+  }
+}
+
+function complete(app, input, ctx) {
+  const id = String(input.id || "");
+  if (!/^[a-z0-9]{15}$/.test(id)) bad("The sale needs an id made on the till (15 letters and digits).");
+  const existing = app.findRecordsByFilter("sales", "id = {:id}", "", 1, 0, { id: id });
+  if (existing.length) return { duplicate: true, sale: saleView(app, id, ctx.showCost) };
+
+  const actor = ctx.user;
+  const b = build(app, input, actor);
+  const approval = input.approval ? approvalFor(app, input.approval, "sales.approve") : null;
+  const quote = quoteView(b, approval);
+  if (b.problems.length) return { refused: 409, message: b.problems[0].message, quote };
+  if (b.needs.length && !approval) return { refused: 403, message: "A manager's approval is needed: " + b.needs.join("; ") + ".", quote };
+  if (input.expected_total_cents !== undefined && Number(input.expected_total_cents) !== b.priced.total_cents) {
+    return { refused: 409, message: "The total changed (prices or tax were updated). Check the new total.", quote };
+  }
+  // Training sales need no till, but are listed on its Z report when one is open (never in its money).
+  const till = openTill(app, ctx.device);
+  if (!b.training && !till) return { refused: 409, message: "Open the till before selling.", quote };
+  const pay = settlePayments(app, b.priced.total_cents, input.payments);
+  if (pay.remaining > 0) return { refused: 409, message: "Not paid in full: " + pay.remaining + " cents left.", quote };
+
+  const number = (b.training ? "T-" : "S-") + ("000000" + nextNumber(app, b.training ? "training" : "sale", ctx)).slice(-6);
+  const s = new Record(app.findCollectionByNameOrId("sales"));
+  s.set("id", id);
+  const appr = [];
+  if (approval && b.needs.length) b.needs.forEach((w) => appr.push({ what: w, by: "users:" + approval.user, name: approval.name, at: new Date().toISOString() }));
+  s.load({ number, till: till ? till.id : "", cashier: actor ? actor.id : "", status: "completed", training: b.training, offline: false,
+    tax_mode: b.mode, subtotal_cents: b.priced.subtotal_cents, discount_cents: b.priced.discount_cents, tax_cents: b.priced.tax_cents,
+    deposit_cents: b.priced.deposit_cents, total_cents: b.priced.total_cents, rounding_cents: pay.rounding_cents, paid_cents: pay.paid_cents,
+    change_cents: pay.change_cents, taxes: b.priced.taxes, exempt: b.exempt, approvals: appr, note: String(input.note || "").substring(0, 500),
+    items: b.live.reduce((a, l) => a + (st().isLooseUnit(l.u) && l.u.getString("kind") === "weight" ? 1 : l.qty), 0),
+    completed_at: new DateTime(), device_time: String(input.device_time || "").substring(0, 40) });
+  st().stamp(s, ctx);
+  app.save(s);
+
+  const pl = {};
+  b.priced.lines.forEach((l) => { pl[l.key] = l; });
+  let costTotal = 0;
+  b.lines.forEach((l, i) => {
+    const line = new Record(app.findCollectionByNameOrId("sale_lines"));
+    if (l.voided) {
+      line.load({ sale: id, line_no: i + 1, product: l.p.id, selling_unit: l.u.id, name: l.name, qty: l.qty, voided: true });
+    } else {
+      let lots = [], cost = 0;
+      if (!b.training) {
+        openPacksFor(app, l, ctx);
+        const lv = st().level(app, l.p.id, ctx);
+        const sealed = st().sealedOf(lv);
+        st().removeFromLevel(app, l.p, l.u, st().isLooseUnit(l.u) ? l.base : l.qty, lv, sealed);
+        st().saveLevel(app, lv, sealed, ctx);
+        // Expired lots only when fresh ones are not enough (the sale was approved for it, BR-14).
+        const fresh = st().fefoLots(app, l.p.id, { allowExpired: false }).reduce((a, x) => a + x.getFloat("qty"), 0);
+        const t = st().takeLots(app, l.p.id, l.base, { allowExpired: fresh + 1e-9 < l.base }, ctx);
+        lots = t.taken; cost = t.value;
+        st().movement(app, { product: l.p.id, type: "sale", qty_base: -l.base, selling_unit: l.u.id, unit_qty: l.qty, lots_taken: lots,
+          cost_cents: l.base ? Math.round((cost / l.base) * 10000) / 10000 : 0, value_cents: -cost, ref_collection: "sales", ref_id: id,
+          note: number }, Object.assign({}, ctx, { op: "" }));
+      }
+      costTotal += cost;
+      line.load({ sale: id, line_no: i + 1, product: l.p.id, selling_unit: l.u.id, name: l.name, qty: l.qty, base_qty: l.base, tare: l.tare,
+        regular_price_cents: l.regular, price_cents: l.price, override_reason: l.reason, gross_cents: l.gross, line_discount_cents: l.ld,
+        cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, tax_class: l.p.getString("tax_class"),
+        taxes: pl[l.key].taxes, deposit_cents: l.deposit, lots: lots, cost_cents: cost, age_checked: l.age_checked });
+    }
+    st().stamp(line, ctx);
+    app.save(line);
+  });
+  s.set("cost_cents", costTotal);
+  st().stamp(s, ctx);
+  app.save(s);
+
+  pay.payments.forEach((pm) => {
+    const r = new Record(app.findCollectionByNameOrId("payments"));
+    r.load(Object.assign({ sale: id }, pm));
+    st().stamp(r, ctx);
+    app.save(r);
+  });
+  if (b.exempt) {
+    const r = new Record(app.findCollectionByNameOrId("tax_exemptions"));
+    r.load({ sale: id, reason: b.exempt.reason, reference: b.exempt.reference, exempt_cents: b.exemptCents });
+    st().stamp(r, ctx);
+    app.save(r);
+  }
+  if (input.cart_id) app.findRecordsByFilter("soft_holds", "cart_id = {:c}", "", 0, 0, { c: String(input.cart_id) }).forEach((h) => app.delete(h));
+  if (approval) useApproval(app, input.approval);
+  return { duplicate: false, sale: saleView(app, id, ctx.showCost) };
+}
+
+// ---- Void a completed sale (FR-3.11, BR-18) -------------------------------------------------------
+// Only while its till is still open (later: a return). Stock goes back to the lots it came from.
+
+function voidSale(app, id, body, ctx) {
+  let s;
+  try { s = app.findRecordById("sales", id); } catch (_) { bad("Unknown sale."); }
+  if (s.getString("status") !== "completed") bad("This sale is already voided.");
+  const reason = String(body.reason || "").trim();
+  if (!reason) bad("Give a reason for the void.");
+  let by = ctx.user;
+  if (!can(app, ctx.user, "sales.void")) {
+    const a = approvalFor(app, body.approval, "sales.void");
+    if (!a) throw new ForbiddenError("A manager's approval is needed to void a sale.");
+    by = app.findRecordById("users", a.user);
+    useApproval(app, body.approval);
+  }
+  if (!s.getBool("training")) {
+    const till = s.getString("till") ? app.findRecordById("tills", s.getString("till")) : null;
+    if (!till || till.getString("status") !== "open") bad("The till of this sale is closed. Use a return instead.");
+    app.findRecordsByFilter("sale_lines", "sale = {:s} && voided = false", "line_no", 0, 0, { s: id }).forEach((l) => {
+      const p = app.findRecordById("products", l.getString("product"));
+      const u = app.findRecordById("selling_units", l.getString("selling_unit"));
+      const lv = st().level(app, p.id, ctx);
+      const sealed = st().sealedOf(lv);
+      st().addToLevel(u, st().isLooseUnit(u) ? l.getFloat("base_qty") : l.getFloat("qty"), lv, sealed);
+      st().saveLevel(app, lv, sealed, ctx);
+      let lots = [];
+      try { lots = JSON.parse(l.getString("lots") || "[]") || []; } catch (_) { lots = []; }
+      lots.forEach((t) => {
+        try {
+          const lot = app.findRecordById("stock_lots", t.lot);
+          lot.set("qty", r3(lot.getFloat("qty") + t.qty));
+          st().stamp(lot, ctx);
+          app.save(lot);
+        } catch (_) { /* lot removed */ }
+      });
+      st().movement(app, { product: p.id, type: "sale", qty_base: l.getFloat("base_qty"), selling_unit: u.id, unit_qty: l.getFloat("qty"),
+        lots_taken: lots, value_cents: l.getInt("cost_cents"), ref_collection: "sales", ref_id: id, note: "Void " + s.getString("number"), reason: reason },
+        Object.assign({}, ctx, { op: "" }));
+    });
+  }
+  app.findRecordsByFilter("payments", "sale = {:s} && status = 'approved'", "", 0, 0, { s: id }).forEach((p) => {
+    p.set("status", "voided"); st().stamp(p, ctx); app.save(p);
+  });
+  s.set("status", "voided"); s.set("voided_by", "users:" + by.id); s.set("voided_at", new DateTime()); s.set("void_reason", reason.substring(0, 300));
+  st().stamp(s, ctx);
+  app.save(s);
+  return saleView(app, id, ctx.showCost);
+}
+
+// ---- Holds (FR-3.10) and soft holds (BR-13) -------------------------------------------------------
+
+function hold(app, body, ctx) {
+  const h = new Record(app.findCollectionByNameOrId("holds"));
+  const cart = body.cart || {};
+  if (!Array.isArray(cart.lines) || !cart.lines.length) bad("Nothing to hold.");
+  h.load({ label: String(body.label || "").substring(0, 80), status: "held", cart: cart, total_cents: Number(body.total_cents) || 0,
+    items: cart.lines.length, held_by: ctx.user ? ctx.user.id : "" });
+  st().stamp(h, ctx);
+  app.save(h);
+  return h;
+}
+
+function recall(app, id, ctx, cancel) {
+  let h;
+  try { h = app.findRecordById("holds", id); } catch (_) { bad("Unknown held sale."); }
+  if (h.getString("status") !== "held") bad("This sale was already recalled or cancelled.");
+  h.set("status", cancel ? "cancelled" : "recalled");
+  if (!cancel) { h.set("recalled_by", ctx.user ? ctx.user.id : ""); h.set("recalled_at", new DateTime()); }
+  st().stamp(h, ctx);
+  app.save(h);
+  return h;
+}
+
+// Replaces this cart's soft holds: items whose stock is at or under the limit are held for N minutes.
+function softHold(app, body, ctx) {
+  const cfg = setting(app, "sales.soft_hold", { units: 3, minutes: 5 }) || {};
+  const cartId = String(body.cart_id || "");
+  if (!/^[A-Za-z0-9_-]{6,40}$/.test(cartId)) bad("Invalid cart id.");
+  const now = new Date();
+  app.findRecordsByFilter("soft_holds", "cart_id = {:c} || expires_at < {:n}", "", 0, 0,
+    { c: cartId, n: now.toISOString().replace("T", " ") }).forEach((h) => app.delete(h));
+  const held = [];
+  (Array.isArray(body.items) ? body.items : []).slice(0, 300).forEach((it) => {
+    const q = Number(it.qty_base);
+    if (!(q > 0)) return;
+    const lv = app.findRecordsByFilter("stock_levels", "product = {:p}", "", 1, 0, { p: String(it.product || "") });
+    if (!lv.length || lv[0].getFloat("on_hand") > Number(cfg.units || 3)) return;
+    const h = new Record(app.findCollectionByNameOrId("soft_holds"));
+    h.load({ cart_id: cartId, product: it.product, qty_base: q, expires_at: new Date(now.getTime() + Number(cfg.minutes || 5) * 60000).toISOString().replace("T", " ") });
+    st().stamp(h, ctx);
+    app.save(h);
+    held.push({ product: it.product, qty_base: q });
+  });
+  return { held };
+}
+
+module.exports = { build, quoteView, complete, voidSale, saleView, newApproval, settlePayments, hold, recall, softHold, openTill, nextNumber, business };

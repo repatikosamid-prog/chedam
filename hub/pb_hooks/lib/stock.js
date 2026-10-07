@@ -526,4 +526,6 @@ function shrink(app, from, to) {
 }
 
 module.exports = { receive, adjust, decide, packBreak, packMake, startCount, countLine, setCountStatus, approveCount,
-  productView, shrink, syncApprovals, takeLots, fefoLots, level, today, statusOf };
+  productView, shrink, syncApprovals, takeLots, fefoLots, level, today, statusOf,
+  // used by selling (lib/sales.js)
+  sealedOf, saveLevel, removeFromLevel, addToLevel, checkAvailable, sealedInner, isLooseUnit, movement, stamp, r3, dbDate, ymd };

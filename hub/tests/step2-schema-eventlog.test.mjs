@@ -92,7 +92,7 @@ try {
   const mods = (await list("modules")).items;
   check("3 core modules, all on", mods.filter((m) => m.kind === "core" && m.enabled).length === 3);
   check("15 switchable modules", mods.filter((m) => m.kind === "switchable").length === 15);
-  check("28 permissions (20 P0, 4 P1 catalogue, 4 P1 stock)", counts.permissions === 28);
+  check("35 permissions (20 P0, 4 P1 catalogue, 4 P1 stock, 7 P1 selling)", counts.permissions === 35);
   check("5 role templates", counts.roles === 5);
   const owner = (await list("roles", "code='owner'")).items[0];
   const manager = (await list("roles", "code='manager'")).items[0];

@@ -39,6 +39,15 @@ const TABLES = {
   stock_movements:      { list: ANY, view: ANY, create: null, update: null, delete: null },
   stock_counts:         { list: ANY, view: ANY, create: null, update: null, delete: null },
   stock_count_lines:    { list: ANY, view: ANY, create: null, update: null, delete: null },
+  // P1 selling: read by sellers and report readers; changed only through /api/chedam/sales and /tills (BR-10)
+  tills:                { list: "sales.sell|sales.view|till.manage", view: "sales.sell|sales.view|till.manage", create: null, update: null, delete: null },
+  cash_movements:       { list: "sales.view|till.manage", view: "sales.view|till.manage", create: null, update: null, delete: null },
+  sales:                { list: "sales.sell|sales.view", view: "sales.sell|sales.view", create: null, update: null, delete: null },
+  sale_lines:           { list: "sales.sell|sales.view", view: "sales.sell|sales.view", create: null, update: null, delete: null },
+  payments:             { list: "sales.sell|sales.view", view: "sales.sell|sales.view", create: null, update: null, delete: null },
+  tax_exemptions:       { list: "sales.view", view: "sales.view", create: null, update: null, delete: null },
+  holds:                { list: "sales.sell", view: "sales.sell", create: null, update: null, delete: null },
+  soft_holds:           { list: "sales.sell", view: "sales.sell", create: null, update: null, delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".
@@ -374,7 +383,7 @@ function overrideCheck(e, app, actor, rec) {
 // DL-72: costs and margins only for people with costs.view (not cashiers). Applied to every record
 // the API returns (lists, views, realtime) through onRecordEnrich.
 const COST_FIELDS = { products: ["cost_cents"], price_history: ["old_cents", "new_cents"], stock_lots: ["cost_cents"],
-  stock_movements: ["cost_cents", "value_cents", "lots_taken"] };
+  stock_movements: ["cost_cents", "value_cents", "lots_taken"], sales: ["cost_cents"], sale_lines: ["cost_cents", "lots"] };
 
 function hideCosts(e) {
   const name = e.record.collection().name;
