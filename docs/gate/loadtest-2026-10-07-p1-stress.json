@@ -1,0 +1,77 @@
+{
+  "at": "2026-10-08T06:24:33.568Z",
+  "seconds": 602,
+  "tills": 5,
+  "seconds_between_sales": 1.5,
+  "people": [
+    "Cal Cashier",
+    "Mira Manager",
+    "Demo Owner",
+    "Cal Cashier",
+    "Mira Manager"
+  ],
+  "sales_online": 541,
+  "sales_offline": 30,
+  "returns": 70,
+  "voids": 22,
+  "requests": 6230,
+  "errors": 3,
+  "by_status": {
+    "200": 6227,
+    "400": 3
+  },
+  "failures": {
+    "400 SALE (payment to receipt) - Not enough 'Cola 355 mL can (Case of 2 x 12)' even after opening packs.": 1,
+    "400 SALE (payment to receipt) - Not enough 'Sparkling water 500 mL (6-pack)' even after opening packs.": 1,
+    "400 POST /api/chedam/sales/:id/void - Items of this sale were returned. Use a return instead.": 1
+  },
+  "payment_to_receipt_ms": {
+    "p50": 478,
+    "p95": 1191,
+    "max": 2203
+  },
+  "latency_p95_ms": {
+    "GET /api/collections/users/records": 167,
+    "POST /api/chedam/devices/pairing-code": 75,
+    "POST /api/chedam/devices/pair": 63,
+    "POST /api/chedam/auth/pin": 590,
+    "GET /api/chedam/sales/offline-pack": 149,
+    "POST /api/chedam/stock/receive": 128,
+    "POST /api/chedam/tills/open": 102,
+    "POST /api/chedam/sales/quote": 463,
+    "GET /api/chedam/catalogue/lookup": 392,
+    "SALE (payment to receipt)": 1191,
+    "GET /api/chedam/returns/sale/:id": 677,
+    "POST /api/chedam/returns/quote": 434,
+    "POST /api/chedam/returns": 621,
+    "GET /api/chedam/reports/tills": 3022,
+    "GET /api/chedam/audit": 701,
+    "GET /api/chedam/tills/current": 1063,
+    "POST /api/chedam/sales/:id/void": 980,
+    "OFFLINE upload": 2580,
+    "OFFLINE repeat": 2624,
+    "POST /api/chedam/tills/:id/close": 632,
+    "GET /api/collections/sales/records": 2079,
+    "GET /api/collections/stock_movements/records": 1791,
+    "GET /api/collections/stock_levels/records": 26,
+    "GET /api/collections/events/records": 601
+  },
+  "checks": {
+    "confirmed_sales_missing": 0,
+    "duplicate_receipt_numbers": 0,
+    "offline_repeats_not_answered_with_first": 0,
+    "sales_in_hub": 571,
+    "confirmed_sales": 571,
+    "stock_not_matching_movements": 0,
+    "z_reports_not_matching_sales": [],
+    "sale_audit_entries": 571
+  },
+  "pass": {
+    "NFR-02 no lost or duplicated sales": true,
+    "stock = sum of movements": true,
+    "Z reports = sales": true,
+    "every sale in the audit log": true,
+    "NFR-05 payment to receipt < 1 s (p95)": false,
+    "no server errors (5xx)": true
+  }
+}

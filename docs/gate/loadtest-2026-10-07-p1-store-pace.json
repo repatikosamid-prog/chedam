@@ -1,0 +1,72 @@
+{
+  "at": "2026-10-08T06:46:58.613Z",
+  "seconds": 606,
+  "tills": 5,
+  "seconds_between_sales": 15,
+  "people": [
+    "Cal Cashier",
+    "Mira Manager",
+    "Demo Owner",
+    "Cal Cashier",
+    "Mira Manager"
+  ],
+  "sales_online": 156,
+  "sales_offline": 30,
+  "returns": 16,
+  "voids": 5,
+  "requests": 1100,
+  "errors": 0,
+  "by_status": {
+    "200": 1100
+  },
+  "failures": {},
+  "payment_to_receipt_ms": {
+    "p50": 470,
+    "p95": 1128,
+    "max": 2505
+  },
+  "latency_p95_ms": {
+    "GET /api/collections/users/records": 404,
+    "POST /api/chedam/devices/pairing-code": 86,
+    "POST /api/chedam/devices/pair": 43,
+    "POST /api/chedam/auth/pin": 588,
+    "GET /api/chedam/sales/offline-pack": 130,
+    "POST /api/chedam/stock/receive": 132,
+    "POST /api/chedam/tills/open": 89,
+    "GET /api/chedam/catalogue/lookup": 210,
+    "POST /api/chedam/sales/quote": 687,
+    "SALE (payment to receipt)": 1128,
+    "GET /api/chedam/returns/sale/:id": 647,
+    "POST /api/chedam/returns/quote": 393,
+    "POST /api/chedam/returns": 414,
+    "GET /api/chedam/reports/tills": 1466,
+    "GET /api/chedam/audit": 495,
+    "GET /api/chedam/tills/current": 467,
+    "POST /api/chedam/sales/:id/void": 284,
+    "OFFLINE upload": 2709,
+    "OFFLINE repeat": 1922,
+    "POST /api/chedam/tills/:id/close": 257,
+    "GET /api/collections/sales/records": 1524,
+    "GET /api/collections/stock_movements/records": 1661,
+    "GET /api/collections/stock_levels/records": 20,
+    "GET /api/collections/events/records": 564
+  },
+  "checks": {
+    "confirmed_sales_missing": 0,
+    "duplicate_receipt_numbers": 0,
+    "offline_repeats_not_answered_with_first": 0,
+    "sales_in_hub": 186,
+    "confirmed_sales": 186,
+    "stock_not_matching_movements": 0,
+    "z_reports_not_matching_sales": [],
+    "sale_audit_entries": 186
+  },
+  "pass": {
+    "NFR-02 no lost or duplicated sales": true,
+    "stock = sum of movements": true,
+    "Z reports = sales": true,
+    "every sale in the audit log": true,
+    "NFR-05 payment to receipt < 1 s (p95)": false,
+    "no server errors (5xx)": true
+  }
+}
