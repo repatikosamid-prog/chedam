@@ -126,6 +126,14 @@ try {
   check("without costs.view: the cost change is not shown", hid.items.every((x) => !x.fields.some((f) => f.field === "cost_cents")) && JSON.stringify(hid).indexOf('"cost_cents"') < 0, JSON.stringify(hid.items[0]).slice(0, 300));
   check("pages of 50 with 'more'", (await M.get("/api/chedam/audit")).json.items.length === 50 && (await M.get("/api/chedam/audit")).json.more === true);
 
+  console.log("Cost tables: page size and hidden costs (P1 gate findings)");
+  check("more than 200 products a page refused for app users (memory on the Pi)", (await M.get("/api/collections/products/records?perPage=500")).status === 400
+    && (await M.get("/api/collections/products/records?perPage=200")).status === 200);
+  const rl = (await C.get("/api/collections/return_lines/records?perPage=50")).json.items, rt = (await C.get("/api/collections/returns/records?perPage=50")).json.items;
+  check("a cashier does not see the cost of returned goods (returns, return lines)", rl.length > 0 && rt.length > 0 && rl.every((x) => x.cost_cents === undefined) && rt.every((x) => x.cost_cents === undefined),
+    JSON.stringify(rl[0]).slice(0, 200));
+  check("a manager does", (await M.get("/api/collections/return_lines/records?perPage=50")).json.items.every((x) => x.cost_cents !== undefined));
+
   console.log("Retention (FR-10.09, BR-34)");
   const del = await t.su_("DELETE", `/api/collections/sales/records/${cardSale.id}`);
   check("even the admin account cannot delete a sale inside 6 years", del.status === 400 && /kept for 6 years/.test(del.json.message), JSON.stringify(del.json));

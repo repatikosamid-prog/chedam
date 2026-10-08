@@ -189,6 +189,13 @@ function guard(e, action) {
   const app = e.app;
   // For update/delete/view the existing record decides self/assignee; for create there is none yet.
   const existing = action === "create" || action === "list" ? null : e.record;
+  // Lists of tables with costs: at most 200 a page. Every record runs the cost hook (lib/costs_hook.js),
+  // and a page of 500 took the Pi Zero's hub past 200 MB (P1 gate load test, 2026-10-07).
+  if (action === "list" && COST_FIELDS[name]) {
+    const q = (e.requestInfo().query || {});
+    const per = Number(q.perPage || 30);
+    if (per > 200) throw new BadRequestError("Ask for at most 200 " + name.replace(/_/g, " ") + " at a time (perPage).");
+  }
   const how = match(app, spec, user, existing);
   if (!how) forbid("You do not have permission for this.");
 

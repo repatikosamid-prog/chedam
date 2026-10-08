@@ -9,8 +9,9 @@ onRecordCreateRequest((e) => { require(`${__hooks}/lib/access.js`).guard(e, "cre
 onRecordUpdateRequest((e) => { require(`${__hooks}/lib/access.js`).guard(e, "update"); e.next(); });
 onRecordDeleteRequest((e) => { require(`${__hooks}/lib/access.js`).guard(e, "delete"); e.next(); });
 
-// Fields some people may not see (DL-72: costs and margins).
-onRecordEnrich((e) => { require(`${__hooks}/lib/access.js`).hideCosts(e); e.next(); }, "products", "price_history", "stock_lots", "stock_movements", "sales", "sale_lines");
+// Fields some people may not see (DL-72: costs and margins). lib/costs_hook.js is small: it runs per record.
+onRecordEnrich((e) => { require(`${__hooks}/lib/costs_hook.js`).hide(e); e.next(); },
+  "products", "price_history", "stock_lots", "stock_movements", "sales", "sale_lines", "returns", "return_lines");
 
 // ---- Password sign-in: same lockout as PINs; only active people -------------------------------
 onRecordAuthWithPasswordRequest((e) => {

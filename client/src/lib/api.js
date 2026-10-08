@@ -62,6 +62,19 @@ export async function api(method, path, body, { timeout = 6000 } = {}) {
 }
 
 // Multipart request (file uploads such as the logo). Same headers as api(), no JSON body.
+// Every page of a collection list, `perPage` at a time (the hub refuses more than 200 a page for tables
+// with costs: each record costs it memory, P1 gate). path: "/api/collections/x/records?filter=..."
+export async function apiAll(path, perPage = 200) {
+  const items = [];
+  for (let page = 1; page <= 500; page++) {
+    const r = await api("GET", path + (path.includes("?") ? "&" : "?") + "perPage=" + perPage + "&page=" + page, null, { timeout: 15000 });
+    if (!r.ok) return r;
+    items.push(...r.json.items);
+    if (page >= r.json.totalPages) break;
+  }
+  return { ok: true, status: 200, json: { items } };
+}
+
 export async function apiForm(method, path, form, { timeout = 20000 } = {}) {
   if (hubDown) return DOWN;
   const h = { "X-Chedam-Version": VERSION };

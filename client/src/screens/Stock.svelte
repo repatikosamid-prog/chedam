@@ -3,7 +3,7 @@
   // reorder point, ok); search, filter. Entry point to receiving, counts, approvals and the shrink report.
   import ExportMenu from "../components/ExportMenu.svelte";
   import { onMount } from "svelte";
-  import { api } from "../lib/api.js";
+  import { api, apiAll } from "../lib/api.js";
   import { s, go, can, handleRefusal } from "../lib/session.svelte.js";
   import { qty } from "../lib/catalogue.js";
 
@@ -12,8 +12,8 @@
 
   onMount(async () => {
     const [p, l] = await Promise.all([
-      api("GET", "/api/collections/products/records?perPage=1000&sort=name&fields=id,name,base_unit,reorder_point,status&filter=" + encodeURIComponent("deleted_at='' && status!='archived'")),
-      api("GET", "/api/collections/stock_levels/records?perPage=1000&fields=product,on_hand,loose_qty,sealed"),
+      apiAll("/api/collections/products/records?sort=name&fields=id,name,base_unit,reorder_point,status&filter=" + encodeURIComponent("deleted_at='' && status!='archived'")),
+      apiAll("/api/collections/stock_levels/records?fields=product,on_hand,loose_qty,sealed", 500),
     ]);
     loading = false;
     if (!p.ok) { if (!(await handleRefusal(p))) error = p.message; return; }

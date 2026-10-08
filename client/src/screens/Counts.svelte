@@ -2,7 +2,7 @@
   // Stock counts (FR-6.08): start a count, find each product by scanning or searching, enter sealed
   // packs and loose items, see the variance, submit; a manager approves (variance applied) or cancels.
   import { onMount } from "svelte";
-  import { api } from "../lib/api.js";
+  import { api, apiAll } from "../lib/api.js";
   import { go, can, handleRefusal } from "../lib/session.svelte.js";
   import { qty } from "../lib/catalogue.js";
   import Scanner from "../components/Scanner.svelte";
@@ -22,12 +22,12 @@
   }
   async function loadLines() {
     if (!cur) return;
-    const r = await api("GET", "/api/collections/stock_count_lines/records?perPage=1000&sort=-counted_at&filter=" + encodeURIComponent(`count='${cur.id}'`));
+    const r = await apiAll("/api/collections/stock_count_lines/records?sort=-counted_at&filter=" + encodeURIComponent(`count='${cur.id}'`), 500);
     if (r.ok) {
       lines = r.json.items;
       const need = lines.map((l) => l.product).filter((id) => !names[id]);
       if (need.length) {
-        const p = await api("GET", "/api/collections/products/records?perPage=1000&fields=id,name,base_unit&filter=" + encodeURIComponent(need.map((i) => `id='${i}'`).join(" || ")));
+        const p = await apiAll("/api/collections/products/records?fields=id,name,base_unit&filter=" + encodeURIComponent(need.map((i) => `id='${i}'`).join(" || ")));
         if (p.ok) { const n = { ...names }; p.json.items.forEach((x) => (n[x.id] = x)); names = n; }
       }
     }
