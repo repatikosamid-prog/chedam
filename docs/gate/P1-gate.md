@@ -21,7 +21,7 @@ Section 13 "Phase gate (every phase)" for P1, with the NFRs that apply. Automate
 | NFR | Target | Measured (Pi Zero 2 W) | Status |
 | --- | --- | --- | --- |
 | NFR-02 no lost or duplicated sales | 0 | 0 in all load and power tests (2,000+ sales) | **pass** |
-| NFR-05 payment to receipt | < 1 s | Hub time per sale: median **0.45 s**; 95th percentile **1.1-1.7 s** when several tills pay at once or offline uploads arrive together. Laptop: median 0.1-0.2 s | **not met at the 95th percentile on the Pi Zero** (DL-107) |
+| NFR-05 payment to receipt | < 1 s | Hub time per sale: median **0.45 s**; 95th percentile **1.1-1.7 s** when several tills pay at once or offline uploads arrive together. Laptop: median 0.1-0.2 s | **not met at the 95th percentile on the Pi Zero** (DL-107); accepted for the pilot, Pi 4 hub later (Sreya, 2026-10-08) |
 | NFR-07 devices on the pilot hub | 5 | 5 tills selling together, 0 server errors | **pass** |
 | NFR-08 hub memory | < 150 MB | Store pace (5 tills, a sale every ~15 s each): levels off at ~99 MB, peak 138 MB. Stress (a sale every ~1.5 s each): up to 148 MB while selling | **pass** at store pace; stress is at the edge |
 | NFR-09 power pull mid-sale | survives | 3/3 software resets; 10 real pulls with Sreya | partly done |
