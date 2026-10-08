@@ -55,7 +55,7 @@ async function all(col, filter = "") {
 
 // ---- Setup: tills paired and signed in (cashiers and managers), stock received, tills opened
 const people = (await su("GET", "/api/collections/users/records?perPage=50")).json.items;
-const sellers = ["Cal Cashier", "Mira Manager", "Demo Owner"].filter((n) => PIN[n]);
+const sellers = ["Mira Manager", "Cal Cashier", "Demo Owner"].filter((n) => PIN[n]);
 const tills = [];
 for (let i = 0; i < TILLS; i++) {
   const code = (await su("POST", "/api/chedam/devices/pairing-code", { name: "Load till " + (i + 1), type: "till" })).json.code;

@@ -113,6 +113,16 @@ function addLot(app, productId, qty, cost, opts, ctx) {
 
 // FEFO (BR-14): lots with the earliest expiry first, lots without expiry last, then oldest received.
 // Expired lots are skipped unless allowExpired (write-offs and counts may take them; sales may not).
+// The lots of a product in the order they are sold (FEFO), once: {all, fresh, freshQty, allQty}. fresh leaves
+// out expired lots; both keep the same order as fefoLots().
+function lotsOf(app, productId) {
+  const now = today();
+  const all = fefoLots(app, productId, { allowExpired: true });
+  const fresh = all.filter((l) => !l.getString("expiry_date") || ymd(l.getString("expiry_date")) >= now);
+  const sum = (a) => a.reduce((s, x) => s + x.getFloat("qty"), 0);
+  return { all: all, fresh: fresh, allQty: sum(all), freshQty: sum(fresh) };
+}
+
 function fefoLots(app, productId, opts) {
   const now = today();
   return app.findRecordsByFilter("stock_lots", "product = {:p} && qty > 0 && deleted_at = ''", "received_at", 0, 0, { p: productId })
@@ -124,11 +134,12 @@ function fefoLots(app, productId, opts) {
     });
 }
 
-// Takes qty from lots. dry: only work out which lots and the value. Returns {taken, value, short}.
+// Takes qty from lots. dry: only work out which lots and the value. lots: the lots to take from, already
+// read and in order (saves reading them again). Returns {taken, value, short}.
 function takeLots(app, productId, qty, opts, ctx) {
   let left = r3(qty), value = 0;
   const taken = [];
-  fefoLots(app, productId, opts).forEach((l) => {
+  (opts.lots || fefoLots(app, productId, opts)).forEach((l) => {
     if (left <= 0) return;
     const t = Math.min(left, l.getFloat("qty"));
     taken.push({ lot: l.id, qty: r3(t), cost_cents: l.getFloat("cost_cents"), expiry: ymd(l.getString("expiry_date")) });
@@ -541,6 +552,6 @@ function shrink(app, from, to) {
 }
 
 module.exports = { receive, adjust, decide, packBreak, packMake, startCount, countLine, setCountStatus, approveCount,
-  productView, shrink, syncApprovals, takeLots, fefoLots, level, today, statusOf,
+  productView, shrink, syncApprovals, takeLots, fefoLots, lotsOf, level, today, statusOf,
   // used by selling (lib/sales.js)
   sealedOf, saveLevel, removeFromLevel, addToLevel, checkAvailable, sealedInner, isLooseUnit, movement, stamp, r3, dbDate, ymd };

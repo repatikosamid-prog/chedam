@@ -73,10 +73,12 @@ function amountOf(d, gross) {
   return Math.min(v, gross);
 }
 
-function ratesOf(app, classId, exemptTypes) {
+// cache: {classId: rates} kept for one sale, so each tax class is looked up once (a line asks up to 4 times).
+function ratesOf(app, classId, exemptTypes, cache) {
   if (!classId) return [];
-  return require(`${__hooks}/lib/tax.js`).ratesFor(app, classId)
-    .filter((t) => exemptTypes.indexOf(t.code) < 0).map((t) => ({ code: t.code, label: t.label, rate: t.rate }));
+  const all = cache && cache[classId] ? cache[classId] : require(`${__hooks}/lib/tax.js`).ratesFor(app, classId);
+  if (cache) cache[classId] = all;
+  return all.filter((t) => exemptTypes.indexOf(t.code) < 0).map((t) => ({ code: t.code, label: t.label, rate: t.rate }));
 }
 
 function moduleOn(app, code) { return require(`${__hooks}/lib/catalogue.js`).moduleOn(app, code); }
@@ -106,6 +108,8 @@ function build(app, input, actor) {
   }
 
   const out = [];
+  const taxCache = {};
+  const regulated = moduleOn(app, "regulated_items");
   lines.forEach((ln, i) => {
     const key = String(ln.key || "l" + i);
     let p, u;
@@ -153,16 +157,16 @@ function build(app, input, actor) {
     // Deposits and eco fees (FR-3.07), per base unit
     let deposit = 0, depositRates = [], depositFull = [];
     const fees = p.get("deposits_fees") || [];
-    if (fees.length && moduleOn(app, "regulated_items")) {
+    if (fees.length && regulated) {
       app.findRecordsByIds("deposits_fees", fees).forEach((f) => {
         if (!f.getBool("active") || f.getString("deleted_at")) return;
         deposit += core().roundHalfUp(f.getInt("amount_cents") * base);
-        depositRates = ratesOf(app, f.getString("tax_class"), exemptTypes);
-        depositFull = ratesOf(app, f.getString("tax_class"), []);
+        depositRates = ratesOf(app, f.getString("tax_class"), exemptTypes, taxCache);
+        depositFull = ratesOf(app, f.getString("tax_class"), [], taxCache);
       });
     }
     out.push({ key, p, u, name, qty, base, tare, regular, price, reason, gross, ld, deposit,
-      rates: ratesOf(app, p.getString("tax_class"), exemptTypes), fullRates: ratesOf(app, p.getString("tax_class"), []),
+      rates: ratesOf(app, p.getString("tax_class"), exemptTypes, taxCache), fullRates: ratesOf(app, p.getString("tax_class"), [], taxCache),
       depositRates, depositFull,
       age_checked: !!ln.age_checked, break_pack: !!ln.break_pack });
   });
@@ -224,9 +228,8 @@ function stockCheck(app, live, cartId, problems, need) {
       }
     });
     // Expired lots (BR-14)
-    const fresh = st().fefoLots(app, pid, { allowExpired: false }).reduce((a, x) => a + x.getFloat("qty"), 0);
-    const all = st().fefoLots(app, pid, { allowExpired: true }).reduce((a, x) => a + x.getFloat("qty"), 0);
-    if (want > fresh + 1e-9 && all > fresh + 1e-9) need("Sell expired '" + p.getString("name") + "'");
+    const lots = st().lotsOf(app, pid);
+    if (want > lots.freshQty + 1e-9 && lots.allQty > lots.freshQty + 1e-9) need("Sell expired '" + p.getString("name") + "'");
   });
 }
 
@@ -457,8 +460,8 @@ function complete(app, input, ctx, internal) {
         st().removeFromLevel(app, l.p, l.u, st().isLooseUnit(l.u) ? l.base : l.qty, lv, sealed);
         st().saveLevel(app, lv, sealed, ctx);
         // Expired lots only when fresh ones are not enough (the sale was approved for it, BR-14).
-        const fresh = st().fefoLots(app, l.p.id, { allowExpired: false }).reduce((a, x) => a + x.getFloat("qty"), 0);
-        const t = st().takeLots(app, l.p.id, l.base, { allowExpired: fresh + 1e-9 < l.base }, ctx);
+        const have = st().lotsOf(app, l.p.id);
+        const t = st().takeLots(app, l.p.id, l.base, { lots: have.freshQty + 1e-9 < l.base ? have.all : have.fresh }, ctx);
         lots = t.taken; cost = t.value;
         st().movement(app, { product: l.p.id, type: "sale", qty_base: -l.base, selling_unit: l.u.id, unit_qty: l.qty, lots_taken: lots,
           cost_cents: l.base ? Math.round((cost / l.base) * 10000) / 10000 : 0, value_cents: -cost, ref_collection: "sales", ref_id: id,

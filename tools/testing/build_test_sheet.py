@@ -12,7 +12,7 @@ from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 
-OUT = Path(__file__).resolve().parents[2] / "docs" / "testing" / "Chedam-Manual-Tests-P1-1-9.xlsx"
+OUT = Path(__file__).resolve().parents[2] / "docs" / "testing" / "Chedam-Manual-Tests-P1-1-10.xlsx"
 
 # (id, area, device / needs, what to do, what should happen)
 TESTS = [
@@ -125,6 +125,13 @@ TESTS = [
     ("K06", "Reports", "Laptop", "Audit log as a person without costs.view (if you set one up)", "Cost changes are not shown"),
     ("K07", "Reports", "Laptop", "Admin dashboard (https://chedam.local/_/): try to delete a sale", "Refused: kept for 6 years"),
     ("K08", "Reports", "Laptop", "Export each report (CSV / Excel / PDF)", "Files open with the same rows"),
+    # ---- L. P1 gate (step 10): with real devices; Claude runs the tools when you are ready
+    ("L01", "P1 gate", "Laptop + iPhone + Android", "Sign in on three devices at once (laptop, iPhone, Android 9) and ring up sales on all three for 10 minutes; one also returns, one opens the till offline", "All sales on the Sales list; Z reports right; nothing stuck in 'waiting to upload'"),
+    ("L02", "P1 gate", "Android 9", "Scan a barcode with the Android phone's camera (Sell or Stock → Receive)", "The product is found (iPhone already confirmed 2026-10-07)"),
+    ("L03", "P1 gate", "Pi + laptop", "Power pull mid-sale ×10: Claude starts tools/powertest/sale-writer.mjs; pull the Pi's plug while it sells, wait 5 s, plug back in; 10 times", "Every cycle PASS: no confirmed sale lost or half-saved, stock consistent, databases ok"),
+    ("L04", "P1 gate", "Pi + spare SD card", "Restore drill: the newest backup onto a spare card (docs/P0-backup-restore.md), time it", "Under 15 minutes; sales, stock and people as before; tills sign in"),
+    ("L05", "P1 gate", "Laptop", "Look at Reports → Tills after the 3-device test", "Each till reconciled; no unexplained flags"),
+    ("L06", "P1 gate", "Store", "Pilot: use Chedam in the store for at least one week", "No lost sales; issues written down"),
     # ---- I. Reliability
     ("I01", "Reliability", "Pi", "Pull the Pi's power while nothing is happening; plug back in", "Back within ~2 minutes; tills reconnect by themselves"),
     ("I02", "Reliability", "Pi + till", "Pull the Pi's power during a sale", "Till finishes offline; uploads after the Pi is back; nothing lost or doubled"),
@@ -189,13 +196,13 @@ def build():
 
     g = wb.create_sheet("Before you start")
     for line in [
-        "Chedam manual tests: P0 + P1 steps 1-9 (sheet made 2026-10-07)",
+        "Chedam manual tests: P0 + P1 steps 1-10 (sheet made 2026-10-07)",
         "",
         "Address: https://chedam.local on every device (pairing is remembered per address).",
         "Sample people: Demo Owner, Mira Manager, Cal Cashier, Sam Staff (PINs as in the sample data; Demo Owner's PIN was changed).",
         "Temporary business numbers are in use (A09). Replace them before selling for real.",
         "Rows marked NEEDS PRINTER wait for the receipt printer and cash drawer: mark them Blocked for now.",
-        "Reports (K) need step 9 on the Pi.",
+        "The gate checks (L) are done with Claude: say when the devices are ready.",
         "For each row: do what it says, compare with 'What should happen', choose Pass / Fail / Blocked, and write what happened when it is not a Pass.",
         "A screenshot or photo of any Fail helps: note its file name in Notes.",
     ]:

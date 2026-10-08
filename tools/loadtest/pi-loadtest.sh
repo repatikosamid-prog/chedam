@@ -3,6 +3,7 @@
 # same PocketBase binary, hooks, migrations and memory settings as chedam-hub.service, its own data folder,
 # 127.0.0.1:8099 only, plus a memory sampler (every 2 s, VmRSS/VmHWM of the test hub).
 #   ssh chedam 'bash -s start' < tools/loadtest/pi-loadtest.sh     -> prints a superuser token file path
+#   ssh chedam 'POOL=6 bash -s start' < ...                         -> with 6 JS engines instead of PocketBase's 15
 #   ssh chedam 'bash -s report' < tools/loadtest/pi-loadtest.sh    -> memory summary
 #   ssh chedam 'bash -s stop'  < tools/loadtest/pi-loadtest.sh     -> stops and deletes everything
 set -euo pipefail
@@ -16,7 +17,7 @@ start)
   # Same limits as the service: GOMEMLIMIT=100MiB, MemoryHigh=150M, MemoryMax=220M
   sudo systemd-run --quiet --unit=chedam-loadtest -p User=chedam-hub -p MemoryHigh=150M -p MemoryMax=220M \
     -E GOMEMLIMIT=100MiB /opt/chedam/bin/pocketbase serve --http=127.0.0.1:8099 --dir=$W/pb_data \
-    --hooksDir=/opt/chedam/pb_hooks --migrationsDir=$W/pb_migrations --publicDir=/opt/chedam/pb_public
+    --hooksDir=/opt/chedam/pb_hooks --migrationsDir=$W/pb_migrations --publicDir=/opt/chedam/pb_public --hooksPool=${POOL:-15}
   for i in $(seq 1 60); do curl -sf http://127.0.0.1:8099/api/health >/dev/null && break; sleep 1; done
   PW=$(head -c 24 /dev/urandom | base64 | tr -dc A-Za-z0-9 | head -c 24)
   sudo -u chedam-hub /opt/chedam/bin/pocketbase superuser upsert loadtest@chedam.test "Pw$PW" --dir=$W/pb_data >/dev/null
