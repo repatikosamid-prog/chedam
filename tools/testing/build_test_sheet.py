@@ -12,7 +12,7 @@ from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 
-OUT = Path(__file__).resolve().parents[2] / "docs" / "testing" / "Chedam-Manual-Tests-P1-1-7.xlsx"
+OUT = Path(__file__).resolve().parents[2] / "docs" / "testing" / "Chedam-Manual-Tests-P1-1-8.xlsx"
 
 # (id, area, device / needs, what to do, what should happen)
 TESTS = [
@@ -105,6 +105,17 @@ TESTS = [
     ("H08", "Labels", "Laptop", "Label of a product with a size (B06) and of bananas", "Unit price per 100 g / 100 mL; bananas price per kg with PLU"),
     ("H09", "Labels", "Laptop", "New layout that is too wide for the page", "Refused, says by how much"),
     ("H10", "Labels", "Laptop", "Template: turn on French name and origin", "Both appear on the labels"),
+    # ---- J. Import and export (step 8; after step 8 is on the Pi)
+    ("J01", "Import and export", "Laptop", "Home → Import and export: choose a product file exported from another system (or a spreadsheet you made)", "Shows the file type, rows and a preview; column names row found"),
+    ("J02", "Import and export", "Laptop", "Next: columns", "Each column has a suggested field with high / medium / low; change any that are wrong"),
+    ("J03", "Import and export", "Laptop", "Next: values: match categories and tax values; choose options", "Existing categories matched; new ones marked to be created; tax values set"),
+    ("J04", "Import and export", "Laptop", "Next: check; look at Errors, Drafts, Warnings, Already there", "Duplicate barcodes and bad values shown with the line number; nothing saved yet"),
+    ("J05", "Import and export", "Laptop", "Fix one row; exclude one row; 'Set for the rows shown' a category", "Check runs again; counts change"),
+    ("J06", "Import and export", "Laptop", "Import", "Done in seconds; counts match the check; products appear in Products (Drafts with reasons)"),
+    ("J07", "Import and export", "Laptop", "Import a file with an error you did not fix or exclude (Import stays disabled), then a file of 2001 rows", "Cannot import with errors; 2001 rows refused"),
+    ("J08", "Import and export", "Laptop", "Import as Sam Staff", "New products come in as Drafts for a manager to activate"),
+    ("J09", "Import and export", "Laptop", "Products / Stock / Sales → Export → CSV, Excel, PDF", "Files open in Excel / a PDF reader with the rows shown on screen"),
+    ("J10", "Import and export", "Laptop (owner)", "Import and export → Download everything (zip)", "Zip with tables (CSV, JSON), data dictionary and README; no passwords or PINs inside"),
     # ---- I. Reliability
     ("I01", "Reliability", "Pi", "Pull the Pi's power while nothing is happening; plug back in", "Back within ~2 minutes; tills reconnect by themselves"),
     ("I02", "Reliability", "Pi + till", "Pull the Pi's power during a sale", "Till finishes offline; uploads after the Pi is back; nothing lost or doubled"),
@@ -169,13 +180,13 @@ def build():
 
     g = wb.create_sheet("Before you start")
     for line in [
-        "Chedam manual tests: P0 + P1 steps 1-7 (sheet made 2026-10-07)",
+        "Chedam manual tests: P0 + P1 steps 1-8 (sheet made 2026-10-07)",
         "",
         "Address: https://chedam.local on every device (pairing is remembered per address).",
         "Sample people: Demo Owner, Mira Manager, Cal Cashier, Sam Staff (PINs as in the sample data; Demo Owner's PIN was changed).",
         "Temporary business numbers are in use (A09). Replace them before selling for real.",
         "Rows marked NEEDS PRINTER wait for the receipt printer and cash drawer: mark them Blocked for now.",
-        "Labels (H) need step 7 on the Pi.",
+        "Import and export (J) needs step 8 on the Pi.",
         "For each row: do what it says, compare with 'What should happen', choose Pass / Fail / Blocked, and write what happened when it is not a Pass.",
         "A screenshot or photo of any Fail helps: note its file name in Notes.",
     ]:
