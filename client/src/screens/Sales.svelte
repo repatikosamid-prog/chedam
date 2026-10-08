@@ -1,6 +1,7 @@
 <script>
   // Recent sales: find by receipt number, open the receipt, reprint, void while the till is open
   // (manager, FR-3.11). Managers and the accountant also see the tax-exempt sales report (FR-4.05).
+  import ExportMenu from "../components/ExportMenu.svelte";
   import { onMount } from "svelte";
   import { api } from "../lib/api.js";
   import { go, can, handleRefusal } from "../lib/session.svelte.js";
@@ -48,7 +49,11 @@
       <button class="mb-1 min-h-10 text-sm underline" onclick={() => (sale ? (sale = null) : go("sell"))}>← {sale ? "Sales" : "Sell"}</button>
       <h1 class="text-xl font-bold">{sale ? sale.number : "Sales"}</h1>
     </div>
-    {#if !sale && can("sales.view")}<button class="btn-ghost" onclick={showExempt}>Tax-exempt report</button>{/if}
+    {#if !sale}<div class="flex flex-wrap gap-2">
+      <ExportMenu title="Sales" rows={list} columns={[{ key: "number", label: "Receipt" }, { key: "completed_at", label: "Date" },
+        { key: "total", label: "Total", value: (x) => ((x.total_cents + x.rounding_cents) / 100).toFixed(2) }, { key: "tax", label: "Tax", value: (x) => ((x.tax_cents || 0) / 100).toFixed(2) },
+        { key: "status", label: "Status" }, { key: "training", label: "Training" }, { key: "offline_ref", label: "Offline receipt" }]} />
+      {#if can("sales.view")}<button class="btn-ghost" onclick={showExempt}>Tax-exempt report</button>{/if}</div>{/if}
   </div>
   {#if error}<p role="alert" class="rounded-xl bg-bad/10 px-3 py-2 text-bad">{error}</p>{/if}
 

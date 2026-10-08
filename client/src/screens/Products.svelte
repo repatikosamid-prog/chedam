@@ -1,6 +1,7 @@
 <script>
   // Product list (FR-5.01, 5.02): search by name, barcode or PLU; filter by category and status;
   // the default unit's price and, for people with costs.view, the margin (DL-72). Drafts show why.
+  import ExportMenu from "../components/ExportMenu.svelte";
   import { onMount } from "svelte";
   import { api } from "../lib/api.js";
   import { s, go, can, handleRefusal } from "../lib/session.svelte.js";
@@ -74,6 +75,11 @@
       <h1 class="text-xl font-bold">Products</h1>
     </div>
     <div class="flex flex-wrap gap-2">
+      <ExportMenu title="Products" rows={items} columns={[{ key: "name", label: "Name" }, { key: "category", label: "Category", value: (p) => catName(p.category) },
+        { key: "status", label: "Status" }, { key: "unit", label: "Unit", value: (p) => (main(p) || {}).name || "" },
+        { key: "price", label: "Price", value: (p) => (main(p) ? (main(p).price_cents / 100).toFixed(2) : "") },
+        { key: "barcode", label: "Barcode", value: (p) => ((main(p) || {}).barcodes || [])[0] || "" }, { key: "plu", label: "PLU" },
+        ...(can("costs.view") ? [{ key: "cost", label: "Cost (per base unit)", value: (p) => (p.cost_cents !== undefined ? (p.cost_cents / 100).toFixed(2) : "") }] : [])]} />
       {#if can("catalogue.edit")}<button class="btn-ghost" onclick={() => go("categories")}>Categories</button>{/if}
       <button class="btn-ghost" onclick={() => go("tax")}>Tax</button>
       {#if can("catalogue.edit")}<button class="btn" onclick={() => open("")}>Add product</button>{/if}

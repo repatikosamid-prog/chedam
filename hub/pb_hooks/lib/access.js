@@ -59,6 +59,8 @@ const TABLES = {
   label_templates:      { list: "labels.manage", view: "labels.manage", create: "labels.manage", update: "labels.manage", delete: null },
   label_batches:        { list: "labels.manage", view: "labels.manage", create: null, update: null, delete: null },
   label_batch_items:    { list: "labels.manage", view: "labels.manage", create: null, update: null, delete: null },
+  // P1 import (step 8): written only by /api/chedam/imports.
+  import_jobs:          { list: "catalogue.edit", view: "catalogue.edit", create: null, update: null, delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".

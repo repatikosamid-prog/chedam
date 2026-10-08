@@ -19,7 +19,11 @@
   "dependencies": {
     "@zxing/library": "0.23.0",
     "dexie": "4.4.6",
+    "fflate": "0.8.3",
+    "hyparquet": "1.31.2",
     "jspdf": "4.2.1",
-    "qrcode-generator": "2.0.4"
+    "papaparse": "5.7.0",
+    "qrcode-generator": "2.0.4",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }

@@ -209,7 +209,7 @@ function afterWrite(app, record, action) {
     const now = action === "delete" ? 0 : record.getInt("price_cents");
     if (was !== now) history(app, record.getString("product"), record.id, "price", was, now, actor, device);
     // BR-25: a new price (or a new unit on sale) goes to the label batch.
-    if (was !== now && action !== "delete") require(`${__hooks}/lib/labels.js`).autoPrice(app, record, actor, device);
+    if (was !== now && action !== "delete" && !record.get("@nolabels")) require(`${__hooks}/lib/labels.js`).autoPrice(app, record, actor, device);
     // Packs and cases built on this unit follow its size (their base_qty is recomputed on save).
     if (action !== "delete") {
       app.findRecordsByFilter("selling_units", "contains_unit = {:u} && deleted_at = ''", "", 0, 0, { u: record.id }).forEach((o) => {
@@ -233,7 +233,7 @@ function afterWrite(app, record, action) {
     const now = action === "delete" ? 0 : record.getInt("cost_cents");
     if (was !== now) history(app, record.id, "", "cost", was, now, actor, device);
     // BR-25: a product going on sale gets its labels.
-    if (action !== "delete" && record.getString("status") === "active" && !record.getString("deleted_at") && (action === "create" || prev.status !== "active")) {
+    if (action !== "delete" && !record.get("@nolabels") && record.getString("status") === "active" && !record.getString("deleted_at") && (action === "create" || prev.status !== "active")) {
       require(`${__hooks}/lib/labels.js`).autoNewProduct(app, record, actor, device);
     }
     syncDraftsTask(app);

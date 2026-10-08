@@ -176,6 +176,12 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
+      {#if can("catalogue.edit") || can("data.export")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("data")}>
+          <span class="font-semibold">Import and export</span>
+          <span class="text-sm text-muted">Product file import, full data export</span>
+        </button>
+      {/if}
       {#if can("labels.manage") && modules.some((m) => m.module === "labels")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("labels")}>
           <span class="font-semibold">Labels</span>

@@ -8,95 +8,21 @@
 routerAdd("POST", "/api/chedam/catalogue/products", (e) => {
   const access = require(`${__hooks}/lib/access.js`);
   const devices = require(`${__hooks}/lib/devices.js`);
-  const cat = require(`${__hooks}/lib/catalogue.js`);
   const su = e.hasSuperuserAuth();
   if (!su) {
     if (!access.isActive(e.auth)) throw new UnauthorizedError("Sign in first.");
     if (!access.can(e.app, e.auth, "catalogue.edit")) throw new ForbiddenError("You do not have permission for this.");
   }
   const body = e.requestInfo().body || {};
-  const inP = body.product || {};
-  const inUnits = Array.isArray(body.units) ? body.units : [];
-  if (inUnits.length > 20) throw new BadRequestError("At most 20 selling units per product.");
-  const actor = su ? "system:superuser" : devices.actorOf(e);
-  const dev = devices.currentId(e);
-  const PRODUCT_FIELDS = ["name", "name_fr", "category", "base_unit", "tax_class", "cost_cents", "plu", "pos_button", "reorder_point",
-    "description", "tare", "scale_code", "scale_ack", "perishable", "shelf_life_days", "expiry_at_receiving", "storage_area",
-    "age_restricted", "min_age", "deposits_fees", "imported", "hs_code", "origin_country", "non_returnable",
-    "size_qty", "size_unit"];
-  const UNIT_FIELDS = ["name", "kind", "contains_qty", "contains_unit", "barcodes", "price_cents", "sell_at_pos", "is_default", "sort"];
-  const ID = /^[a-z0-9]{15}$/;
-  const stamp = (r) => {
-    if (r.isNew()) { r.set("created_by", actor); if (dev) r.set("device_id", dev); }
-    r.set("updated_by", actor); r.set("@actor", actor); r.set("@device", dev); r.set("@batch", true);
-  };
-  const mayPrice = su || access.can(e.app, e.auth, "prices.edit");
-
+  const opts = { actor: su ? "system:superuser" : devices.actorOf(e), device: devices.currentId(e), su: su,
+    mayPrice: su || access.can(e.app, e.auth, "prices.edit") };
   let productId = "";
-  let problems = [];
   let refused = null;   // BR-07 problems: answered as a list after the transaction rolled back
   try {
     e.app.runInTransaction((tx) => {
-      let p;
-      if (inP.id && !ID.test(String(inP.id))) throw new BadRequestError("Invalid product id.");
-      try { p = inP.id ? tx.findRecordById("products", inP.id) : null; } catch (_) { p = null; }
-      const wasActive = !!p && p.getString("status") === "active";
-      if (p && p.getString("deleted_at")) throw new BadRequestError("This product was removed.");
-      if (!p) {
-        p = new Record(tx.findCollectionByNameOrId("products"));
-        if (inP.id) p.set("id", inP.id);
-        p.set("status", "draft");
-      }
-      PRODUCT_FIELDS.forEach((f) => { if (inP[f] !== undefined) p.set(f, inP[f]); });
-      stamp(p);
-      tx.save(p);
-      productId = p.id;
-
-      // Units that contain other units of this request are saved after them.
-      const pending = inUnits.slice();
-      const saved = {};
-      for (let pass = 0; pending.length && pass < 8; pass++) {
-        for (let i = 0; i < pending.length; i++) {
-          const u = pending[i];
-          const inner = u.contains_unit;
-          if (inner && pending.some((o) => o !== u && o.id === inner)) continue;
-          let r;
-          if (u.id && !ID.test(String(u.id))) throw new BadRequestError("Invalid selling unit id.");
-          try { r = u.id ? tx.findRecordById("selling_units", u.id) : null; } catch (_) { r = null; }
-          if (r && r.getString("product") !== p.id) throw new BadRequestError("A selling unit belongs to another product.");
-          const oldPrice = r ? r.getInt("price_cents") : 0;
-          if (!r) {
-            r = new Record(tx.findCollectionByNameOrId("selling_units"));
-            if (u.id) r.set("id", u.id);
-            r.set("product", p.id);
-          }
-          UNIT_FIELDS.forEach((f) => { if (u[f] !== undefined) r.set(f, u[f]); });
-          if (u.deleted) r.set("deleted_at", new DateTime());
-          if (wasActive && !mayPrice && (r.getInt("price_cents") !== oldPrice || u.deleted)) {
-            throw new ForbiddenError("Changing the price of an active product needs prices.edit.");
-          }
-          stamp(r);
-          tx.save(r);
-          saved[r.id] = true;
-          pending.splice(i, 1); i--;
-        }
-      }
-      if (pending.length) throw new BadRequestError("Packs contain each other in a loop.");
-
-      // Final state, checked once with every unit in place (BR-07).
-      problems = cat.problems(tx, p, cat.unitsOf(tx, p.id));
-      const wantActive = wasActive || !!body.activate;
-      if (body.activate && !wasActive && !mayPrice) throw new ForbiddenError("Making a product active needs prices.edit.");
-      if (wantActive && problems.length && (wasActive || !body.keep_draft)) {
-        refused = problems;
-        throw new BadRequestError("This product cannot be active yet.");
-      }
-      const status = wantActive && !problems.length ? "active" : p.getString("status");
-      if (status !== p.getString("status") || p.getString("draft_reasons") !== JSON.stringify(problems)) {
-        p.set("status", status);
-        stamp(p);
-        tx.save(p);
-      }
+      const r = require(`${__hooks}/lib/catalogue_save.js`).saveProduct(tx, body, opts);
+      productId = r.productId;
+      if (r.refused) { refused = r.refused; throw new BadRequestError("This product cannot be active yet."); }
     });
   } catch (err) {
     if (!refused) throw err;

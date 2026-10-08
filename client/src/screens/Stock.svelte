@@ -1,6 +1,7 @@
 <script>
   // Stock list (FR-6.01): every product's stock with a colour status (out, low = at or under its
   // reorder point, ok); search, filter. Entry point to receiving, counts, approvals and the shrink report.
+  import ExportMenu from "../components/ExportMenu.svelte";
   import { onMount } from "svelte";
   import { api } from "../lib/api.js";
   import { s, go, can, handleRefusal } from "../lib/session.svelte.js";
@@ -46,6 +47,9 @@
       <h1 class="text-xl font-bold">Stock</h1>
     </div>
     <div class="flex flex-wrap gap-2">
+      <ExportMenu title="Stock" rows={shown} columns={[{ key: "name", label: "Product" }, { key: "status", label: "Product status" },
+        { key: "on_hand", label: "On hand", value: (p) => (levels[p.id] ? levels[p.id].on_hand : 0) }, { key: "base_unit", label: "Unit" },
+        { key: "reorder_point", label: "Reorder point" }, { key: "stock", label: "Stock", value: (p) => LABEL[status(p)] }]} />
       {#if can("stock.approve")}<button class="btn-ghost" onclick={() => go("approvals")}>Approvals{pending ? " (" + pending + ")" : ""}</button>{/if}
       {#if can("costs.view")}<button class="btn-ghost" onclick={() => go("shrink")}>Shrink report</button>{/if}
       {#if can("stock.count")}<button class="btn-ghost" onclick={() => go("counts")}>Counts</button>{/if}
