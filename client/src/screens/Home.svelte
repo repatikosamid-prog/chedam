@@ -176,6 +176,12 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
+      {#if can("sales.view") || can("till.manage") || can("events.view")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("reports")}>
+          <span class="font-semibold">Reports</span>
+          <span class="text-sm text-muted">Till reconciliation, loss prevention, audit log</span>
+        </button>
+      {/if}
       {#if can("catalogue.edit") || can("data.export")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("data")}>
           <span class="font-semibold">Import and export</span>

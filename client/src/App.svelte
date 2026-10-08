@@ -18,6 +18,7 @@
   import Returns from "./screens/Returns.svelte";
   import Labels from "./screens/Labels.svelte";
   import ImportExport from "./screens/ImportExport.svelte";
+  import Reports from "./screens/Reports.svelte";
   import Setup from "./screens/Setup.svelte";
   import Recovery from "./screens/Recovery.svelte";
   import Wizard from "./screens/Wizard.svelte";
@@ -105,6 +106,7 @@
   {:else if s.screen === "returns"}<Returns />
   {:else if s.screen === "labels"}<Labels />
   {:else if s.screen === "data"}<ImportExport />
+  {:else if s.screen === "reports"}<Reports />
   {:else if s.screen === "setup"}<Setup />
   {:else if s.screen === "recovery"}<Recovery />
   {:else if s.screen === "wizard"}<Wizard />

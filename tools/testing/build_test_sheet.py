@@ -12,7 +12,7 @@ from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 
-OUT = Path(__file__).resolve().parents[2] / "docs" / "testing" / "Chedam-Manual-Tests-P1-1-8.xlsx"
+OUT = Path(__file__).resolve().parents[2] / "docs" / "testing" / "Chedam-Manual-Tests-P1-1-9.xlsx"
 
 # (id, area, device / needs, what to do, what should happen)
 TESTS = [
@@ -116,6 +116,15 @@ TESTS = [
     ("J08", "Import and export", "Laptop", "Import as Sam Staff", "New products come in as Drafts for a manager to activate"),
     ("J09", "Import and export", "Laptop", "Products / Stock / Sales → Export → CSV, Excel, PDF", "Files open in Excel / a PDF reader with the rows shown on screen"),
     ("J10", "Import and export", "Laptop (owner)", "Import and export → Download everything (zip)", "Zip with tables (CSV, JSON), data dictionary and README; no passwords or PINs inside"),
+    # ---- K. Reports (step 9; after step 9 is on the Pi)
+    ("K01", "Reports", "Laptop", "After closing a till: Home → Reports → Tills", "The till with sales, cash expected / counted / over or short, cards; flags such as 'Card settlement not entered'"),
+    ("K02", "Reports", "Laptop + card terminal", "Reconcile: enter the terminal's end-of-day total and batch number for that till", "Balanced: reconciled. Not balanced: asks for a note, then reconciled with the note"),
+    ("K03", "Reports", "Till + Pi", "Make a sale offline on a till, close the till, then switch the Pi on", "Tills shows '1 sale arrived after closing'"),
+    ("K04", "Reports", "Laptop", "Reports → Loss prevention for the week; tap a cashier", "Voids, removed lines, discounts, overrides, no-sales, refunds per cashier; flags; the events with times and receipts"),
+    ("K05", "Reports", "Laptop", "Reports → Audit log: filter by a person, by Products, by a receipt number", "Who, when, which device; open a row: before → after"),
+    ("K06", "Reports", "Laptop", "Audit log as a person without costs.view (if you set one up)", "Cost changes are not shown"),
+    ("K07", "Reports", "Laptop", "Admin dashboard (https://chedam.local/_/): try to delete a sale", "Refused: kept for 6 years"),
+    ("K08", "Reports", "Laptop", "Export each report (CSV / Excel / PDF)", "Files open with the same rows"),
     # ---- I. Reliability
     ("I01", "Reliability", "Pi", "Pull the Pi's power while nothing is happening; plug back in", "Back within ~2 minutes; tills reconnect by themselves"),
     ("I02", "Reliability", "Pi + till", "Pull the Pi's power during a sale", "Till finishes offline; uploads after the Pi is back; nothing lost or doubled"),
@@ -180,13 +189,13 @@ def build():
 
     g = wb.create_sheet("Before you start")
     for line in [
-        "Chedam manual tests: P0 + P1 steps 1-8 (sheet made 2026-10-07)",
+        "Chedam manual tests: P0 + P1 steps 1-9 (sheet made 2026-10-07)",
         "",
         "Address: https://chedam.local on every device (pairing is remembered per address).",
         "Sample people: Demo Owner, Mira Manager, Cal Cashier, Sam Staff (PINs as in the sample data; Demo Owner's PIN was changed).",
         "Temporary business numbers are in use (A09). Replace them before selling for real.",
         "Rows marked NEEDS PRINTER wait for the receipt printer and cash drawer: mark them Blocked for now.",
-        "Import and export (J) needs step 8 on the Pi.",
+        "Reports (K) need step 9 on the Pi.",
         "For each row: do what it says, compare with 'What should happen', choose Pass / Fail / Blocked, and write what happened when it is not a Pass.",
         "A screenshot or photo of any Fail helps: note its file name in Notes.",
     ]:
