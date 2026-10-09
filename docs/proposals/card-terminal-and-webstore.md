@@ -64,5 +64,5 @@ Option A fits Chedam's rules best: offline first, the store owns its data, and n
 
 1. **Processor:** link the system **the store already has** (Square, Clover or another); a new store without one starts with Square. So the common payment interface (FR-3.22) is built with the first link, and Square is the first adapter; Clover and others follow as stores need them.
 2. **When:** the linked terminal stays in **P5**, as planned.
-3. **Web store:** **added to the plan**. Option still to confirm: A (recommended), B or C. Pick-up first.
+3. **Web store:** **added to the plan**, **option A** (Chedam storefront on a static host; the hub stays private). Pick-up first.
 4. **Domain and DNS:** the **store owner** manages them. Chedam's web store set-up will show the exact DNS record to add.

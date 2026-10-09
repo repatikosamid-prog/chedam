@@ -10,7 +10,7 @@ Chedam is built in agile sprints: **one phase of the Master Specification (Secti
 | 3 | P3 Buy and spend | Purchasing, vendors, expenses | Planned |
 | 4 | P4 People and money | Staff, payroll inputs, accounting | Planned |
 | 5 | P5 Connect and enrich | Integrations (linked card terminal: the store's own processor, DL-114), product data | Planned |
-| 6 | Web store | Online shop fed by the store's stock (added 2026-10-09, DL-114; phase to be placed) | Planned |
+| 6 | Web store | Online shop fed by the store's stock (added 2026-10-09, DL-114, option A: Chedam publishes the shop to a static host; phase to be placed) | Planned |
 
 ## How a sprint runs
 
