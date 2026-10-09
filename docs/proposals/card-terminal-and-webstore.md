@@ -60,9 +60,9 @@ Option A fits Chedam's rules best: offline first, the store owns its data, and n
 
 **Rough build order (A):** product photos and "show online" → site generator with publishing to the host → processor checkout links → order import as pick-up orders with stock holds → order screen for staff → policies pages → tests, including stock racing between the till and the web.
 
-## Decisions needed (Sreya)
+## Decisions (Sreya, 2026-10-09, DL-114)
 
-1. **Q3:** which processor first: Square, or compare Helcim and Stripe on cost? Does the pilot store already have a Square account or terminal (or a Clover)?
-2. Should the linked terminal stay in **P5**, or come right after the P1 release?
-3. Web store: add it to the plan? If so, which option (A, B or C)? Pick-up only to start?
-4. Which domain and sub-address should the shop use, and who has access to the domain's DNS settings?
+1. **Processor:** link the system **the store already has** (Square, Clover or another); a new store without one starts with Square. So the common payment interface (FR-3.22) is built with the first link, and Square is the first adapter; Clover and others follow as stores need them.
+2. **When:** the linked terminal stays in **P5**, as planned.
+3. **Web store:** **added to the plan**. Option still to confirm: A (recommended), B or C. Pick-up first.
+4. **Domain and DNS:** the **store owner** manages them. Chedam's web store set-up will show the exact DNS record to add.
