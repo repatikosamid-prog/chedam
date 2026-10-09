@@ -47,7 +47,7 @@
     if (!(c >= 0)) { error = "Enter the card terminal's total for this till (0 if no cards)."; return; }
     const r = await api("POST", `/api/chedam/reports/tills/${recon.id}/reconcile`, { card_settlement_cents: c, settlement_ref: recon.ref, note: recon.note });
     if (!r.ok) return fail(r);
-    ok = "Till " + r.json.number + " reconciled."; recon = null; load();
+    ok = "Till " + r.json.number + " (Z " + r.json.shift + ") reconciled as batch " + r.json.batch_no + "."; recon = null; load();
   }
 
   const show = (v) => (v === null || v === undefined || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
@@ -79,27 +79,28 @@
         { key: "closed_by", label: "Closed by" }, { key: "sales", label: "Sales" }, { key: "total", label: "Total", value: (x) => x.total_cents / 100 },
         { key: "exp", label: "Cash expected", value: (x) => x.expected_cash_cents / 100 }, { key: "cnt", label: "Cash counted", value: (x) => (x.counted_cents === null ? "" : x.counted_cents / 100) },
         { key: "var", label: "Cash over/short", value: (x) => (x.cash_variance_cents === null ? "" : x.cash_variance_cents / 100) }, { key: "card", label: "Cards", value: (x) => x.card_cents / 100 },
-        { key: "term", label: "Terminal", value: (x) => (x.card_settlement_cents === null ? "" : x.card_settlement_cents / 100) }, { key: "settlement_ref", label: "Batch" },
+        { key: "term", label: "Terminal", value: (x) => (x.card_settlement_cents === null ? "" : x.card_settlement_cents / 100) }, { key: "batch_no", label: "Batch" }, { key: "settlement_ref", label: "Terminal ref" },
         { key: "late_sales", label: "Sales after closing" }, { key: "reconciled_by", label: "Reconciled by" }, { key: "note", label: "Note" }, { key: "flags", label: "Flags", value: (x) => x.flags.join("; ") }]} />
     </div>
     {#each rec.tills as x (x.id)}
       <div class="card space-y-1 {x.flags.length ? 'border-warn' : ''}">
         <div class="flex flex-wrap justify-between gap-2">
-          <p class="font-semibold">Till {x.number} · {x.device} · {when(x.opened_at)}{x.closed_at ? " – " + when(x.closed_at) : " (open)"}</p>
+          <p class="font-semibold">Till {x.number} · Z {x.shift} · {x.device} · {when(x.opened_at)}{x.closed_at ? " – " + when(x.closed_at) : " (open)"}{x.batch_no ? " · Batch " + x.batch_no : ""}</p>
           <p class="text-sm {x.reconciled_at ? 'text-ok' : 'text-muted'}">{x.reconciled_at ? "Reconciled by " + x.reconciled_by : x.status === "closed" ? "Not reconciled" : "Open"}</p>
         </div>
         <p class="text-sm">{x.sales} sales · {money(x.total_cents)}{x.returns_cents ? " · returns " + money(x.returns_cents) : ""} · opened by {x.opened_by}{x.closed_by ? ", closed by " + x.closed_by : ""}</p>
         <p class="text-sm">Cash: expected {money(x.expected_cash_cents)}{x.counted_cents !== null ? ", counted " + money(x.counted_cents) + " (" + (x.cash_variance_cents === 0 ? "balanced" : (x.cash_variance_cents < 0 ? "short " : "over ") + money(Math.abs(x.cash_variance_cents))) + ")" : ""}
-          · Cards: {money(x.card_cents)}{x.card_settlement_cents !== null ? ", terminal " + money(x.card_settlement_cents) + (x.settlement_ref ? " (batch " + x.settlement_ref + ")" : "") : ""}</p>
+          · Cards: {money(x.card_cents)}{x.card_settlement_cents !== null ? ", terminal " + money(x.card_settlement_cents) + (x.settlement_ref ? " (terminal ref " + x.settlement_ref + ")" : "") : ""}</p>
         {#each x.flags as fl (fl)}<p class="text-sm text-warn">⚠ {fl}</p>{/each}
         {#if x.note}<p class="text-sm text-muted">Note: {x.note}</p>{/if}
         {#if x.status === "closed" && can("till.manage")}
           {#if recon && recon.id === x.id}
-            <form class="grid gap-2 sm:grid-cols-3" onsubmit={reconcile}>
+            <form class="grid gap-2 sm:grid-cols-2" onsubmit={reconcile}>
               <label class="block"><span class="text-sm text-muted">Card terminal total for this till ($)</span><input class="field" inputmode="decimal" bind:value={recon.amount} /></label>
-              <label class="block"><span class="text-sm text-muted">Batch number (from the terminal's report)</span><input class="field" bind:value={recon.ref} maxlength="60" /></label>
+              <p class="block"><span class="block text-sm text-muted">Batch number</span><span class="flex min-h-12 items-center font-semibold">{x.batch_no || "Given when you reconcile"}</span></p>
+              <label class="block"><span class="text-sm text-muted">Terminal's own reference (optional)</span><input class="field" bind:value={recon.ref} maxlength="60" /></label>
               <label class="block"><span class="text-sm text-muted">Note (needed when it does not balance)</span><input class="field" bind:value={recon.note} maxlength="500" /></label>
-              <div class="flex gap-2 sm:col-span-3"><button class="btn" type="submit">Reconcile</button><button class="btn-ghost" type="button" onclick={() => (recon = null)}>Cancel</button></div>
+              <div class="flex gap-2 sm:col-span-2"><button class="btn" type="submit">Reconcile</button><button class="btn-ghost" type="button" onclick={() => (recon = null)}>Cancel</button></div>
             </form>
           {:else}
             <button class="btn-ghost min-h-10 text-sm" onclick={() => (recon = { id: x.id, amount: ((x.card_settlement_cents ?? x.card_cents) / 100).toFixed(2), ref: x.settlement_ref, note: x.note })}>{x.reconciled_at ? "Change" : "Reconcile"}</button>

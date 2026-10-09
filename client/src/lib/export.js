@@ -82,14 +82,30 @@ export function exportFiles(dict, tables, at) {
   return files;
 }
 
-// The full export: fetches every table page by page, then one zip. onProgress(text)
-export async function fullExport(api, onProgress = () => {}) {
+// What the owner can choose to export (2026-10-09): tables grouped the way the store thinks of them.
+// A table not listed here (a later phase's) goes under "Other", so nothing is ever left out of "Everything".
+export const GROUPS = [
+  ["products", "Products and prices", ["categories", "products", "selling_units", "price_history", "tax_types", "tax_rates", "tax_classes", "deposits_fees", "storage_areas"]],
+  ["stock", "Stock", ["stock_levels", "stock_lots", "stock_movements", "stock_counts", "stock_count_lines"]],
+  ["sales", "Sales", ["sales", "sale_lines", "payments", "tax_exemptions", "holds", "soft_holds"]],
+  ["transactions", "Tills, returns and refunds", ["tills", "cash_movements", "returns", "return_lines", "refunds", "store_credits"]],
+  ["people", "People and devices", ["users", "roles", "permissions", "permission_overrides", "devices"]],
+  ["store", "Store settings", ["business", "locations", "settings", "modules", "label_layouts", "label_templates"]],
+  ["records", "Audit log and records", ["events", "tasks", "import_jobs", "backups", "updates", "label_batch_items", "label_batches"]],
+];
+export function groupOf(table) { const g = GROUPS.find((x) => x[2].includes(table)); return g ? g[0] : "other"; }
+
+// The export: the chosen tables (all when `only` is empty), page by page, then one file: a zip (CSV + JSON
+// + dictionary) or an Excel workbook (one sheet per table, plus the dictionary). onProgress(text)
+export async function fullExport(api, onProgress = () => {}, { only = null, format = "zip" } = {}) {
   const d = await api("GET", "/api/chedam/export/dictionary");
   if (!d.ok) throw new Error(d.message);
+  const dict = only && only.length ? d.json.tables.filter((t) => only.includes(groupOf(t.table))) : d.json.tables;
+  if (!dict.length) throw new Error("Choose what to export.");
   const tables = {};
   let n = 0;
-  for (const t of d.json.tables) {
-    onProgress("Reading " + t.table + " (" + ++n + " of " + d.json.tables.length + ")");
+  for (const t of dict) {
+    onProgress("Reading " + t.table + " (" + ++n + " of " + dict.length + ")");
     tables[t.table] = [];
     for (let page = 1; ; page++) {
       const r = await api("GET", "/api/chedam/export/table/" + t.table + "?per_page=1000&page=" + page, null, { timeout: 60000 });
@@ -98,8 +114,23 @@ export async function fullExport(api, onProgress = () => {}) {
       if (page >= r.json.pages) break;
     }
   }
+  const rows = Object.values(tables).reduce((a, r) => a + r.length, 0);
+  const name = "chedam-export-" + (only && only.length && dict.length < d.json.tables.length ? only.join("-") + "-" : "") + stamp();
+  if (format === "xlsx") {
+    onProgress("Making the workbook…");
+    const XLSX = await import("xlsx");
+    const wb = XLSX.utils.book_new();
+    const sheet = (aoa) => XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, sheet([["table", "description", "rows", "field", "type", "note"],
+      ...dict.flatMap((t) => t.fields.map((f) => [t.table, t.description, t.rows, f.name, f.type, f.note || (f.links_to ? "links to " + f.links_to : "")]))]), "Dictionary");
+    dict.forEach((t) => XLSX.utils.book_append_sheet(wb, sheet([t.fields.map((f) => f.name),
+      ...tables[t.table].map((r) => t.fields.map((f) => { const v = r[f.name]; return v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : v; }))]), t.table.substring(0, 31)));
+    const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+    download(name + ".xlsx", new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    return { tables: dict.length, rows, bytes: out.byteLength };
+  }
   onProgress("Making the zip…");
-  const zip = zipSync(exportFiles(d.json.tables, tables, d.json.at), { level: 6 });
-  download("chedam-export-" + stamp() + ".zip", new Blob([zip], { type: "application/zip" }));
-  return { tables: d.json.tables.length, rows: Object.values(tables).reduce((a, r) => a + r.length, 0), bytes: zip.length };
+  const zip = zipSync(exportFiles(dict, tables, d.json.at), { level: 6 });
+  download(name + ".zip", new Blob([zip], { type: "application/zip" }));
+  return { tables: dict.length, rows, bytes: zip.length };
 }

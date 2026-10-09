@@ -98,7 +98,7 @@ export function quoteOffline(cart, ix, perms) {
     const ld = amountOf(ln.discount, gross);
     if (ld > 0) {
       if (!perms.discount) problems.push({ key: ln.key, type: "discount", message: "You cannot give discounts." });
-      else if (gross && (ld / gross) * 100 > s.discount_limit_pct + 1e-9) needApproval("Discount on '" + p.name + "' above " + s.discount_limit_pct + "%", ln.key);
+      else if (core.discountPct(ln.discount, ld, gross) > s.discount_limit_pct + 1e-9) needApproval("Discount on '" + p.name + "' above " + s.discount_limit_pct + "%", ln.key);
     }
     if (p.age_restricted && !ln.age_checked) problems.push({ key: ln.key, type: "age", message: "Check ID: '" + p.name + "' is " + p.min_age + "+." });
     let deposit = 0, depositRates = [], depositFull = [];
@@ -111,17 +111,17 @@ export function quoteOffline(cart, ix, perms) {
     }
     const rates = ratesFor(ix, p.tax_class, exemptTypes);
     lines.push({ key: ln.key, name, product: p.id, selling_unit: u.id, qty, base_qty: base, tare, regular_price_cents: regular, price_cents: price,
-      gross_cents: gross, line_discount_cents: ld, deposit_cents: deposit, age_restricted: !!p.age_restricted, min_age: p.min_age,
+      gross_cents: gross, line_discount_cents: ld, discount_label: ld ? core.discountLabel(ln.discount) : "", deposit_cents: deposit, age_restricted: !!p.age_restricted, min_age: p.min_age,
       _rates: rates, _full: ratesFor(ix, p.tax_class, []), _dep: depositRates, _depFull: depositFull });
     upload.push({ key: ln.key, product: p.id, selling_unit: u.id, name, qty, tare, regular_price_cents: regular, price_cents: price, override_reason: reason,
-      gross_cents: gross, line_discount_cents: ld, rates, deposit_cents: deposit, deposit_rates: depositRates, age_checked: !!ln.age_checked });
+      gross_cents: gross, line_discount_cents: ld, discount_label: ld ? core.discountLabel(ln.discount) : "", rates, deposit_cents: deposit, deposit_rates: depositRates, age_checked: !!ln.age_checked });
   }
   const live = lines.filter((l) => !l.voided);
   const after = live.reduce((a, l) => a + Math.max(0, l.gross_cents - l.line_discount_cents), 0);
   const cartDisc = amountOf(cart.cart_discount, after);
   if (cartDisc > 0) {
     if (!perms.discount) problems.push({ type: "discount", message: "You cannot give discounts." });
-    else if (after && (cartDisc / after) * 100 > s.discount_limit_pct + 1e-9) needApproval("Cart discount above " + s.discount_limit_pct + "%");
+    else if (core.discountPct(cart.cart_discount, cartDisc, after) > s.discount_limit_pct + 1e-9) needApproval("Sale discount above " + s.discount_limit_pct + "%");
   }
   const toCore = (full) => live.map((l) => ({ key: l.key, gross_cents: l.gross_cents, line_discount_cents: l.line_discount_cents,
     rates: full ? l._full : l._rates, deposit_cents: l.deposit_cents, deposit_rates: full ? l._depFull : l._dep }));
@@ -134,6 +134,7 @@ export function quoteOffline(cart, ix, perms) {
     lines: lines.map((l) => l.voided ? l : { ...l, _rates: undefined, _full: undefined, _dep: undefined, _depFull: undefined,
       cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, taxes: pl[l.key].taxes }),
     tax_mode: ix.tax_mode, subtotal_cents: priced.subtotal_cents, discount_cents: priced.discount_cents, cart_discount_cents: cartDisc,
+    cart_discount_label: cartDisc ? core.discountLabel(cart.cart_discount) : "",
     taxes: priced.taxes, tax_cents: priced.tax_cents, deposit_cents: priced.deposit_cents, total_cents: priced.total_cents,
     cash_total_cents: core.cashRound(priced.total_cents), exempt, exempt_cents: exemptCents, problems, needs_approval: [], training: !!cart.training,
     upload_lines: upload,

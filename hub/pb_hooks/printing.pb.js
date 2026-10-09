@@ -36,6 +36,17 @@ routerAdd("POST", "/api/chedam/sales/{id}/print", (e) => {
   return e.json(200, require(`${__hooks}/lib/printing.js`).printSale(e.app, e.request.pathValue("id"), c.body, c));
 });
 
+// A reprint printed by the device itself (browser print): needs a manager like any reprint, and is
+// counted. Body: {approval}
+routerAdd("POST", "/api/chedam/sales/{id}/reprint", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "sales.sell");
+  return e.json(200, require(`${__hooks}/lib/printing.js`).reprintLocal(e.app, "sales", e.request.pathValue("id"), c.body, c));
+});
+routerAdd("POST", "/api/chedam/returns/{id}/reprint", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "sales.return");
+  return e.json(200, require(`${__hooks}/lib/printing.js`).reprintLocal(e.app, "returns", e.request.pathValue("id"), c.body, c));
+});
+
 // The receipt as the printer prints it, as text (preview, and a check without a printer).
 routerAdd("GET", "/api/chedam/sales/{id}/receipt-text", (e) => {
   const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "sales.sell|sales.view");

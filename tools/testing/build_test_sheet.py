@@ -1,10 +1,13 @@
-"""Builds the manual test sheet for Sreya: docs/testing/Chedam-Manual-Tests-P1-1-7.xlsx
+"""Builds the manual test sheet for Sreya: docs/testing/Chedam-Manual-Tests-P1-1-10.xlsx
 
 One row per check: what to do and what should happen, with a Pass / Fail / Blocked / Not tested choice,
 notes, tester and date. A Summary tab counts the results per area. Rerun after adding checks; it
 overwrites the sheet, so fill in a copy (or rename it) once testing starts.
-Usage: python tools/testing/build_test_sheet.py
+--retest: the retest sheet for the fixes and changes from testing feedback (RETEST), in its own file,
+so the main sheet being filled in is left alone.
+Usage: python tools/testing/build_test_sheet.py [--retest]
 """
+import sys
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -139,9 +142,35 @@ TESTS = [
     ("I04", "Reliability", "Laptop", "Next morning: Backups", "Last night's backup listed as verified"),
 ]
 
+# Fixes and changes from Sreya's testing on 2026-10-09 (DL-109..113): retest these on the laptop and iPhone.
+RETEST_OUT = Path(__file__).resolve().parents[2] / "docs" / "testing" / "Chedam-Retest-2026-10-09.xlsx"
+RETEST = [
+    ("R01", "Sell", "Till", "Ring up 3 products; tap ✕ on the middle one", "Only that line goes; totals and tax update at once; the other lines stay"),
+    ("R02", "Sell", "Till", "Tap − on a line with quantity 1", "That line goes (same as ✕)"),
+    ("R03", "Sell", "Till", "Under one product tap 'Discount this item', give 10%", "The line says 'Item discount (10% off) −$…'; no manager needed at exactly 10%"),
+    ("R04", "Sell", "Till", "Give a second product $1.00 off, then 'Sale discount' 5% for the whole sale", "Totals show 'Item discounts' and 'Sale discount (5% off)' on separate lines"),
+    ("R05", "Sell", "Till", "Pay; look at the receipt on screen (and printed, when there is a printer)", "Under each discounted product: 'Discount 10% off' / 'Discount $1.00 off'; then 'Sale discount 5% off' after the subtotal"),
+    ("R06", "Sell", "Till", "After paying, wait without touching the screen", "'Back to selling in 15 s' counts down; the till returns to Sell by itself"),
+    ("R07", "Sell", "Till", "After paying, tap 'Stay here' (or tap Reprint / Void)", "The countdown stops; New sale goes back"),
+    ("R08", "Receipts", "Till", "As a cashier: Sales → open a sale → Reprint", "Asks for a manager: pick a manager, PIN; then it prints. The sale shows 'Reprinted 1 time'"),
+    ("R09", "Receipts", "Till", "As a manager or owner: Reprint", "Prints without asking (it is still counted)"),
+    ("R10", "Receipts", "Till", "Right after a sale: Print receipt, then press it again", "The second press is a reprint and asks for a manager (cashier)"),
+    ("R11", "Till", "Till", "Close the till, open it again (same device)", "Still 'Till 1'; the Z report says 'Till 1 · Z 2' (Z counts the openings)"),
+    ("R12", "Till", "Second device", "Open a till on another device (e.g. the iPhone)", "That device is 'Till 2'; the first stays 'Till 1'"),
+    ("R13", "Reports", "Laptop", "Reports → Tills: reconcile a closed till", "Batch number given by Chedam: B-000001, then B-000002 for the next till; never twice; 'Change' keeps the number"),
+    ("R14", "Stock", "Laptop", "Stock → a product that was received and sold → Recent changes", "Received in green, Sold in blue (Damaged / lost red); a key above the list"),
+    ("R15", "Saving", "Any", "Save something on any screen (category, product, settings, printers, reconcile…)", "'Saved ✓' pops up at the bottom for 2-3 seconds"),
+    ("R16", "Labels", "Laptop", "Labels: 10 labels of one product among others; make the PDF; print at 100% (Actual size)", "Every label shows its own name with its own price right under it; no price sits next to another label's name"),
+    ("R17", "Labels", "iPhone", "Labels → add a category → Make the PDF (also right after an update was installed)", "The PDF opens. If a new version was just installed, the app reloads once by itself and the PDF works"),
+    ("R18", "Import", "Laptop", "Import and export → open 'The columns Chedam reads'", "Table of columns: which are required (Name), needed to sell, optional; with examples"),
+    ("R19", "Import", "Laptop", "Download template (Excel), fill in 2 products, import it", "Columns map by themselves (all 'high'); products imported"),
+    ("R20", "Import", "Laptop + Google Sheets", "Open the CSV template in Google Sheets, fill in, File → Download → .csv, import", "Same as R19"),
+    ("R21", "Export", "Laptop", "Export data: tick only Sales (or Products, People…), choose Excel workbook, download", "Only the chosen data, one sheet per table plus a Dictionary sheet"),
+]
+
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]
 
-def build():
+def build(OUT=OUT, TESTS=TESTS, intro=None):
     wb = Workbook()
     ws = wb.active
     ws.title = "Tests"
@@ -195,7 +224,7 @@ def build():
         s.column_dimensions[col].width = 12
 
     g = wb.create_sheet("Before you start")
-    for line in [
+    for line in intro or [
         "Chedam manual tests: P0 + P1 steps 1-10 (sheet made 2026-10-07)",
         "",
         "Address: https://chedam.local on every device (pairing is remembered per address).",
@@ -216,4 +245,13 @@ def build():
     print(OUT, len(TESTS), "checks")
 
 if __name__ == "__main__":
-    build()
+    if "--retest" in sys.argv:
+        build(RETEST_OUT, RETEST, [
+            "Chedam retest: fixes and changes from testing on 2026-10-09",
+            "",
+            "Test after the update is deployed to the hub (Claude says when). On the laptop and the iPhone; Android later.",
+            "Sample people: Demo Owner, Mira Manager, Cal Cashier, Sam Staff. Reprints by a cashier need a manager's PIN.",
+            "For each row: do what it says, compare with 'What should happen', choose Pass / Fail / Blocked, and write what happened when it is not a Pass.",
+        ])
+    else:
+        build()

@@ -4,19 +4,44 @@
   // paid, opening the drawer for cash. From the store's threshold the buyer's name can be added for a
   // full GST/HST receipt (NFR-14). Reprints are marked COPY and counted on the hub. kind "return": a
   // return slip (the drawer opens for a cash refund).
+  // Reprints need a manager (security): a manager's PIN on the till, unless the person signed in may
+  // approve. A browser reprint is checked and counted on the hub too. Offline receipts (local) are
+  // printed by this device only.
   import { onMount } from "svelte";
   import { money } from "../lib/catalogue.js";
+  import { api } from "../lib/api.js";
+  import { can } from "../lib/session.svelte.js";
   import { pr, loadPrinter, printSale, printReturn } from "../lib/printer.svelte.js";
+  import Approve from "./Approve.svelte";
 
   let { sale, auto = false, local = false, reprint = false, kind = "sale" } = $props();
   let msg = $state(""), bad = $state(false), busy = $state(false), printed = $state(0), buyer = $state(null);
+  let localPrinted = $state(0), need = $state(null);            // need: {where: "hub"|"device", body} waiting for a manager
+  const again = $derived(reprint || printed > 0 || localPrinted > 0);
+
+  // A reprint without approval rights asks a manager first.
+  function ask(where, body = {}) {
+    if (again && !local && !can("sales.approve")) { need = { where, body }; return; }
+    go(where, body);
+  }
+
+  async function go(where, body, approval) {
+    need = null;
+    if (where === "hub") return print({ ...body, approval });
+    if (again && !local) {
+      const r = await api("POST", `/api/chedam/${kind === "return" ? "returns" : "sales"}/${sale.id}/reprint`, { approval }, { quiet: true });
+      if (!r.ok) { bad = true; msg = r.message; return; }
+    }
+    localPrinted++;
+    window.print();
+  }
 
   const hubPrint = $derived(!local && !!pr.mine);
   const full = $derived(kind === "sale" && hubPrint && sale.total_cents >= (pr.options.full_receipt_cents || 15000));
 
   async function print(body) {
     busy = true;
-    const r = await (kind === "return" ? printReturn : printSale)(sale.id, { reprint: reprint || printed > 0, ...body });
+    const r = await (kind === "return" ? printReturn : printSale)(sale.id, { reprint: again, ...body });
     busy = false;
     bad = !r.printed;
     msg = r.printed ? "Printed on " + r.printer + (r.copy ? " (copy " + r.copy + ")" : "") + (r.drawer ? " · drawer opened" : "") : r.error;
@@ -36,12 +61,15 @@
 
 <div class="space-y-2 print:hidden">
   <div class="flex flex-wrap justify-center gap-2">
-    {#if hubPrint}<button class="btn-ghost" disabled={busy} onclick={() => print({})}>{busy ? "Printing…" : reprint || printed ? "Reprint" : kind === "return" ? "Print return slip" : "Print receipt"}</button>{/if}
-    <button class="btn-ghost" onclick={() => window.print()}>{hubPrint ? "Print on this device" : reprint ? "Reprint" : "Print receipt"}</button>
+    {#if hubPrint}<button class="btn-ghost" disabled={busy} onclick={() => ask("hub")}>{busy ? "Printing…" : again ? "Reprint" : kind === "return" ? "Print return slip" : "Print receipt"}</button>{/if}
+    <button class="btn-ghost" onclick={() => ask("device")}>{hubPrint ? (again ? "Reprint on this device" : "Print on this device") : again ? "Reprint" : "Print receipt"}</button>
     {#if full && buyer === null}<button class="btn-ghost" onclick={() => (buyer = "")}>Full tax receipt (name)</button>{/if}
   </div>
+  {#if need}
+    <Approve what={["Reprint " + (sale.number || "this receipt")]} onApproved={(a) => go(need.where, need.body, a.approval)} onCancel={() => (need = null)} />
+  {/if}
   {#if buyer !== null}
-    <form class="flex flex-wrap items-end justify-center gap-2" onsubmit={(e) => { e.preventDefault(); print({ buyer }); buyer = null; }}>
+    <form class="flex flex-wrap items-end justify-center gap-2" onsubmit={(e) => { e.preventDefault(); ask("hub", { buyer }); buyer = null; }}>
       <label class="block text-left"><span class="text-sm text-muted">Customer's name (sales of {money(pr.options.full_receipt_cents)} or more)</span>
         <input class="field" bind:value={buyer} maxlength="80" required /></label>
       <button class="btn" type="submit" disabled={busy}>Print</button>

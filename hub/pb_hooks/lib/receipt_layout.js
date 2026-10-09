@@ -81,13 +81,13 @@ function receipt(sale, opts) {
     if (Number(l.qty) !== 1 || l.price_cents !== l.regular_price_cents) {
       add({ t: "text", s: "  " + qtyText(l.qty) + " x " + money(l.price_cents) + (l.price_cents !== l.regular_price_cents ? " (was " + money(l.regular_price_cents) + ")" : "") });
     }
-    if (l.line_discount_cents) add({ t: "pair", l: "  Discount", r: "-" + money(l.line_discount_cents) });
+    if (l.line_discount_cents) add({ t: "pair", l: "  Discount" + (l.discount_label ? " " + l.discount_label : ""), r: "-" + money(l.line_discount_cents) });
     if (l.deposit_cents) add({ t: "pair", l: "  Deposit/fee", r: money(l.deposit_cents) });
   });
   add({ t: "rule" });
   add({ t: "pair", l: "Subtotal", r: money(sale.subtotal_cents) });
   const cartDisc = (sale.discount_cents || 0) - lines.reduce((a, l) => a + (l.line_discount_cents || 0), 0);
-  if (cartDisc > 0) add({ t: "pair", l: "Cart discount", r: "-" + money(cartDisc) });
+  if (cartDisc > 0) add({ t: "pair", l: "Sale discount" + (sale.cart_discount_label ? " " + sale.cart_discount_label : ""), r: "-" + money(cartDisc) });
   if (sale.deposit_cents) add({ t: "pair", l: "Deposits and fees", r: money(sale.deposit_cents) });
   (sale.taxes || []).forEach((x) => add({ t: "pair", l: x.label + " " + x.rate + "%" + (sale.tax_mode === "tax_included" ? " (incl.)" : ""), r: money(x.tax_cents) }));
   if (sale.exempt) add({ t: "text", s: "Tax exempt: " + (sale.exempt.label || sale.exempt.reason || "") + (sale.exempt.reference ? " - " + sale.exempt.reference : "") });
@@ -184,7 +184,7 @@ function tillReport(z, business, opts) {
   const add = (x) => L.push(x);
   const p = (l, r, bold) => add({ t: "pair", l, r, bold: !!bold });
   add({ t: "text", s: (business && business.name) || "", align: "center", bold: true });
-  add({ t: "text", s: (z.closed_at ? "Z REPORT" : "X REPORT (till still open)") + " - TILL " + z.till, align: "center", bold: true, big: !!z.closed_at });
+  add({ t: "text", s: (z.closed_at ? "Z REPORT" : "X REPORT (till still open)") + " - TILL " + z.till + (z.shift ? " - Z " + z.shift : ""), align: "center", bold: true, big: !!z.closed_at });
   add({ t: "text", s: "Opened " + when(z.opened_at), align: "center" });
   if (z.closed_at) add({ t: "text", s: "Closed " + when(z.closed_at), align: "center" });
   if (o.copy) add({ t: "text", s: "*** COPY ***", align: "center" });

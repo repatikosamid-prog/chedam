@@ -29,12 +29,22 @@ function floatOf(app, body) {
   return { total: c, clean: {} };
 }
 
+// A device keeps its till number (Till 1, Till 2...): the first device that opens a till is Till 1, the
+// next new device Till 2. `number` counts every opening (the shift, its Z report is "Z 12").
+function registerNo(app, deviceId) {
+  const mine = app.findRecordsByFilter("tills", "device = {:d} && register_no > 0", "-opened_at", 1, 0, { d: deviceId });
+  if (mine.length) return mine[0].getInt("register_no");
+  const top = app.findRecordsByFilter("tills", "register_no > 0", "-register_no", 1, 0);
+  return top.length ? top[0].getInt("register_no") + 1 : 1;
+}
+function tillNo(t) { return t.getInt("register_no") || t.getInt("number"); }
+
 function open(app, body, ctx) {
   if (!ctx.device) bad("Tills open on a paired device.");
   if (require(`${__hooks}/lib/sales.js`).openTill(app, ctx.device)) bad("This till is already open.");
   const float = floatOf(app, body);
   const t = new Record(app.findCollectionByNameOrId("tills"));
-  t.load({ number: require(`${__hooks}/lib/sales.js`).nextNumber(app, "till", ctx), device: ctx.device, status: "open",
+  t.load({ number: require(`${__hooks}/lib/sales.js`).nextNumber(app, "till", ctx), register_no: registerNo(app, ctx.device), device: ctx.device, status: "open",
     opened_by: ctx.user ? ctx.user.id : "", opened_at: new DateTime(), float_cents: float.total, float_detail: float.clean });
   st().stamp(t, ctx);
   app.save(t);
@@ -55,7 +65,7 @@ function openOffline(app, body, ctx) {
   }
   const float = floatOf(app, body);
   const other = require(`${__hooks}/lib/sales.js`).openTill(app, ctx.device);
-  const note = other ? "Till " + other.getInt("number") + " was still open on this device." : "";
+  const note = other ? "Till " + tillNo(other) + " (Z " + other.getInt("number") + ") was still open on this device." : "";
   let opener = ctx.user;
   if (body.opened_by) {
     try {
@@ -69,14 +79,14 @@ function openOffline(app, body, ctx) {
   if (dt && dt <= Date.now() + 300000 && dt >= Date.now() - 86400000) { try { at = new DateTime(new Date(dt).toISOString()); } catch (_) { at = new DateTime(); } }
   const t = new Record(app.findCollectionByNameOrId("tills"));
   t.set("id", id);
-  t.load({ number: require(`${__hooks}/lib/sales.js`).nextNumber(app, "till", ctx), device: ctx.device, status: "open",
+  t.load({ number: require(`${__hooks}/lib/sales.js`).nextNumber(app, "till", ctx), register_no: registerNo(app, ctx.device), device: ctx.device, status: "open",
     opened_by: opener ? opener.id : "", opened_at: at, float_cents: float.total, float_detail: float.clean,
     offline: true, device_time: String(body.device_time || "").substring(0, 40), synced_at: new DateTime(), sync_note: note });
   st().stamp(t, ctx);
   app.save(t);
   if (other) {
     const task = new Record(app.findCollectionByNameOrId("tasks"));
-    task.load({ title: "Two tills open on one device: till " + other.getInt("number") + " and till " + t.getInt("number") + " (opened offline). Close till " + other.getInt("number") + ".",
+    task.load({ title: "Two tills open on one device: Z " + other.getInt("number") + " and Z " + t.getInt("number") + " (opened offline). Close Z " + other.getInt("number") + ".",
       kind: "till_variance", source: "rule", rule_key: "till:double:" + t.id, status: "open", priority: "normal", link_collection: "tills", link_id: other.id });
     st().stamp(task, ctx);
     app.save(task);
@@ -170,7 +180,7 @@ function summary(app, t) {
   });
   const expected = t.getInt("float_cents") + cashIn - usdChange - msum("drop") - msum("payout") + msum("float_add") - cashOut;
   return {
-    till: t.getInt("number"), opened_at: t.getString("opened_at"), float_cents: t.getInt("float_cents"),
+    till: tillNo(t), shift: t.getInt("number"), opened_at: t.getString("opened_at"), float_cents: t.getInt("float_cents"),
     sales_count: done.length, items: done.reduce((a, s) => a + s.getFloat("items"), 0),
     gross_cents: sum(done, "subtotal_cents"), discount_cents: sum(done, "discount_cents"), tax_cents: sum(done, "tax_cents"),
     deposit_cents: sum(done, "deposit_cents"), total_cents: sum(done, "total_cents"), rounding_cents: sum(done, "rounding_cents"),
@@ -207,7 +217,7 @@ function close(app, id, body, ctx) {
   const limit = Number(setting(app, "till.variance_task_cents", 500));
   if (Math.abs(z.variance_cents) > limit) {
     const task = new Record(app.findCollectionByNameOrId("tasks"));
-    task.load({ title: "Till " + z.till + " closed " + (z.variance_cents < 0 ? "short" : "over") + " by $" + (Math.abs(z.variance_cents) / 100).toFixed(2),
+    task.load({ title: "Till " + z.till + " (Z " + z.shift + ") closed " + (z.variance_cents < 0 ? "short" : "over") + " by $" + (Math.abs(z.variance_cents) / 100).toFixed(2),
       kind: "till_variance", source: "rule", rule_key: "till:variance:" + t.id, status: "open", priority: "normal", link_collection: "tills", link_id: t.id });
     st().stamp(task, ctx);
     app.save(task);
@@ -216,7 +226,7 @@ function close(app, id, body, ctx) {
 }
 
 function view(app, t) {
-  const v = { id: t.id, number: t.getInt("number"), status: t.getString("status"), device: t.getString("device"),
+  const v = { id: t.id, number: tillNo(t), shift: t.getInt("number"), status: t.getString("status"), device: t.getString("device"),
     opened_at: t.getString("opened_at"), float_cents: t.getInt("float_cents"), closed_at: t.getString("closed_at"),
     offline: t.getBool("offline"), device_time: t.getString("device_time"), sync_note: t.getString("sync_note") };
   if (t.getString("status") === "open") v.summary = summary(app, t);
@@ -224,4 +234,4 @@ function view(app, t) {
   return v;
 }
 
-module.exports = { open, openOffline, cash, close, summary, view, till, mayUse };
+module.exports = { open, openOffline, cash, close, summary, view, till, mayUse, registerNo, tillNo };

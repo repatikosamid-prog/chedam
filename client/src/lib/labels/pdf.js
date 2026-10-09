@@ -66,34 +66,43 @@ function drawLabel(doc, cell, d, f, opts) {
   const s = Math.max(0.55, Math.min(w / 63.5, h / 33.9, 1.8));     // scale against a 63.5 × 33.9 mm label
   const pad = Math.max(1.2, 2 * s);
   const ix = x + pad, iw = w - 2 * pad;
-  let top = y + pad;
-  // Logo, top right
-  let logoW = 0;
-  if (f.logo && opts.logo) {
-    const lh = Math.min(7 * s, h * 0.22);
-    try { doc.addImage(opts.logo, x + w - pad - lh * 1.6, top, lh * 1.6, lh, undefined, "FAST"); logoW = lh * 1.6 + 1; } catch (_) { logoW = 0; }
+  // Name, details and price are one block, centred in the label: the price never sits on the label's
+  // edge, so a sheet that prints a little off (or plain paper) cannot pair it with the next label's name.
+  const nameSize = 9.5 * s, small = 6.5 * s;
+  const logoH = f.logo && opts.logo ? Math.min(7 * s, h * 0.22) : 0;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(nameSize);
+  const lines = doc.splitTextToSize(d.name || "", iw - (logoH ? logoH * 1.6 + 1 : 0)).slice(0, 2);
+  const sub = [f.name_fr && d.name_fr ? d.name_fr : "", sizeText(d)].filter(Boolean).join(" · ");
+  let originText = "";
+  if (f.origin && d.origin) {
+    const fr = d.origin === "CA" ? "Produit du Canada" : "Origine : " + (COUNTRY_FR[d.origin] || COUNTRY[d.origin] || d.origin);
+    originText = "Product of " + (COUNTRY[d.origin] || d.origin) + (f.name_fr ? " / " + fr : "");
+  }
+  const upRow = f.unit_price && unitPrice(d, f.unit_price_basis || "auto") ? small / PT * 1.25 : 0;
+  const headH = Math.max(logoH, lines.length * nameSize / PT * 1.15 + (sub ? small / PT * 1.2 : 0) + (originText ? small / PT * 1.2 : 0));
+  const inner = h - 2 * pad;
+  const rowH = Math.max(0, Math.min(inner - headH, 12 * s + upRow));
+  let top = y + pad + Math.max(0, (inner - headH - rowH) / 2);
+  const blockBottom = top + headH + rowH;
+  // Logo, top right of the block
+  if (logoH) {
+    try { doc.addImage(opts.logo, x + w - pad - logoH * 1.6, top, logoH * 1.6, logoH, undefined, "FAST"); } catch (_) { /* unreadable logo: left off */ }
   }
   // Name (2 lines at most), then the French name and size
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
-  const nameSize = 9.5 * s;
   doc.setFontSize(nameSize);
-  const lines = doc.splitTextToSize(d.name || "", iw - logoW).slice(0, 2);
+  const headTop = top;
   doc.text(lines, ix, top, { baseline: "top" });
   top += lines.length * nameSize / PT * 1.15;
   doc.setFont("helvetica", "normal");
-  const small = 6.5 * s;
   doc.setFontSize(small);
-  const sub = [f.name_fr && d.name_fr ? d.name_fr : "", sizeText(d)].filter(Boolean).join(" · ");
   if (sub) { doc.text(doc.splitTextToSize(sub, iw)[0], ix, top, { baseline: "top" }); top += small / PT * 1.2; }
-  if (f.origin && d.origin) {
-    const fr = d.origin === "CA" ? "Produit du Canada" : "Origine : " + (COUNTRY_FR[d.origin] || COUNTRY[d.origin] || d.origin);
-    const o = "Product of " + (COUNTRY[d.origin] || d.origin) + (f.name_fr ? " / " + fr : "");
-    doc.text(doc.splitTextToSize(o, iw)[0], ix, top, { baseline: "top" });
-    top += small / PT * 1.2;
-  }
-  // Price, bottom right; unit price under it
-  const bottom = y + h - pad;
+  if (originText) { doc.text(doc.splitTextToSize(originText, iw)[0], ix, top, { baseline: "top" }); top += small / PT * 1.2; }
+  top = headTop + headH;
+  // Price, bottom right of the block; unit price under it
+  const bottom = blockBottom;
   const up = f.unit_price ? unitPrice(d, f.unit_price_basis || "auto") : null;
   let priceBottom = bottom, priceArea = 0;
   if (up) {

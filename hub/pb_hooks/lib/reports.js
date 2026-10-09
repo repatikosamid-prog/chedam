@@ -58,11 +58,11 @@ function tillRow(app, t, limit) {
   if (cardVar) flags.push("Card terminal " + (cardVar < 0 ? "below" : "above") + " the till by $" + (Math.abs(cardVar) / 100).toFixed(2));
   if (late > 0) flags.push(late + " sale(s) arrived after closing ($" + (lateCents / 100).toFixed(2) + ")");
   return {
-    id: t.id, number: t.getInt("number"), device: deviceName(app, t.getString("device")), status: t.getString("status"),
+    id: t.id, number: require(`${__hooks}/lib/tills.js`).tillNo(t), shift: t.getInt("number"), device: deviceName(app, t.getString("device")), status: t.getString("status"),
     opened_at: t.getString("opened_at"), closed_at: t.getString("closed_at"), opened_by: nameOf(app, t.getString("opened_by")), closed_by: nameOf(app, t.getString("closed_by")),
     sales: now.sales_count, total_cents: now.total_cents + now.rounding_cents, cash_in_cents: now.cash_in_cents,
     expected_cash_cents: open ? now.expected_cash_cents : t.getInt("expected_cents"), counted_cents: open ? null : t.getInt("counted_cents"), cash_variance_cents: cashVar,
-    card_cents: cardNow, card_at_close_cents: card, card_settlement_cents: settled, settlement_ref: t.getString("settlement_ref"), card_variance_cents: cardVar,
+    card_cents: cardNow, card_at_close_cents: card, card_settlement_cents: settled, settlement_ref: t.getString("settlement_ref"), batch_no: t.getString("batch_no"), card_variance_cents: cardVar,
     late_sales: late, late_cents: lateCents, returns_cents: now.returns_cents || 0, cash_refunds_cents: now.cash_refunds_cents || 0,
     reconciled_at: t.getString("reconciled_at"), reconciled_by: nameOf(app, t.getString("reconciled_by")), note: t.getString("reconcile_note"),
     flags: flags, balanced: !open && !flags.length,
@@ -90,6 +90,8 @@ function reconcile(app, id, body, ctx) {
   if (!(c >= 0) || c !== Math.floor(c)) bad("Enter the card terminal's total for this till (0 if no cards).");
   t.set("card_settlement_cents", c);
   t.set("settlement_ref", String(body.settlement_ref || "").trim().substring(0, 60));
+  // The batch number is the hub's: B-000001, B-000002... in order, given once per till (a change keeps it).
+  if (!t.getString("batch_no")) t.set("batch_no", "B-" + ("000000" + require(`${__hooks}/lib/sales.js`).nextNumber(app, "batch", ctx)).slice(-6));
   t.set("@settled", true);
   const row = tillRow(app, t, Number(setting(app, "till.variance_task_cents", 500)));
   const note = String(body.note || "").trim();

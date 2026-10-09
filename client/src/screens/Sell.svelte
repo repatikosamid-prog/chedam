@@ -4,6 +4,9 @@
   // the hub's quote after every change (DL-79); manager PIN when needed (DL-81); payments with cash
   // rounding, card on the standalone terminal, US cash, split (DL-82); hold/recall; training mode;
   // tax exemption; receipt. The cart is kept on this device so a reload does not lose the sale.
+  // Each line has its own remove button and discount; the whole sale can have a discount too, and the
+  // screen and receipt say which discount was for what. After a sale the receipt stays 15 s for
+  // printing, then the till is back to selling (a tap on the receipt area keeps it).
   // Offline (FR-3.16, DL-86..89): products and prices come from the offline pack; when the hub does not
   // answer, the till prices the sale itself, prints an offline receipt and queues the sale for upload.
   import { onMount } from "svelte";
@@ -278,12 +281,13 @@
     const now = new Date();
     const payload = { id: saleId, offline: true, offline_ref: ref, device_time: now.toISOString(), cashier: s.me.user.id,
       till: info && info.till ? info.till.id : "", training: cart.training, tax_mode: q.tax_mode, lines: q.upload_lines,
-      cart_discount_cents: q.cart_discount_cents, exempt: q.exempt, exempt_cents: q.exempt_cents,
+      cart_discount_cents: q.cart_discount_cents, cart_discount_label: q.cart_discount_label, exempt: q.exempt, exempt_cents: q.exempt_cents,
       totals: { total_cents: q.total_cents, tax_cents: q.tax_cents, subtotal_cents: q.subtotal_cents, discount_cents: q.discount_cents, deposit_cents: q.deposit_cents },
       payments: $state.snapshot(payments) };
     const live2 = q.lines.filter((l) => !l.voided);
     const receipt = { id: saleId, number: ref, offline: true, offline_ref: ref, status: "completed", training: cart.training, tax_mode: q.tax_mode,
       completed_at: now.toISOString(), cashier: s.me.user.name, subtotal_cents: q.subtotal_cents, discount_cents: q.discount_cents, tax_cents: q.tax_cents,
+      cart_discount_cents: q.cart_discount_cents, cart_discount_label: q.cart_discount_label,
       deposit_cents: q.deposit_cents, total_cents: q.total_cents, rounding_cents: st2.rounding, paid_cents: q.total_cents + st2.rounding, change_cents: st2.change,
       taxes: q.taxes, exempt: q.exempt, payments: st2.applied, business: (ix && ix.business) || (info && info.business) || {},
       lines: live2.map((l, i) => ({ ...l, line_no: i + 1 })),
@@ -296,7 +300,27 @@
     syncQueue();
   }
 
-  function newSale() { sale = null; exReturn = null; mode = "sell"; note = ""; focusCode(); }
+  function newSale() { stopBack(); sale = null; exReturn = null; mode = "sell"; note = ""; focusCode(); }
+
+  // Back to selling by itself, 15 s after a sale (time to print the receipt). Any tap on the receipt
+  // area (reprint, void, the buyer's name) keeps the screen until New sale.
+  const BACK_AFTER = 15;
+  let back = $state(0), backTimer;
+  function stopBack() { clearInterval(backTimer); back = 0; }
+  // A tap or a key anywhere on the receipt area (except New sale) keeps the screen.
+  function keepOnTouch(node) {
+    const stop = (e) => { if (!e.target.closest("[data-newsale]")) stopBack(); };
+    node.addEventListener("pointerdown", stop);
+    node.addEventListener("keydown", stop);
+    return { destroy() { node.removeEventListener("pointerdown", stop); node.removeEventListener("keydown", stop); } };
+  }
+  const doneId = $derived(mode === "done" && sale ? sale.id : "");   // a void changes the sale, not its id
+  $effect(() => {
+    if (!doneId) return;
+    back = BACK_AFTER;
+    backTimer = setInterval(() => { back -= 1; if (back <= 0) newSale(); }, 1000);
+    return () => clearInterval(backTimer);
+  });
 
   // ---- Holds -------------------------------------------------------------------------------------
 
@@ -377,17 +401,18 @@
   {/if}
 
   {#if mode === "done" && sale}
-    <div class="grid gap-4 lg:grid-cols-[1fr_auto]">
+    <div class="grid gap-4 lg:grid-cols-[1fr_auto]" use:keepOnTouch>
       <div class="card space-y-3 text-center">
         {#if sale.offline}<p class="rounded-xl bg-warn/10 px-3 py-2 text-warn">Saved on this till (hub not reachable). It uploads by itself when the hub is back.</p>{/if}
         {#if sale.change_cents}<p class="text-muted">Change</p><p class="text-5xl font-bold tabular-nums">{money(sale.change_cents)}</p>
         {:else}<p class="text-3xl font-bold">Paid ✓</p>{/if}
         <p class="text-muted">{sale.number} · {money(sale.total_cents + sale.rounding_cents)}</p>
         <div class="flex flex-wrap justify-center gap-2 print:hidden">
-          <button class="btn" onclick={newSale}>New sale</button>
+          <button class="btn" data-newsale onclick={newSale}>New sale{back ? " (" + back + ")" : ""}</button>
           {#if sale.status === "completed" && !sale.offline}<button class="btn-ghost" onclick={() => (dialog = { kind: "void", reason: "" })}>Void</button>{/if}
         </div>
         {#key sale.id}<PrintButtons {sale} auto={true} local={!!sale.offline} />{/key}
+        {#if back}<p class="text-sm text-muted print:hidden" role="timer">Back to selling in {back} s · <button class="underline" onclick={stopBack}>Stay here</button></p>{/if}
       </div>
       <div class="space-y-4">
         {#if exReturn}
@@ -462,7 +487,7 @@
             <input class="field" type="number" min={l.kind === "weight" ? 0.001 : 1} step={l.kind === "weight" ? 0.001 : 1} value={l.qty} onchange={(e) => setQty(l, e.currentTarget.value)} /></label>
           {#if can("sales.discount")}
             <div class="grid grid-cols-2 gap-2">
-              <label class="block"><span class="text-sm text-muted">Discount</span>
+              <label class="block"><span class="text-sm text-muted">Discount on this item</span>
                 <select class="field" value={l.discount ? l.discount.type : "pct"} onchange={(e) => (l.discount = { type: e.currentTarget.value, value: l.discount ? l.discount.value : 0 })}>
                   <option value="pct">%</option><option value="amount">$</option></select></label>
               <label class="block"><span class="text-sm text-muted">{l.discount && l.discount.type === "amount" ? "Amount ($)" : "Percent"}</span>
@@ -481,6 +506,7 @@
       {:else if dialog && dialog.kind === "discount"}
         <form class="space-y-2 rounded-xl border border-accent p-3" onsubmit={(e) => { e.preventDefault(); const v = dialog.type === "amount" ? toCents(dialog.value) : Number(dialog.value); cart.cart_discount = v ? { type: dialog.type, value: v } : null; dialog = null; changed(); }}>
           <p class="font-semibold">Discount on the whole sale</p>
+          <p class="text-sm text-muted">For one product only, use "Discount this item" under it.</p>
           <div class="grid grid-cols-2 gap-2">
             <select class="field" bind:value={dialog.type} aria-label="Discount type"><option value="pct">%</option><option value="amount">$</option></select>
             <input class="field" inputmode="decimal" bind:value={dialog.value} aria-label="Discount value" />
@@ -517,7 +543,7 @@
                 <button class="min-w-0 text-left" disabled={mode !== "sell"} onclick={() => (dialog = { kind: "edit", key: l.key })}>
                   <span class="block font-semibold leading-tight">{l.name}{l.age_checked ? " · ID ✓" : ""}</span>
                   <span class="block text-sm text-muted">{l.kind === "weight" ? l.qty + " " + l.base_unit : l.qty} × {ql ? money(ql.price_cents) : "…"}{l.price_cents !== undefined ? " (new price)" : ""}</span>
-                  {#if ql && ql.line_discount_cents}<span class="block text-sm text-ok">Discount −{money(ql.line_discount_cents)}</span>{/if}
+                  {#if ql && ql.line_discount_cents}<span class="block text-sm text-ok">Item discount {ql.discount_label ? "(" + ql.discount_label + ") " : ""}−{money(ql.line_discount_cents)}</span>{/if}
                   {#if ql && ql.deposit_cents}<span class="block text-xs text-muted">+ deposit {money(ql.deposit_cents)}</span>{/if}
                 </button>
                 <div class="flex shrink-0 items-center gap-1">
@@ -526,8 +552,12 @@
                     <button class="h-10 w-10 rounded-lg border border-line" aria-label="One more" onclick={() => setQty(l, l.qty + 1)}>+</button>
                   {/if}
                   <span class="w-20 text-right font-semibold tabular-nums">{ql ? money(ql.gross_cents - ql.line_discount_cents) : ""}</span>
+                  {#if mode === "sell"}<button class="h-10 w-10 rounded-lg border border-line text-bad" aria-label={"Remove " + l.name} title="Remove this item" onclick={() => removeLine(l)}>✕</button>{/if}
                 </div>
               </div>
+              {#if mode === "sell" && can("sales.discount")}
+                <button class="mt-1 min-h-8 text-sm text-accent underline" onclick={() => (dialog = { kind: "edit", key: l.key })}>{l.discount ? "Change item discount" : "Discount this item"}</button>
+              {/if}
               {#if pr}
                 <p class="mt-1 text-sm text-bad">{pr.message}
                   {#if pr.type === "pack_break"}<button class="ml-1 underline" onclick={() => openPack(l.key)}>Open a pack</button>{/if}
@@ -542,7 +572,8 @@
 
       {#if quote && live.length}
         <div class="space-y-1 border-t border-line pt-2 text-sm">
-          {#if quote.discount_cents}<p class="flex justify-between"><span>Discounts</span><span>−{money(quote.discount_cents)}</span></p>{/if}
+          {#if quote.discount_cents - quote.cart_discount_cents > 0}<p class="flex justify-between text-ok"><span>Item discounts</span><span>−{money(quote.discount_cents - quote.cart_discount_cents)}</span></p>{/if}
+          {#if quote.cart_discount_cents}<p class="flex justify-between text-ok"><span>Sale discount{quote.cart_discount_label ? " (" + quote.cart_discount_label + ")" : ""}</span><span>−{money(quote.cart_discount_cents)}</span></p>{/if}
           {#if quote.deposit_cents}<p class="flex justify-between"><span>Deposits and fees</span><span>{money(quote.deposit_cents)}</span></p>{/if}
           {#each quote.taxes as x (x.code + x.rate)}<p class="flex justify-between"><span>{x.label} {x.rate}%{quote.tax_mode === "tax_included" ? " incl." : ""}</span><span>{money(x.tax_cents)}</span></p>{/each}
           {#if quote.exempt}<p class="text-ok">Exempt: {quote.exempt.label} ({money(quote.exempt_cents)} not charged)</p>{/if}
@@ -557,10 +588,10 @@
           <button class="btn flex-1 text-lg" disabled={!live.length || !quote || quoting} onclick={startPay}>Pay {quote ? money(quote.total_cents) : ""}</button>
         </div>
         <div class="flex flex-wrap gap-2 text-sm">
-          {#if can("sales.discount")}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={() => (dialog = { kind: "discount", type: cart.cart_discount ? cart.cart_discount.type : "pct", value: "" })}>Discount</button>{/if}
+          {#if can("sales.discount")}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={() => (dialog = { kind: "discount", type: cart.cart_discount ? cart.cart_discount.type : "pct", value: "" })}>Sale discount</button>{/if}
           {#if can("sales.tax_exempt")}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={() => (dialog = { kind: "exempt", reason: cart.exempt ? cart.exempt.reason : "", reference: cart.exempt ? cart.exempt.reference : "" })}>Tax exempt</button>{/if}
           <button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={hold}>Hold</button>
-          <button class="btn-ghost min-h-10 text-sm text-bad" disabled={!cart.lines.length} onclick={() => clearCart()}>Clear</button>
+          <button class="btn-ghost min-h-10 text-sm text-bad" disabled={!cart.lines.length} onclick={() => clearCart()}>Clear sale</button>
         </div>
       {:else if mode === "pay" && st && ex.draft && ex.draft.credit_cents >= quote.total_cents}
         <div class="space-y-2 border-t border-line pt-2">

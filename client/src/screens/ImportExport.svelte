@@ -11,7 +11,8 @@
   import { profile } from "../lib/import/profile.js";
   import { FIELDS, suggest } from "../lib/import/map.js";
   import { toRow, cents } from "../lib/import/transform.js";
-  import { fullExport } from "../lib/export.js";
+  import { fullExport, GROUPS } from "../lib/export.js";
+  import { COLUMNS, NEED, downloadTemplate } from "../lib/import/template.js";
 
   let step = $state(1);
   let file = $state(null), read = $state(null), tableIx = $state(0), header = $state(0);
@@ -144,9 +145,14 @@
   }
   function restart() { step = 1; read = null; file = null; rows = []; checked = null; excluded = {}; job = null; error = ""; }
 
+  // What to export: every group ticked = everything (also tables of later phases, under "Other").
+  let pickGroups = $state(Object.fromEntries([...GROUPS.map((g) => [g[0], true]), ["other", true]]));
+  let exportFormat = $state("zip");
+  const allPicked = $derived(Object.values(pickGroups).every(Boolean));
   async function exportAll() {
     busy = "export"; error = ""; progress = "";
-    try { const r = await fullExport(api, (t) => (progress = t)); progress = "Done: " + r.tables + " tables, " + r.rows + " rows, " + Math.round(r.bytes / 1024) + " KB."; }
+    const only = allPicked ? null : Object.keys(pickGroups).filter((k) => pickGroups[k]);
+    try { const r = await fullExport(api, (t) => (progress = t), { only, format: exportFormat }); progress = "Done: " + r.tables + " tables, " + r.rows + " rows, " + Math.round(r.bytes / 1024) + " KB."; }
     catch (e) { error = "Export failed: " + e.message; progress = ""; }
     busy = "";
   }
@@ -166,6 +172,22 @@
       <ol class="flex flex-wrap gap-2 text-sm">{#each ["File", "Columns", "Values", "Check", "Import"] as t, i (t)}<li class="rounded-lg px-2 py-0.5 {step === i + 1 ? 'bg-accent text-accent-ink' : step > i + 1 ? 'bg-ok/10 text-ok' : 'bg-soft text-muted'}">{i + 1}. {t}</li>{/each}</ol>
 
       {#if step === 1}
+        <details class="rounded-xl border border-line p-3" open={!read}>
+          <summary class="cursor-pointer font-semibold">The columns Chedam reads, and a template to fill in</summary>
+          <p class="mt-2 text-sm text-muted">Fill in the template in Excel, or in Google Sheets (File › Import the template, fill it in, then File › Download › .xlsx or .csv), and choose that file below. Only <b>Name</b> is required; a product without the "needed to sell" columns is imported as a Draft and finished later in Products.</p>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <button class="btn-ghost min-h-10 text-sm" onclick={() => downloadTemplate("xlsx", { categories: cats, classes })}>Download template (Excel)</button>
+            <button class="btn-ghost min-h-10 text-sm" onclick={() => downloadTemplate("csv", { categories: cats, classes })}>Download template (CSV)</button>
+          </div>
+          <div class="mt-2 overflow-x-auto"><table class="w-full text-sm">
+            <thead><tr class="text-left"><th class="border-b border-line px-2 py-1">Column</th><th class="border-b border-line px-2 py-1">Needed</th><th class="border-b border-line px-2 py-1">What to put in it</th><th class="border-b border-line px-2 py-1">Example</th></tr></thead>
+            <tbody>{#each COLUMNS as c (c.field)}<tr class="align-top">
+              <td class="px-2 py-1 font-semibold whitespace-nowrap">{c.heading}</td>
+              <td class="px-2 py-1 whitespace-nowrap {c.need === 'required' ? 'text-bad' : c.need === 'to sell' ? 'text-warn' : 'text-muted'}">{NEED[c.need]}</td>
+              <td class="px-2 py-1">{c.what}{c.field === "tax" && classes.length ? " This store: " + classes.map((x) => x.name).join(", ") + "." : ""}</td>
+              <td class="px-2 py-1 whitespace-nowrap text-muted">{c.field === "tax" ? "" : c.example.find(Boolean) || ""}</td></tr>{/each}</tbody>
+          </table></div>
+        </details>
         <p class="text-sm text-muted">CSV, TSV or text, Excel (.xlsx, .xls, .ods), JSON, Parquet, or a zip of these. Exports from Square, Shopify, Lightspeed, Clover, Loyverse or QuickBooks work as they are. Up to 2000 products at a time. The file stays on this computer until step 5.</p>
         <input class="field" type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.ods,.json,.parquet,.zip" onchange={pick} aria-label="Choose the file" />
         {#if busy === "read"}<p class="text-muted">Reading…</p>{/if}
@@ -320,9 +342,21 @@
 
   {#if can("data.export")}
     <div class="card space-y-2">
-      <h2 class="font-semibold">Full business export</h2>
-      <p class="text-sm text-muted">Everything in Chedam, yours to keep or take elsewhere: every table as CSV and JSON, with a data dictionary that says what each field is (money in cents). Passwords, PINs and device keys are never included.</p>
-      <button class="btn" disabled={busy === "export"} onclick={exportAll}>{busy === "export" ? "Exporting…" : "Download everything (zip)"}</button>
+      <h2 class="font-semibold">Export data</h2>
+      <p class="text-sm text-muted">Your data, yours to keep or take elsewhere, with a data dictionary that says what each field is (money in cents). Passwords, PINs and device keys are never included.</p>
+      <fieldset class="grid gap-1 sm:grid-cols-2">
+        <legend class="mb-1 text-sm font-semibold">What to export</legend>
+        {#each [...GROUPS, ["other", "Other (newer parts of Chedam)", []]] as [k, label] (k)}
+          <label class="flex min-h-10 items-center gap-3"><input type="checkbox" class="h-5 w-5 accent-accent" bind:checked={pickGroups[k]} /> {label}</label>
+        {/each}
+      </fieldset>
+      <div class="flex flex-wrap gap-2 text-sm">
+        <button class="underline" onclick={() => Object.keys(pickGroups).forEach((k) => (pickGroups[k] = true))}>All</button>
+        <button class="underline" onclick={() => Object.keys(pickGroups).forEach((k) => (pickGroups[k] = false))}>None</button>
+      </div>
+      <label class="block max-w-xs"><span class="text-sm text-muted">File</span>
+        <select class="field" bind:value={exportFormat}><option value="zip">Zip: CSV + JSON per table</option><option value="xlsx">Excel workbook: one sheet per table</option></select></label>
+      <button class="btn" disabled={busy === "export" || !Object.values(pickGroups).some(Boolean)} onclick={exportAll}>{busy === "export" ? "Exporting…" : allPicked ? "Download everything" : "Download the chosen data"}</button>
       {#if progress}<p class="text-sm text-muted">{progress}</p>{/if}
     </div>
   {/if}

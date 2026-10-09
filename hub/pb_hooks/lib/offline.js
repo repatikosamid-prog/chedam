@@ -100,6 +100,7 @@ function complete(app, input, ctx) {
     return { key: String(ln.key || "l" + i), p, u, voided: !!ln.voided, name: String(ln.name || p.getString("name")).substring(0, 200), qty,
       base: r3(qty * (u.getFloat("base_qty") || 1)), tare: Number(ln.tare || 0), regular: Number(ln.regular_price_cents || 0), price: Number(ln.price_cents || 0),
       reason: String(ln.override_reason || "").substring(0, 200), gross: Number(ln.gross_cents || 0), ld: Math.min(Number(ln.line_discount_cents || 0), Number(ln.gross_cents || 0)),
+      dl: String(ln.discount_label || "").substring(0, 40),
       deposit: Number(ln.deposit_cents || 0), rates: ln.rates || [], depositRates: ln.deposit_rates || [], age_checked: !!ln.age_checked };
   });
   const live = out.filter((l) => !l.voided);
@@ -118,7 +119,7 @@ function complete(app, input, ctx) {
   if (input.till) {
     try { till = app.findRecordById("tills", String(input.till)); } catch (_) { till = null; }
     if (till && till.getString("device") !== ctx.device) till = null;
-    if (till && till.getString("status") !== "open") note = "Arrived after till " + till.getInt("number") + " was closed: not in its Z report.";
+    if (till && till.getString("status") !== "open") note = "Arrived after till " + require(`${__hooks}/lib/tills.js`).tillNo(till) + " (Z " + till.getInt("number") + ") was closed: not in its Z report.";
   }
   if (!till && !training) note = (note ? note + " " : "") + "No open till recorded for this sale.";
 
@@ -127,6 +128,7 @@ function complete(app, input, ctx) {
   s.set("id", id);
   s.load({ number, till: till ? till.id : "", cashier: cashier ? cashier.id : "", status: "completed", training, offline: true, tax_mode: mode,
     subtotal_cents: priced.subtotal_cents, discount_cents: priced.discount_cents, tax_cents: priced.tax_cents, deposit_cents: priced.deposit_cents,
+    cart_discount_cents: priced.cart_discount_cents, cart_discount_label: String(input.cart_discount_label || "").substring(0, 40),
     total_cents: priced.total_cents, rounding_cents: pay.rounding_cents, paid_cents: pay.paid_cents, change_cents: pay.change_cents, taxes: priced.taxes,
     exempt: input.exempt || null, approvals: [], note: String(input.note || "").substring(0, 500),
     items: live.reduce((a, l) => a + (l.u.getString("kind") === "weight" ? 1 : l.qty), 0),
@@ -155,7 +157,7 @@ function complete(app, input, ctx) {
       costTotal += cost;
       line.load({ sale: id, line_no: i + 1, product: l.p.id, selling_unit: l.u.id, name: l.name, qty: l.qty, base_qty: l.base, tare: l.tare,
         regular_price_cents: l.regular, price_cents: l.price, override_reason: l.reason, gross_cents: l.gross, line_discount_cents: l.ld,
-        cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, tax_class: l.p.getString("tax_class"),
+        discount_label: l.ld ? l.dl : "", cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, tax_class: l.p.getString("tax_class"),
         taxes: pl[l.key].taxes, deposit_cents: l.deposit, lots: lots, cost_cents: cost, age_checked: l.age_checked });
     }
     st().stamp(line, ctx);

@@ -6,6 +6,8 @@
 // fail at once (status 0) instead of each waiting again; only the connectivity check keeps trying.
 // The first answer from the hub clears that.
 
+import { savedToast } from "./toast.svelte.js";
+
 export const VERSION = __APP_VERSION__;
 
 // me: who is signed in (GET /api/chedam/access/me), kept so a till that reloads while the hub is
@@ -36,8 +38,9 @@ export function save(k, v) {
 
 const DOWN = { status: 0, ok: false, json: null, message: "The hub is not answering. Check that it is on and the Wi-Fi works." };
 
-// Returns { status, ok, json, message }. status 0 = the hub did not answer.
-export async function api(method, path, body, { timeout = 6000 } = {}) {
+// Returns { status, ok, json, message }. status 0 = the hub did not answer. A change the hub accepted
+// pops up "Saved ✓" (lib/toast.svelte.js); quiet: true leaves it out.
+export async function api(method, path, body, { timeout = 6000, quiet = false } = {}) {
   if (hubDown && !path.startsWith(PROBE)) return DOWN;
   const h = { "Content-Type": "application/json", "X-Chedam-Version": VERSION };
   const dev = load("device");
@@ -58,6 +61,7 @@ export async function api(method, path, body, { timeout = 6000 } = {}) {
   setDown(false);
   let json = null;
   try { json = await res.json(); } catch { /* empty body */ }
+  if (res.ok && !quiet) savedToast(method, path);
   return { status: res.status, ok: res.ok, json, message: (json && json.message) || res.statusText };
 }
 
@@ -75,7 +79,7 @@ export async function apiAll(path, perPage = 200) {
   return { ok: true, status: 200, json: { items } };
 }
 
-export async function apiForm(method, path, form, { timeout = 20000 } = {}) {
+export async function apiForm(method, path, form, { timeout = 20000, quiet = false } = {}) {
   if (hubDown) return DOWN;
   const h = { "X-Chedam-Version": VERSION };
   const dev = load("device");
@@ -96,5 +100,6 @@ export async function apiForm(method, path, form, { timeout = 20000 } = {}) {
   setDown(false);
   let json = null;
   try { json = await res.json(); } catch { /* empty body */ }
+  if (res.ok && !quiet) savedToast(method, path);
   return { status: res.status, ok: res.ok, json, message: (json && json.message) || res.statusText };
 }

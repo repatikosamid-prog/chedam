@@ -148,7 +148,7 @@ function build(app, input, actor) {
     const ld = amountOf(ln.discount, gross);
     if (ld > 0) {
       if (!can(app, actor, "sales.discount")) throw new ForbiddenError("You cannot give discounts.");
-      if (gross && (ld / gross) * 100 > discLimit + 1e-9) need("Discount on '" + p.getString("name") + "' above " + discLimit + "%", key);
+      if (core().discountPct(ln.discount, ld, gross) > discLimit + 1e-9) need("Discount on '" + p.getString("name") + "' above " + discLimit + "%", key);
     }
     // Age check (FR-3.06)
     if (p.getBool("age_restricted") && !ln.age_checked) {
@@ -165,7 +165,7 @@ function build(app, input, actor) {
         depositFull = ratesOf(app, f.getString("tax_class"), [], taxCache);
       });
     }
-    out.push({ key, p, u, name, qty, base, tare, regular, price, reason, gross, ld, deposit,
+    out.push({ key, p, u, name, qty, base, tare, regular, price, reason, gross, ld, dl: ld ? core().discountLabel(ln.discount) : "", deposit,
       rates: ratesOf(app, p.getString("tax_class"), exemptTypes, taxCache), fullRates: ratesOf(app, p.getString("tax_class"), [], taxCache),
       depositRates, depositFull,
       age_checked: !!ln.age_checked, break_pack: !!ln.break_pack });
@@ -179,7 +179,7 @@ function build(app, input, actor) {
   const cartDisc = amountOf(input.cart_discount, after);
   if (cartDisc > 0) {
     if (!can(app, actor, "sales.discount")) throw new ForbiddenError("You cannot give discounts.");
-    if (after && (cartDisc / after) * 100 > discLimit + 1e-9) need("Cart discount above " + discLimit + "%");
+    if (core().discountPct(input.cart_discount, cartDisc, after) > discLimit + 1e-9) need("Sale discount above " + discLimit + "%");
   }
   const priced = core().compute(live.map((l) => ({ key: l.key, gross_cents: l.gross, line_discount_cents: l.ld, rates: l.rates,
     deposit_cents: l.deposit, deposit_rates: l.depositRates })), { mode: mode, cart_discount_cents: cartDisc });
@@ -192,7 +192,8 @@ function build(app, input, actor) {
   if (!live.length) problems.push({ type: "empty", message: "The cart is empty." });
 
   if (!training) stockCheck(app, live, input.cart_id, problems, need);
-  return { lines: out, live, priced, mode, exempt, exemptCents, problems, needs, training, cartDisc };
+  return { lines: out, live, priced, mode, exempt, exemptCents, problems, needs, training, cartDisc,
+    cartDiscLabel: cartDisc ? core().discountLabel(input.cart_discount) : "" };
 }
 
 // Stock before payment (BR-11): enough on hand (minus other carts' soft holds, BR-13), loose units or
@@ -312,11 +313,11 @@ function quoteView(b, approval) {
   return {
     lines: b.lines.map((l) => l.voided ? { key: l.key, voided: true, name: l.name } : {
       key: l.key, name: l.name, product: l.p.id, selling_unit: l.u.id, qty: l.qty, base_qty: l.base, tare: l.tare,
-      regular_price_cents: l.regular, price_cents: l.price, gross_cents: l.gross, line_discount_cents: l.ld,
+      regular_price_cents: l.regular, price_cents: l.price, gross_cents: l.gross, line_discount_cents: l.ld, discount_label: l.dl,
       cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, taxes: pl[l.key].taxes, deposit_cents: l.deposit,
       age_restricted: l.p.getBool("age_restricted"), min_age: l.p.getInt("min_age") }),
     tax_mode: b.mode, subtotal_cents: b.priced.subtotal_cents, discount_cents: b.priced.discount_cents, cart_discount_cents: b.cartDisc,
-    taxes: b.priced.taxes, tax_cents: b.priced.tax_cents, deposit_cents: b.priced.deposit_cents, total_cents: b.priced.total_cents,
+    cart_discount_label: b.cartDiscLabel, taxes: b.priced.taxes, tax_cents: b.priced.tax_cents, deposit_cents: b.priced.deposit_cents, total_cents: b.priced.total_cents,
     cash_total_cents: core().cashRound(b.priced.total_cents), exempt: b.exempt, exempt_cents: b.exemptCents,
     problems: b.problems, needs_approval: approval ? [] : b.needs, training: b.training,
   };
@@ -340,7 +341,7 @@ function saleView(app, id, showCost) {
     const v = { id: l.id, line_no: l.getInt("line_no"), name: l.getString("name"), product: l.getString("product"), selling_unit: l.getString("selling_unit"),
       qty: l.getFloat("qty"), base_qty: l.getFloat("base_qty"), regular_price_cents: l.getInt("regular_price_cents"), price_cents: l.getInt("price_cents"),
       override_reason: l.getString("override_reason"), gross_cents: l.getInt("gross_cents"), line_discount_cents: l.getInt("line_discount_cents"),
-      cart_discount_cents: l.getInt("cart_discount_cents"), net_cents: l.getInt("net_cents"), taxes: j(l, "taxes", []), deposit_cents: l.getInt("deposit_cents"),
+      discount_label: l.getString("discount_label"), cart_discount_cents: l.getInt("cart_discount_cents"), net_cents: l.getInt("net_cents"), taxes: j(l, "taxes", []), deposit_cents: l.getInt("deposit_cents"),
       voided: l.getBool("voided"), age_checked: l.getBool("age_checked") };
     if (showCost) v.cost_cents = l.getInt("cost_cents");
     return v;
@@ -354,6 +355,7 @@ function saleView(app, id, showCost) {
     id: s.id, number: s.getString("number"), status: s.getString("status"), training: s.getBool("training"), tax_mode: s.getString("tax_mode"),
     completed_at: s.getString("completed_at"), cashier: cashier, till: s.getString("till"),
     subtotal_cents: s.getInt("subtotal_cents"), discount_cents: s.getInt("discount_cents"), tax_cents: s.getInt("tax_cents"),
+    cart_discount_cents: s.getInt("cart_discount_cents"), cart_discount_label: s.getString("cart_discount_label"),
     deposit_cents: s.getInt("deposit_cents"), total_cents: s.getInt("total_cents"), rounding_cents: s.getInt("rounding_cents"),
     paid_cents: s.getInt("paid_cents"), change_cents: s.getInt("change_cents"), taxes: j(s, "taxes", []), exempt: j(s, "exempt", null),
     approvals: j(s, "approvals", []), note: s.getString("note"), void_reason: s.getString("void_reason"),
@@ -437,6 +439,7 @@ function complete(app, input, ctx, internal) {
   if (approval && b.needs.length) b.needs.forEach((w) => appr.push({ what: w, by: "users:" + approval.user, name: approval.name, at: new Date().toISOString() }));
   s.load({ number, till: till ? till.id : "", cashier: actor ? actor.id : "", status: "completed", training: b.training, offline: false,
     tax_mode: b.mode, subtotal_cents: b.priced.subtotal_cents, discount_cents: b.priced.discount_cents, tax_cents: b.priced.tax_cents,
+    cart_discount_cents: b.cartDisc, cart_discount_label: b.cartDiscLabel,
     deposit_cents: b.priced.deposit_cents, total_cents: b.priced.total_cents, rounding_cents: pay.rounding_cents, paid_cents: pay.paid_cents,
     change_cents: pay.change_cents, taxes: b.priced.taxes, exempt: b.exempt, approvals: appr, note: String(input.note || "").substring(0, 500),
     items: b.live.reduce((a, l) => a + (st().isLooseUnit(l.u) && l.u.getString("kind") === "weight" ? 1 : l.qty), 0),
@@ -470,7 +473,7 @@ function complete(app, input, ctx, internal) {
       costTotal += cost;
       line.load({ sale: id, line_no: i + 1, product: l.p.id, selling_unit: l.u.id, name: l.name, qty: l.qty, base_qty: l.base, tare: l.tare,
         regular_price_cents: l.regular, price_cents: l.price, override_reason: l.reason, gross_cents: l.gross, line_discount_cents: l.ld,
-        cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, tax_class: l.p.getString("tax_class"),
+        discount_label: l.dl, cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, tax_class: l.p.getString("tax_class"),
         taxes: pl[l.key].taxes, deposit_cents: l.deposit, lots: lots, cost_cents: cost, age_checked: l.age_checked });
     }
     st().stamp(line, ctx);

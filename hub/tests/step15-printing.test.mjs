@@ -1,7 +1,7 @@
 // P1 step 5: receipt printers and the cash drawer. Receipt layout (lib/receipt_layout.js) in Node; then a
 // fake network printer (TCP, like port 9100) receives what the hub sends: printers saved and checked,
 // network scan, test page, receipt with drawer kick once per cash sale, reprints marked and counted,
-// buyer's name above the full-receipt threshold, printer off (sale unaffected), no-sale drawer, X report,
+// reprints need a manager (2026-10-09), buyer's name above the full-receipt threshold, printer off (sale unaffected), no-sale drawer, X report,
 // device without a printer.
 // Usage: PB_BIN='C:\Tools\pocketbase.exe' node hub/tests/step15-printing.test.mjs
 import { readFileSync } from "node:fs";
@@ -90,10 +90,18 @@ try {
   const p1 = await C.post(`/api/chedam/sales/${id1}/print`, { kick: true });
   const j2 = await lastJob(2);
   check("cash sale: receipt printed and drawer opened", p1.json.printed && p1.json.drawer === true && has(j2, KICK) && j2.toString("latin1").includes(num1), JSON.stringify(p1.json));
-  const p1b = await C.post(`/api/chedam/sales/${id1}/print`, { kick: true, reprint: true });
+  const noAppr = await C.post(`/api/chedam/sales/${id1}/print`, { kick: true, reprint: true });
+  check("a cashier's reprint needs a manager", noAppr.status === 403 && /approval/.test(noAppr.json.message) && jobs.length === 2, JSON.stringify(noAppr.json));
+  const appr = (await C.post("/api/chedam/sales/approvals", { user: people["Mira Manager"], pin: PIN["Mira Manager"] })).json.approval;
+  const p1b = await C.post(`/api/chedam/sales/${id1}/print`, { kick: true, reprint: true, approval: appr });
   const j3 = await lastJob(3);
-  check("reprint: marked COPY 1, drawer not opened again", p1b.json.copy === 1 && p1b.json.drawer === false && !has(j3, KICK) && j3.toString("latin1").includes("COPY (reprint 1)"), JSON.stringify(p1b.json));
-  check("reprints counted on the sale", (await t.list("sales", `id='${id1}'`)).items[0].reprints === 1);
+  check("reprint with the manager's approval: marked COPY 1, drawer not opened again", p1b.json.copy === 1 && p1b.json.drawer === false && !has(j3, KICK) && j3.toString("latin1").includes("COPY (reprint 1)"), JSON.stringify(p1b.json));
+  const s1v = (await t.list("sales", `id='${id1}'`)).items[0];
+  check("reprints counted on the sale, with who allowed it", s1v.reprints === 1 && s1v.approvals.some((a) => a.what === "Reprint (copy 1)" && a.name === "Mira Manager"), JSON.stringify(s1v.approvals));
+  check("an approval is used once", (await C.post(`/api/chedam/sales/${id1}/print`, { reprint: true, approval: appr })).status === 403);
+  check("a browser reprint needs a manager too", (await C.post(`/api/chedam/sales/${id1}/reprint`, {})).status === 403);
+  const lr = await M.post(`/api/chedam/sales/${id1}/reprint`, {});
+  check("a manager reprints without asking; counted", lr.status === 200 && lr.json.copy === 2 && (await t.list("sales", `id='${id1}'`)).items[0].reprints === 2, JSON.stringify(lr.json));
   const q2 = (await C.post("/api/chedam/sales/quote", { lines: [L(chips)] })).json;
   const s2 = await C.post("/api/chedam/sales", { id: sid(), lines: q2.lines.map((l) => ({ key: l.key, product: l.product, selling_unit: l.selling_unit, qty: l.qty })), payments: [{ method: "card", amount_cents: q2.total_cents }] });
   const p2 = await C.post(`/api/chedam/sales/${s2.json.sale.id}/print`, { kick: true, buyer: "Jane Buyer" });
@@ -101,7 +109,7 @@ try {
   check("card sale: no drawer; small sale: no buyer line", p2.json.printed && !p2.json.drawer && !has(j4, KICK) && !j4.toString("latin1").includes("Sold to"), JSON.stringify(p2.json));
   const rc = (await t.list("settings", "key='printing.receipt'")).items[0];
   await t.su_("PATCH", `/api/collections/settings/records/${rc.id}`, { value: { auto_print: true, full_receipt_cents: 100 } });
-  await C.post(`/api/chedam/sales/${s2.json.sale.id}/print`, { reprint: true, buyer: "Jane Buyer" });
+  await M.post(`/api/chedam/sales/${s2.json.sale.id}/print`, { reprint: true, buyer: "Jane Buyer" });
   const j5 = await lastJob(5);
   check("above the threshold: buyer's name and terms (full GST/HST receipt)", j5.toString("latin1").includes("Sold to: Jane Buyer") && j5.toString("latin1").includes("Terms: paid in full"));
   const rt = await C.get(`/api/chedam/sales/${id1}/receipt-text?chars=32`);
@@ -132,7 +140,7 @@ try {
   console.log("Device without a printer");
   const dev = (await t.list("devices", `id='${devs["Cal Cashier"].id}'`)).items[0];
   await t.su_("PATCH", `/api/collections/devices/records/${dev.id}`, { assigned_printer: "none" });
-  const np = await C.post(`/api/chedam/sales/${id1}/print`, { reprint: true });
+  const np = await C.post(`/api/chedam/sales/${id1}/print`, {});
   check("'none': no printer, the till prints on its own", np.json.printed === false && np.json.no_printer === true, JSON.stringify(np.json));
 } catch (e) {
   err = e;

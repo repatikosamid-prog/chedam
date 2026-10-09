@@ -59,6 +59,16 @@ try {
   const bi = T.toRow(["Milk 2% 4L / Lait 2 % 4 L", "Canada", "kg"], { 0: "name", 1: "origin", 2: "sold_by" }, { split_names: true });
   check("'English / French' split; country to CA; sold by kg", bi.name === "Milk 2% 4L" && bi.name_fr === "Lait 2 % 4 L" && bi.origin_country === "CA" && bi.base_unit === "kg");
 
+  console.log("Import template (2026-10-09)");
+  const TP = await lib("import/template.js");
+  const tr = TP.templateRows([{ name: "Standard (GST + PST)", code: "standard" }, { name: "Zero-rated", code: "zero_rated" }]);
+  const tsug = M.suggest(P.profile(tr[0], tr.slice(1)));
+  const wrong = TP.COLUMNS.filter((c, i) => !tsug[i] || tsug[i].field !== c.field || tsug[i].confidence !== "high");
+  check("a filled-in template maps every column by itself, with high confidence", !wrong.length, JSON.stringify(wrong.map((c) => [c.heading, tsug[TP.COLUMNS.indexOf(c)]])));
+  const trow = T.toRow(tr[2], Object.fromEntries(TP.COLUMNS.map((c, i) => [i, c.field])));
+  check("its example rows import as intended (bananas: kg, PLU, zero-rated)", trow.name === "Bananas" && trow.base_unit === "kg" && trow.plu === "4011" && trow.price_cents === 174 && trow.tax === "Zero-rated", JSON.stringify(trow));
+  check("only Name is required", TP.COLUMNS.filter((c) => c.need === "required").map((c) => c.field).join() === "name");
+
   console.log("Exports (FR-11.09)");
   const X = await lib("export.js");
   const c = X.csv([{ key: "a", label: "Name" }, { key: "b" }], [{ a: 'Say "hi", ok', b: 2 }, { a: "line\nbreak", b: null }]);
@@ -151,6 +161,10 @@ try {
   const pj = (await O.get("/api/chedam/export/table/selling_units?per_page=1000")).json.rows;
   check("JSON fields as lists (barcodes), not bytes", pj.some((u) => Array.isArray(u.barcodes) && u.barcodes.includes("0628915209992")));
   check("unknown table refused", (await O.get("/api/chedam/export/table/_superusers")).status === 404);
+  const loose = dict.filter((x) => X.groupOf(x.table) === "other").map((x) => x.table);
+  check("export choices: every table is in a named group (products, sales, people...)", !loose.length, loose.join());
+  check("the groups the owner asked for: products, people, sales, transactions", ["products", "people", "sales", "transactions"].every((g) => X.GROUPS.some((x) => x[0] === g))
+    && X.groupOf("users") === "people" && X.groupOf("payments") === "sales" && X.groupOf("refunds") === "transactions");
 } catch (e) {
   err = e;
 }

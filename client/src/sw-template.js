@@ -16,12 +16,20 @@ self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
 
+// The build before this one is kept until the next update: a page that is still open on it can load its
+// on-demand parts (PDF maker, spreadsheet reader) from the cache; the hub no longer has them.
+const META = "chedam-meta";
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("chedam-shell-") && k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim()),
-  );
+  event.waitUntil((async () => {
+    const meta = await caches.open(META);
+    const hit = await meta.match("./__current");
+    const before = hit ? await hit.text() : "";
+    const keep = [CACHE, before];
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k.startsWith("chedam-shell-") && !keep.includes(k)).map((k) => caches.delete(k)));
+    if (before !== CACHE) await meta.put("./__current", new Response(CACHE));
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener("fetch", (event) => {
@@ -39,6 +47,7 @@ self.addEventListener("fetch", (event) => {
   }
   // App files are content-hashed: the cache is always right for them. ignoreVary: the hub answers with
   // "Vary: Origin" and module scripts are requested with an Origin header, the cached copies without one.
+  // caches.match looks in every cache, so the build before this one is found too.
   event.respondWith(caches.match(req, { ignoreVary: true }).then((hit) => hit || fetch(req)));
 });
 

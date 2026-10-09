@@ -6,6 +6,7 @@
   import { load } from "./lib/api.js";
   import { watchIdle } from "./lib/idle.js";
   import ConnectivityBar from "./components/ConnectivityBar.svelte";
+  import Toast from "./components/Toast.svelte";
   import Pair from "./screens/Pair.svelte";
   import Waiting from "./screens/Waiting.svelte";
   import Names from "./screens/Names.svelte";
@@ -70,6 +71,7 @@
 </script>
 
 <div class="print:hidden"><ConnectivityBar /></div>
+<Toast />
 
 <main class="mx-auto w-full {s.screen === 'sell' ? 'max-w-6xl' : 'max-w-3xl'} px-4 pt-4 pb-12">
   <header class="mb-4 flex items-center justify-between gap-3 print:hidden">

@@ -9,6 +9,14 @@
         "--fresh"
       ],
       "port": 8095
+    },
+    {
+      "name": "chedam-dev-keep",
+      "runtimeExecutable": "C:\\Program Files\\Git\\bin\\bash.exe",
+      "runtimeArgs": [
+        "tools/devhub/dev-hub.sh"
+      ],
+      "port": 8095
     }
   ]
 }

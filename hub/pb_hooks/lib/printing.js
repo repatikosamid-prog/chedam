@@ -65,7 +65,43 @@ function scan(app, port) {
   });
 }
 
-function tillNumber(app, id) { try { return app.findRecordById("tills", id).getInt("number"); } catch (_) { return 0; } }
+function tillNumber(app, id) { try { return require(`${__hooks}/lib/tills.js`).tillNo(app.findRecordById("tills", id)); } catch (_) { return 0; } }
+
+// Reprints need a manager (security): the person has sales.approve, or a manager gave a one-time approval
+// on the till (opts.approval). r: the sale or return, saved by the caller. Each reprint is written to the
+// record's approvals (who allowed it, when); the newest 20 are kept.
+function takeReprint(tx, r, opts, ctx) {
+  const sales = require(`${__hooks}/lib/sales.js`);
+  let by;
+  if (ctx.can("sales.approve")) by = { user: ctx.user ? ctx.user.id : "", name: ctx.user ? ctx.user.getString("name") : "superuser" };
+  else {
+    by = sales.approvalFor(tx, opts.approval, "sales.approve");
+    if (!by) throw new ForbiddenError("A manager's approval is needed to reprint a receipt.");
+    sales.useApproval(tx, opts.approval);
+  }
+  const copy = r.getInt("reprints") + 1;
+  let list = [];
+  try { list = JSON.parse(r.getString("approvals") || "[]") || []; } catch (_) { list = []; }
+  list.push({ what: "Reprint (copy " + copy + ")", by: by.user ? "users:" + by.user : "system:superuser", name: by.name, at: new Date().toISOString() });
+  r.set("approvals", list.slice(-20));
+  r.set("reprints", copy);
+  return copy;
+}
+
+// A reprint on the device's own printer (browser print): checked and counted like a printer reprint.
+// kind: "sales" | "returns". Returns {copy}.
+function reprintLocal(app, kind, id, opts, ctx) {
+  if (kind !== "sales" && kind !== "returns") bad("Unknown kind.");
+  let copy = 0;
+  app.runInTransaction((tx) => {
+    let r;
+    try { r = tx.findRecordById(kind, id); } catch (_) { bad(kind === "sales" ? "Unknown sale." : "Unknown return."); }
+    copy = takeReprint(tx, r, opts, ctx);
+    stamp(r, ctx);
+    tx.save(r);
+  });
+  return { copy };
+}
 
 // Prints a sale's receipt on the device's printer. opts: {reprint, buyer, kick}
 // kick: the drawer opens for a cash sale this device took in the last 10 minutes, once.
@@ -79,10 +115,7 @@ function printSale(app, id, opts, ctx) {
   let copy = 0, kick = false;
   app.runInTransaction((tx) => {
     const r = tx.findRecordById("sales", id);
-    if (opts.reprint) {
-      copy = r.getInt("reprints") + 1;
-      r.set("reprints", copy);
-    }
+    if (opts.reprint) copy = takeReprint(tx, r, opts, ctx);
     if (opts.kick && !r.getBool("drawer_opened")) {
       const tillDevice = (() => { try { return tx.findRecordById("tills", r.getString("till")).getString("device"); } catch (_) { return ""; } })();
       const recent = Date.now() - new Date(r.getString("completed_at").replace(" ", "T")).getTime() < 10 * 60000;
@@ -108,7 +141,7 @@ function printReturn(app, id, opts, ctx) {
   let copy = 0, kick = false;
   app.runInTransaction((tx) => {
     const r = tx.findRecordById("returns", id);
-    if (opts.reprint) { copy = r.getInt("reprints") + 1; r.set("reprints", copy); }
+    if (opts.reprint) copy = takeReprint(tx, r, opts, ctx);
     if (opts.kick && !r.getBool("drawer_opened") && printer.drawer !== false) {
       const tillDevice = (() => { try { return tx.findRecordById("tills", r.getString("till")).getString("device"); } catch (_) { return ""; } })();
       const recent = Date.now() - new Date(r.getString("completed_at").replace(" ", "T")).getTime() < 10 * 60000;
@@ -127,7 +160,7 @@ function saleText(app, id, chars, ctx) {
   const view = sales.saleView(app, id, false);
   const printer = forDevice(app, ctx.device);
   const w = Number(chars) || (printer ? printer.chars : 48);
-  const L = layout().receipt(view, { chars: w, till_number: (() => { try { return app.findRecordById("tills", view.till).getInt("number"); } catch (_) { return 0; } })() });
+  const L = layout().receipt(view, { chars: w, till_number: tillNumber(app, view.till) });
   return { text: layout().text(L, w), chars: w, printer: printer ? printer.name : "" };
 }
 
@@ -192,4 +225,4 @@ function savePrinters(app, list, ctx) {
   return out;
 }
 
-module.exports = { clean, printers, options, forDevice, send, scan, printSale, printReturn, saleText, printTill, kickNoSale, test, savePrinters };
+module.exports = { clean, printers, options, forDevice, send, scan, printSale, printReturn, saleText, printTill, kickNoSale, test, savePrinters, reprintLocal };

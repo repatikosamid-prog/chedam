@@ -90,4 +90,18 @@ function compute(lines, opts) {
 // BR-16: cash to the nearest 5 cents (1-2 cents down, 3-4 up). Cards stay exact.
 function cashRound(c) { return Math.round(c / 5) * 5; }
 
-module.exports = { compute, spread, cashRound, roundHalfUp };
+// What a discount was, for the sale screen and the receipt: "10% off", "$2.00 off" ("" for none).
+function discountLabel(d) {
+  if (!d || !Number(d.value)) return "";
+  const v = Number(d.value);
+  return d.type === "pct" ? String(Math.round(v * 1000) / 1000) + "% off" : "$" + (v / 100).toFixed(2) + " off";
+}
+
+// How big a discount is, as a percentage, for the cashier's limit (BR-18): a percentage discount is the
+// percentage asked for (10% of $3.99 rounds to $0.40, still 10%); an amount is its share of the price.
+function discountPct(d, cents, gross) {
+  if (d && d.type === "pct") return Number(d.value) || 0;
+  return gross ? (cents / gross) * 100 : 0;
+}
+
+module.exports = { compute, spread, cashRound, roundHalfUp, discountLabel, discountPct };

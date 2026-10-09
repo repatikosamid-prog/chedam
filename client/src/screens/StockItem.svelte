@@ -68,6 +68,15 @@
 
   function when(t) { return t ? new Date(t.replace(" ", "T")).toLocaleString() : ""; }
   function day(t) { return t ? new Date(t + "T12:00:00").toLocaleDateString() : ""; }
+
+  // Recent changes in colour: stock in (received, returned) and sold differ at a glance; damage and loss
+  // stand out; the text says it too, so colour is never the only sign.
+  function moveColour(m) {
+    if (m.type === "receive" || m.type === "return") return "text-stock-in";
+    if (m.type === "sale") return m.qty_base > 0 ? "text-stock-in" : "text-stock-out";
+    if (m.type === "damage" || m.type === "loss") return "text-bad";
+    return "";
+  }
 </script>
 
 <section class="space-y-4">
@@ -154,11 +163,12 @@
     <div class="card">
       <h2 class="mb-2 font-semibold">Recent changes</h2>
       {#if v.movements.length}
+        <p class="mb-1 flex flex-wrap gap-x-4 text-sm"><span class="text-stock-in">■ Received / returned</span><span class="text-stock-out">■ Sold</span><span class="text-bad">■ Damaged / lost</span></p>
         <ul class="divide-y divide-line text-sm">
           {#each v.movements as m (m.id)}
             <li class="py-2">
               <div class="flex flex-wrap justify-between gap-2">
-                <span><b>{MOVES[m.type] || m.type}</b> {m.qty_base ? (m.qty_base > 0 ? "+" : "") + qty(m.qty_base, v.product.base_unit) : ""}
+                <span class={moveColour(m)}><b>{m.type === "sale" && m.qty_base > 0 ? "Sale voided" : MOVES[m.type] || m.type}</b> {m.qty_base ? (m.qty_base > 0 ? "+" : "") + qty(m.qty_base, v.product.base_unit) : ""}
                   {m.unit_qty && m.selling_unit ? "(" + m.unit_qty + " × " + unitName(m.selling_unit) + ")" : ""}
                   {#if m.status !== "posted"}<span class="text-warn"> · {m.status === "pending" ? "waiting for approval" : "rejected"}</span>{/if}</span>
                 <span class="text-muted">{when(m.at)}</span>

@@ -5,6 +5,7 @@
   --bg: #f6f5f1; --card: #ffffff; --ink: #1d2320; --muted: #5d6762; --line: #d5d9d3;
   --accent: #1f6f5c; --accent-ink: #ffffff; --soft: #e6f0ec;
   --ok: #1f7a45; --warn: #8a5800; --bad: #b3261e;
+  --stock-in: #1f7a45; --stock-out: #1d4ed8;              /* stock received / sold */
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -12,12 +13,14 @@
     --bg: #121614; --card: #1b201e; --ink: #e8ece9; --muted: #a3ada8; --line: #303834;
     --accent: #5fbf9f; --accent-ink: #0d1a15; --soft: #20302a;
     --ok: #63c58a; --warn: #e0a63a; --bad: #f08a80;
+    --stock-in: #63c58a; --stock-out: #8ab4f8;
     color-scheme: dark;
   }
 }
 :root.contrast {
   --bg: #ffffff; --card: #ffffff; --ink: #000000; --muted: #222222; --line: #000000;
   --accent: #00473a; --accent-ink: #ffffff; --soft: #e9f3ef; --bad: #8c0000; --ok: #00501f; --warn: #5c3b00;
+  --stock-in: #00501f; --stock-out: #002f8c;
   color-scheme: light;
 }
 /* Large text (NFR-16): every rem-based size grows */
@@ -35,6 +38,8 @@
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-bad: var(--bad);
+  --color-stock-in: var(--stock-in);
+  --color-stock-out: var(--stock-out);
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
