@@ -4,6 +4,20 @@
 // Every minute: shelf labels for deals and scheduled prices that started or ended (BR-25).
 cronAdd("chedam_promotion_labels", "* * * * *", () => {
   try { require(`${__hooks}/lib/promotions.js`).labelsJob($app); } catch (err) { $app.logger().error("promotion labels", "error", String(err)); }
+  try { require(`${__hooks}/lib/promotions.js`).markdownJob($app); } catch (err) { $app.logger().error("markdown labels", "error", String(err)); }
+});
+
+// Near-expiry stock marked down now (FR-5.11), for the Promotions screen: product, lot, expiry, % off, qty.
+routerAdd("GET", "/api/chedam/promotions/markdowns", (e) => {
+  require(`${__hooks}/lib/sales_http.js`).ctx(e, "promotions.manage|sales.view|stock.receive");
+  const segs = require(`${__hooks}/lib/promotions.js`).markdownSegments(e.app, null);
+  const rows = [];
+  Object.keys(segs).forEach((pid) => {
+    let name = "";
+    try { name = e.app.findRecordById("products", pid).getString("name"); } catch (_) { name = ""; }
+    segs[pid].forEach((x) => rows.push({ product: pid, name: name, lot: x.lot, expiry: x.expiry, pct: x.pct, qty: x.qty }));
+  });
+  return e.json(200, { rows: rows });
 });
 
 // Promotions and scheduled prices, with what each deal is and whether it is in force now.

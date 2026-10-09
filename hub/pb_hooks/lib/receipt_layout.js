@@ -81,14 +81,16 @@ function receipt(sale, opts) {
     if (Number(l.qty) !== 1 || l.price_cents !== l.regular_price_cents) {
       add({ t: "text", s: "  " + qtyText(l.qty) + " x " + money(l.price_cents) + (l.price_cents !== l.regular_price_cents ? " (was " + money(l.regular_price_cents) + ")" : "") });
     }
-    const promo = l.promo_cents || 0, manual = (l.line_discount_cents || 0) - promo;
+    const promo = l.promo_cents || 0, staff = l.staff_cents || 0, manual = (l.line_discount_cents || 0) - promo - staff;
     if (promo) add({ t: "pair", l: "  " + (l.promo_label || "Promotion"), r: "-" + money(promo) });
+    if (staff) add({ t: "pair", l: "  Staff discount", r: "-" + money(staff) });
     if (manual > 0) add({ t: "pair", l: "  Discount" + (l.discount_label ? " " + l.discount_label : ""), r: "-" + money(manual) });
     if (l.deposit_cents) add({ t: "pair", l: "  Deposit/fee", r: money(l.deposit_cents) });
   });
   add({ t: "rule" });
   add({ t: "pair", l: "Subtotal", r: money(sale.subtotal_cents) });
   const cartDisc = (sale.discount_cents || 0) - lines.reduce((a, l) => a + (l.line_discount_cents || 0), 0);
+  if (sale.staff_discount_cents) add({ t: "text", s: "Staff purchase: " + (sale.staff_name || "") + " (" + money(sale.staff_discount_cents) + " off)" });
   if (cartDisc > 0) add({ t: "pair", l: "Sale discount" + (sale.cart_discount_label ? " " + sale.cart_discount_label : ""), r: "-" + money(cartDisc) });
   if (sale.deposit_cents) add({ t: "pair", l: "Deposits and fees", r: money(sale.deposit_cents) });
   (sale.taxes || []).forEach((x) => add({ t: "pair", l: x.label + " " + x.rate + "%" + (sale.tax_mode === "tax_included" ? " (incl.)" : ""), r: money(x.tax_cents) }));

@@ -6,6 +6,8 @@
 // preview():        FR-5.09: per product in scope: regular and promo price, cost, new margin; below cost warned.
 // labelsJob():      every minute: products whose promotion or scheduled price started or ended get labels (BR-25).
 // usage():          a completed sale counts towards each promotion's max_uses.
+// markdownSegments(): FR-5.11: each product's marked-down stock in selling order (FEFO), by days left.
+// markdownJob():    every minute: a lot that reaches a markdown step gets near-expiry stickers (one per item).
 
 const core = () => require(`${__hooks}/lib/promotions_core.js`);
 const st = () => require(`${__hooks}/lib/stock.js`);
@@ -256,6 +258,76 @@ function labelsJob(app) {
     .forEach((r) => app.runInTransaction((tx) => { labels.queue(tx, r.getString("product"), r.getString("selling_unit"), "price_change", ctx); mark(tx, r, "labels_ended"); }));
 }
 
+// ---- Near-expiry markdowns (FR-5.11) -----------------------------------------------------------
+
+function markdownRules(app) {
+  const cfg = require(`${__hooks}/lib/auth.js`).setting(app, "promotions.markdowns", {}) || {};
+  if (!cfg.enabled || !Array.isArray(cfg.steps) || !cfg.steps.length) return null;
+  if (!require(`${__hooks}/lib/catalogue.js`).moduleOn(app, "promotions")) return null;
+  return { steps: cfg.steps.map((x) => ({ days: Number(x.days), pct: Number(x.pct) })).filter((x) => x.days >= 0 && x.pct > 0 && x.pct <= 100),
+    perishable_only: cfg.perishable_only !== false };
+}
+
+const dayMs = 86400000;
+function daysLeft(expiry) {
+  const t = st().today();
+  const a = t.split("-").map(Number), b = String(expiry).substring(0, 10).split("-").map(Number);
+  return Math.round((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / dayMs);
+}
+
+// {product: [{qty, pct, lot, expiry}]}: unexpired lots in selling order (FEFO) while they are marked down.
+// productIds: the products to look at (null: every product with a lot inside the window, for the till's pack).
+function markdownSegments(app, productIds) {
+  const rules = markdownRules(app);
+  if (!rules) return {};
+  const maxDays = rules.steps.reduce((a, x) => Math.max(a, x.days), 0);
+  const until = st().today(maxDays + 1);
+  let ids = productIds;
+  if (!ids) {
+    const seen = {};
+    app.findRecordsByFilter("stock_lots", "qty > 0 && deleted_at = '' && expiry_date != '' && expiry_date < {:u}", "", 0, 0, { u: until + " 00:00:00.000Z" })
+      .forEach((l) => { seen[l.getString("product")] = true; });
+    ids = Object.keys(seen);
+  }
+  const out = {};
+  ids.forEach((pid) => {
+    if (rules.perishable_only) {
+      try { if (!app.findRecordById("products", pid).getBool("perishable")) return; } catch (_) { return; }
+    }
+    const segs = [];
+    for (const l of st().lotsOf(app, pid).fresh) {
+      const exp = l.getString("expiry_date");
+      const pct = exp ? require(`${__hooks}/lib/promotions_core.js`).markdownPct(daysLeft(exp), rules.steps) : 0;
+      if (!pct) break;                                   // FEFO: the next lots expire later
+      segs.push({ qty: l.getFloat("qty"), pct: pct, lot: l.id, expiry: exp.substring(0, 10) });
+    }
+    if (segs.length) out[pid] = segs;
+  });
+  return out;
+}
+
+// Every minute: a lot that reached a (higher) markdown step gets near-expiry stickers for its items, at the
+// lot's % off (one sticker per item of the product's single unit; weighed lots: one for the shelf).
+function markdownJob(app) {
+  const rules = markdownRules(app);
+  if (!rules || !labelsOn(app)) return;
+  const labels = require(`${__hooks}/lib/labels.js`);
+  const ctx = { actor: "system:markdowns", device: "" };
+  const segs = markdownSegments(app, null);
+  Object.keys(segs).forEach((pid) => segs[pid].forEach((sg) => {
+    let lot;
+    try { lot = app.findRecordById("stock_lots", sg.lot); } catch (_) { return; }
+    if (lot.getFloat("markdown_pct") >= sg.pct) return;
+    const unit = app.findRecordsByFilter("selling_units", "product = {:p} && deleted_at = '' && sell_at_pos = true && (kind = 'single' || kind = 'weight')", "sort", 1, 0, { p: pid })[0];
+    app.runInTransaction((tx) => {
+      if (unit) labels.queue(tx, pid, unit.id, "markdown", ctx, unit.getString("kind") === "weight" ? 1 : Math.max(1, Math.floor(sg.qty)), sg.pct);
+      lot.set("markdown_pct", sg.pct);
+      lot.set("updated_by", ctx.actor);
+      tx.save(lot);
+    });
+  }));
+}
+
 // A completed sale used these promotions ([{id, times}]): counted for max_uses (offline sales too; they
 // may go over the limit, the customer has paid).
 function usage(app, applied, ctx) {
@@ -269,4 +341,4 @@ function usage(app, applied, ctx) {
   });
 }
 
-module.exports = { productsOf, plain, plainScheduled, current, currentScheduled, list, save, end, saveScheduled, preview, labelPromo, labelsJob, usage };
+module.exports = { markdownSegments, markdownJob, markdownRules, productsOf, plain, plainScheduled, current, currentScheduled, list, save, end, saveScheduled, preview, labelPromo, labelsJob, usage };

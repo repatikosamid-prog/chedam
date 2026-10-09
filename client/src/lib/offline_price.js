@@ -114,14 +114,15 @@ export function quoteOffline(cart, ix, perms) {
     const rates = ratesFor(ix, p.tax_class, exemptTypes);
     lines.push({ key: ln.key, name, product: p.id, selling_unit: u.id, qty, base_qty: base, tare, regular_price_cents: regular, price_cents: price,
       gross_cents: gross, line_discount_cents: 0, discount_label: "", promo_cents: 0, promo_label: "", promotions: [], deposit_cents: deposit, age_restricted: !!p.age_restricted, min_age: p.min_age,
-      _rates: rates, _full: ratesFor(ix, p.tax_class, []), _dep: depositRates, _depFull: depositFull, _disc: ln.discount, _cat: p.category, _kind: u.kind, _hand: !!reason });
+      _rates: rates, _full: ratesFor(ix, p.tax_class, []), _dep: depositRates, _depFull: depositFull, _disc: ln.discount, _cat: p.category, _kind: u.kind, _hand: !!reason, _bq: u.base_qty || 1 });
     upload.push({ key: ln.key, product: p.id, selling_unit: u.id, name, qty, tare, regular_price_cents: regular, price_cents: price, override_reason: reason,
       gross_cents: gross, line_discount_cents: 0, discount_label: "", rates, deposit_cents: deposit, deposit_rates: depositRates, age_checked: !!ln.age_checked });
   }
   const live = lines.filter((l) => !l.voided);
   // Promotions first (BR-20), then the cashier's own discount on what is left: the hub's order.
-  const promo = promoOn ? promoCore.evaluate(live.map((l) => ({ key: l.key, product: l.product, category: l._cat, kind: l._kind, qty: l.qty, price_cents: l.price_cents, no_promo: l._hand })),
-    ix.promotions || [], { now, coupons }) : { lines: {}, applied: [] };
+  const engineLines = live.map((l) => ({ key: l.key, product: l.product, category: l._cat, kind: l._kind, qty: l.qty, base_qty: l._bq, price_cents: l.price_cents, no_promo: l._hand }));
+  const promo = promoOn ? promoCore.evaluate(engineLines, ix.promotions || [], { now, coupons, markdowns: cart.training ? {} : promoCore.markdowns(engineLines, ix.markdowns || {}) }) : { lines: {}, applied: [] };
+  if (cart.staff && cart.staff.approval) problems.push({ type: "staff", message: "Staff discounts need the hub (the staff member's PIN is checked there)." });
   const up = Object.fromEntries(upload.map((x) => [x.key, x]));
   live.forEach((l) => {
     const pr = promo.lines[l.key];
@@ -149,7 +150,7 @@ export function quoteOffline(cart, ix, perms) {
   if (!live.length) problems.push({ type: "empty", message: "The cart is empty." });
   return {
     offline: true,
-    lines: lines.map((l) => l.voided ? l : { ...l, _rates: undefined, _full: undefined, _dep: undefined, _depFull: undefined, _disc: undefined, _cat: undefined, _kind: undefined, _hand: undefined,
+    lines: lines.map((l) => l.voided ? l : { ...l, _rates: undefined, _full: undefined, _dep: undefined, _depFull: undefined, _disc: undefined, _cat: undefined, _kind: undefined, _hand: undefined, _bq: undefined,
       cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, taxes: pl[l.key].taxes }),
     tax_mode: ix.tax_mode, subtotal_cents: priced.subtotal_cents, discount_cents: priced.discount_cents, cart_discount_cents: cartDisc,
     cart_discount_label: cartDisc ? core.discountLabel(cart.cart_discount) : "", promotions: promo.applied, coupons,

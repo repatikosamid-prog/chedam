@@ -47,6 +47,7 @@ function pack(app) {
     // P2: deals and scheduled prices the till applies itself (its clock decides days and hours, P2-b)
     promotions: mods.promotions ? require(`${__hooks}/lib/promotions.js`).current(app) : [],
     scheduled_prices: mods.promotions ? require(`${__hooks}/lib/promotions.js`).currentScheduled(app) : [],
+    markdowns: require(`${__hooks}/lib/promotions.js`).markdownSegments(app, null),   // FR-5.11, refreshed with the pack
     settings: {
       payment_methods: setting(app, "sales.payment_methods", ["cash", "card"]), cash_rounding: setting(app, "sales.cash_rounding", true),
       usd_rate: setting(app, "sales.usd_rate", 1.35), discount_limit_pct: setting(app, "sales.discount_limit_pct", 10),

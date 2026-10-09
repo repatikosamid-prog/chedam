@@ -18,6 +18,7 @@
   import { newCart, toInput, settle, cashSuggestions, cashRound, METHOD } from "../lib/till.js";
   import Scanner from "../components/Scanner.svelte";
   import Approve from "../components/Approve.svelte";
+  import StaffPin from "../components/StaffPin.svelte";
   import Receipt from "../components/Receipt.svelte";
   import PrintButtons from "../components/PrintButtons.svelte";
   import RefundChooser from "../components/RefundChooser.svelte";
@@ -392,6 +393,8 @@
 
   {#if dialog && dialog.kind === "approve"}
     <Approve what={dialog.what} onApproved={approved} onCancel={() => (dialog = null)} />
+  {:else if dialog && dialog.kind === "staff"}
+    <StaffPin pct={settings.staff_discount ? settings.staff_discount.pct : 0} onDone={(x) => { cart.staff = x; dialog = null; changed(); }} onCancel={() => (dialog = null)} />
   {:else if dialog && dialog.kind === "void"}
     {#if can("sales.void")}
       <div class="card space-y-2 border-bad"><p>Void {sale.number}? Stock goes back; refund the customer the same way they paid.</p>
@@ -554,7 +557,8 @@
                   <span class="block font-semibold leading-tight">{l.name}{l.age_checked ? " · ID ✓" : ""}</span>
                   <span class="block text-sm text-muted">{l.kind === "weight" ? l.qty + " " + l.base_unit : l.qty} × {ql ? money(ql.price_cents) : "…"}{l.price_cents !== undefined ? " (new price)" : ""}</span>
                   {#if ql && ql.promo_cents}<span class="block text-sm text-ok">🏷 {ql.promo_label} −{money(ql.promo_cents)}</span>{/if}
-                  {#if ql && ql.line_discount_cents - (ql.promo_cents || 0) > 0}<span class="block text-sm text-ok">Item discount {ql.discount_label ? "(" + ql.discount_label + ") " : ""}−{money(ql.line_discount_cents - (ql.promo_cents || 0))}</span>{/if}
+                  {#if ql && ql.staff_cents}<span class="block text-sm text-ok">Staff discount −{money(ql.staff_cents)}</span>{/if}
+                  {#if ql && ql.line_discount_cents - (ql.promo_cents || 0) - (ql.staff_cents || 0) > 0}<span class="block text-sm text-ok">Item discount {ql.discount_label ? "(" + ql.discount_label + ") " : ""}−{money(ql.line_discount_cents - (ql.promo_cents || 0) - (ql.staff_cents || 0))}</span>{/if}
                   {#if ql && ql.deposit_cents}<span class="block text-xs text-muted">+ deposit {money(ql.deposit_cents)}</span>{/if}
                 </button>
                 <div class="flex shrink-0 items-center gap-1">
@@ -580,11 +584,16 @@
         {/each}
       </ul>
       {#if problems.some((x) => !x.key)}<p class="text-sm text-bad">{problems.find((x) => !x.key).message}</p>{/if}
+      {#if cart.staff}
+        <p class="flex items-center justify-between gap-2 rounded-xl bg-accent/10 px-3 py-2 text-sm"><span>Staff sale: <b>{cart.staff.name}</b>{quote && quote.staff ? " · " + quote.staff.pct + "% · " + money(quote.staff.cents) + " off" + (quote.staff.left_cents !== null ? " · " + money(quote.staff.left_cents) + " left this month" : "") : ""}</span>
+          <button class="underline" onclick={() => { cart.staff = null; changed(); }}>Remove</button></p>
+      {/if}
 
       {#if quote && live.length}
         <div class="space-y-1 border-t border-line pt-2 text-sm">
           {#each quote.promotions || [] as a (a.id)}<p class="flex justify-between text-ok"><span>🏷 {a.name}{a.times > 1 ? " ×" + a.times : ""}</span><span>−{money(a.saving_cents)}</span></p>{/each}
-          {#if quote.discount_cents - quote.cart_discount_cents - (quote.promotions || []).reduce((x, a) => x + a.saving_cents, 0) > 0}<p class="flex justify-between text-ok"><span>Item discounts</span><span>−{money(quote.discount_cents - quote.cart_discount_cents - (quote.promotions || []).reduce((x, a) => x + a.saving_cents, 0))}</span></p>{/if}
+          {#if quote.staff && quote.staff.cents}<p class="flex justify-between text-ok"><span>Staff discount ({quote.staff.name})</span><span>−{money(quote.staff.cents)}</span></p>{/if}
+          {#if quote.discount_cents - quote.cart_discount_cents - (quote.promotions || []).reduce((x, a) => x + a.saving_cents, 0) - (quote.staff ? quote.staff.cents : 0) > 0}<p class="flex justify-between text-ok"><span>Item discounts</span><span>−{money(quote.discount_cents - quote.cart_discount_cents - (quote.promotions || []).reduce((x, a) => x + a.saving_cents, 0) - (quote.staff ? quote.staff.cents : 0))}</span></p>{/if}
           {#if (quote.coupons_unused || []).length}<p class="text-warn">Coupon {quote.coupons_unused.join(", ")} gives nothing on this sale (unknown, not now, or no items for it).</p>{/if}
           {#if quote.cart_discount_cents}<p class="flex justify-between text-ok"><span>Sale discount{quote.cart_discount_label ? " (" + quote.cart_discount_label + ")" : ""}</span><span>−{money(quote.cart_discount_cents)}</span></p>{/if}
           {#if quote.deposit_cents}<p class="flex justify-between"><span>Deposits and fees</span><span>{money(quote.deposit_cents)}</span></p>{/if}
@@ -604,6 +613,7 @@
           {#if can("sales.discount")}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={() => (dialog = { kind: "discount", type: cart.cart_discount ? cart.cart_discount.type : "pct", value: "" })}>Sale discount</button>{/if}
           {#if can("sales.tax_exempt")}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={() => (dialog = { kind: "exempt", reason: cart.exempt ? cart.exempt.reason : "", reference: cart.exempt ? cart.exempt.reference : "" })}>Tax exempt</button>{/if}
           {#if promoOn}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={() => (dialog = { kind: "coupon", code: "" })}>Coupon{(cart.coupons || []).length ? " (" + cart.coupons.length + ")" : ""}</button>{/if}
+          {#if settings.staff_discount && settings.staff_discount.enabled && !cart.staff && !cart.training}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length || isHubDown()} onclick={() => (dialog = { kind: "staff" })}>Staff sale</button>{/if}
           <button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={hold}>Hold</button>
           <button class="btn-ghost min-h-10 text-sm text-bad" disabled={!cart.lines.length} onclick={() => clearCart()}>Clear sale</button>
         </div>

@@ -213,4 +213,4 @@ function details(app, q) {
   return { cashier: id, name: nameOf(app, id), from: r.from, to: r.to, events: out };
 }
 
-module.exports = { tillRecon, reconcile, lossPrevention, details, range, nameOf };
+module.exports = { tillRecon, reconcile, lossPrevention, details, range, nameOf, dayStart };

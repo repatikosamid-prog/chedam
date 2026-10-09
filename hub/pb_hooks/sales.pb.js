@@ -122,6 +122,7 @@ routerAdd("GET", "/api/chedam/tills/current", (e) => {
       float_default_cents: auth.setting(e.app, "till.float_default_cents", 0),
       denominations: auth.setting(e.app, "till.denominations", []),
       exempt_reasons: auth.setting(e.app, "sales.exempt_reasons", {}),
+      staff_discount: (() => { const d = auth.setting(e.app, "sales.staff_discount", {}) || {}; return { enabled: !!d.enabled, pct: d.pct || 0 }; })(),
     },
     business: sales.business(e.app),
   });

@@ -190,6 +190,18 @@ P2_TESTS = [
     ("P21", "Promotions", "Laptop", "Labels: print the batch with a product on a deal", "The label shows the deal price big, 'SALE', the deal, 'Reg' price and the end date"),
     ("P22", "Promotions", "Till (hub off)", "Switch the Pi off; ring up a product on a deal", "The offline till applies the same deal; after the Pi is back the sale arrives with the deal"),
     ("P23", "Promotions", "Till", "As a cashier: open Promotions", "Can see the deals but not create, change or end them"),
+    # ---- Step 2: near-expiry markdowns and staff discounts (DL-124..127)
+    ("P30", "Markdowns", "Laptop", "Promotions → Near-expiry markdowns: switch On (e.g. 3 days → 25%, 1 day → 50%), Save", "'Marked down now' lists perishable lots inside the window with their %"),
+    ("P31", "Markdowns", "Till", "Ring up a perishable product with a lot expiring within the window", "The line shows 'Near expiry 25% off' (or 50%) and the saving"),
+    ("P32", "Markdowns", "Phone + till", "Receive 2 more of it expiring tomorrow; ring up 3", "2 at 50% (they sell first), 1 at 25%"),
+    ("P33", "Markdowns", "Laptop", "A minute later: Labels", "Near-expiry stickers on the batch, one per item, showing the marked-down price"),
+    ("P34", "Markdowns", "Till", "A product with both a deal and a markdown", "The customer gets whichever saves more, not both"),
+    ("P35", "Staff discount", "Laptop", "Promotions → Staff discount: On, 10%, $100 a month; leave out a category; Save", "Saved; the till shows 'Staff sale'"),
+    ("P36", "Staff discount", "Till", "Ring up items, Staff sale → pick a staff member → their PIN", "10% off each eligible item; 'Staff sale: name · $x off · $y left this month'; not on the excluded category or on items with a deal"),
+    ("P37", "Staff discount", "Till", "Pay; look at the receipt", "'Staff discount' under the items and 'Staff purchase: name'"),
+    ("P38", "Staff discount", "Till", "Staff sale with a wrong PIN", "Refused; no discount"),
+    ("P39", "Staff discount", "Till", "Use up the monthly amount, then another staff sale", "The discount stops at the limit; then 'has used this month's staff discount'"),
+    ("P40", "Staff discount", "Till (hub off)", "Switch the Pi off; try a staff sale", "Not available offline"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

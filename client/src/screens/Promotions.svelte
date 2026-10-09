@@ -4,7 +4,8 @@
   // if it needs one, limits, whether it stacks, labels. The preview shows each product's regular and
   // promo price, and with costs.view the cost and new margin, below cost in red. Saved as a draft or
   // switched on; "End now" stops it (labels go back to the regular price). Scheduled prices: a new price
-  // for a product from a date, to a date.
+  // for a product from a date, to a date. Step 2: near-expiry markdowns (% off by days left, per lot; the
+  // stock marked down now) and the staff discount (%, monthly limit, on deals or not, categories left out).
   import { onMount } from "svelte";
   import { api, apiAll } from "../lib/api.js";
   import { go, can, handleRefusal } from "../lib/session.svelte.js";
@@ -24,11 +25,35 @@
   let list = $state([]), scheduled = $state([]), products = $state([]), units = $state([]), cats = $state([]);
   let error = $state(""), draft = $state(null), preview = $state(null), busy = $state(false), q = $state(""), exQ = $state("");
   let sched = $state(null), schedQ = $state("");
+  let mdSet = $state(null), staffSet = $state(null), mdRows = $state([]);   // settings records and the marked-down stock
 
   async function load() {
     const r = await api("GET", "/api/chedam/promotions");
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
     list = r.json.promotions; scheduled = r.json.scheduled;
+    const st = await api("GET", "/api/collections/settings/records?perPage=10&filter=" + encodeURIComponent("key='promotions.markdowns' || key='sales.staff_discount'"));
+    if (st.ok) {
+      const md = st.json.items.find((x) => x.key === "promotions.markdowns"), sd = st.json.items.find((x) => x.key === "sales.staff_discount");
+      if (md) mdSet = { id: md.id, ...md.value, steps: (md.value.steps || []).map((x) => ({ ...x })) };
+      if (sd) staffSet = { id: sd.id, ...sd.value, limit: ((sd.value.monthly_limit_cents || 0) / 100).toFixed(2), exclude_categories: [...(sd.value.exclude_categories || [])] };
+    }
+    const m = await api("GET", "/api/chedam/promotions/markdowns");
+    if (m.ok) mdRows = m.json.rows;
+  }
+
+  async function saveMarkdowns() {
+    const steps = mdSet.steps.map((x) => ({ days: Number(x.days), pct: Number(x.pct) })).filter((x) => x.days >= 0 && x.pct > 0 && x.pct <= 100).sort((a, b) => b.days - a.days);
+    const r = await api("PATCH", "/api/collections/settings/records/" + mdSet.id, { value: { enabled: !!mdSet.enabled, perishable_only: !!mdSet.perishable_only, steps } });
+    if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
+    mdSet.steps = steps;
+    // Only the marked-down list is read again: the staff discount form may have changes not saved yet.
+    const m = await api("GET", "/api/chedam/promotions/markdowns");
+    if (m.ok) mdRows = m.json.rows;
+  }
+  async function saveStaff() {
+    const r = await api("PATCH", "/api/collections/settings/records/" + staffSet.id, { value: { enabled: !!staffSet.enabled, pct: Number(staffSet.pct) || 0,
+      monthly_limit_cents: toCents(staffSet.limit) || 0, on_promotions: !!staffSet.on_promotions, exclude_categories: staffSet.exclude_categories } });
+    if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
   }
   onMount(async () => {
     load();
@@ -261,6 +286,52 @@
       {/if}
     {/each}
     {#if !list.length}<p class="text-muted">No promotions yet.</p>{/if}
+
+    {#if mdSet}
+      <div class="card space-y-2">
+        <h2 class="font-semibold">Near-expiry markdowns</h2>
+        <p class="text-sm text-muted">Items close to their expiry date sell at a % off, lot by lot (the oldest stock sells first). Their stickers are put on the label batch when a lot reaches a step. The customer gets the markdown or another deal, whichever saves more.</p>
+        {#if can("settings.manage")}
+          <label class="flex min-h-10 items-center gap-3"><input type="checkbox" class="h-5 w-5 accent-accent" bind:checked={mdSet.enabled} /> On</label>
+          <label class="flex min-h-10 items-center gap-3"><input type="checkbox" class="h-5 w-5 accent-accent" bind:checked={mdSet.perishable_only} /> Only products marked perishable</label>
+          {#each mdSet.steps as st, i (i)}
+            <div class="flex flex-wrap items-end gap-2">
+              <label class="block"><span class="text-sm text-muted">Days left (or fewer)</span><input class="field w-28" type="number" min="0" step="1" bind:value={st.days} /></label>
+              <label class="block"><span class="text-sm text-muted">% off</span><input class="field w-28" type="number" min="1" max="100" step="1" bind:value={st.pct} /></label>
+              <button class="btn-ghost min-h-12 text-sm text-bad" onclick={() => (mdSet.steps = mdSet.steps.filter((_, k) => k !== i))}>Remove</button>
+            </div>
+          {/each}
+          <div class="flex flex-wrap gap-2">
+            <button class="btn-ghost min-h-10 text-sm" onclick={() => (mdSet.steps = [...mdSet.steps, { days: 2, pct: 30 }])}>Add a step</button>
+            <button class="btn min-h-10 text-sm" onclick={saveMarkdowns}>Save markdowns</button>
+          </div>
+        {:else}<p class="text-sm">{mdSet.enabled ? "On: " + mdSet.steps.map((x) => x.days + " days → " + x.pct + "%").join(", ") : "Off"}</p>{/if}
+        {#if mdRows.length}
+          <h3 class="mt-2 font-semibold">Marked down now</h3>
+          <ul class="divide-y divide-line text-sm">{#each mdRows as x (x.lot)}<li class="flex justify-between gap-2 py-1"><span>{x.name} · expires {x.expiry}</span><span>{x.qty} at {x.pct}% off</span></li>{/each}</ul>
+        {/if}
+      </div>
+    {/if}
+
+    {#if staffSet}
+      <div class="card space-y-2">
+        <h2 class="font-semibold">Staff discount</h2>
+        <p class="text-sm text-muted">On the till, "Staff sale": the staff member buying enters their own PIN. Recorded on the sale, up to a monthly amount per person.</p>
+        {#if can("settings.manage")}
+          <label class="flex min-h-10 items-center gap-3"><input type="checkbox" class="h-5 w-5 accent-accent" bind:checked={staffSet.enabled} /> On</label>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class="block"><span class="text-sm text-muted">% off</span><input class="field" type="number" min="1" max="100" step="1" bind:value={staffSet.pct} /></label>
+            <label class="block"><span class="text-sm text-muted">Most per person per month ($, 0: no limit)</span><input class="field" inputmode="decimal" bind:value={staffSet.limit} /></label>
+          </div>
+          <label class="flex min-h-10 items-center gap-3"><input type="checkbox" class="h-5 w-5 accent-accent" bind:checked={staffSet.on_promotions} /> Also on items that already have a deal</label>
+          <p class="text-sm text-muted">Not for these categories:</p>
+          <div class="flex flex-wrap gap-2">{#each cats as c (c.id)}
+            <label class="flex min-h-10 items-center gap-2 rounded-xl border px-2 {staffSet.exclude_categories.includes(c.id) ? 'border-bad bg-bad/10' : 'border-line'}">
+              <input type="checkbox" checked={staffSet.exclude_categories.includes(c.id)} onchange={(e) => (staffSet.exclude_categories = e.currentTarget.checked ? [...staffSet.exclude_categories, c.id] : staffSet.exclude_categories.filter((x) => x !== c.id))} /> {c.name}</label>{/each}</div>
+          <button class="btn min-h-10 text-sm" onclick={saveStaff}>Save staff discount</button>
+        {:else}<p class="text-sm">{staffSet.enabled ? "On: " + staffSet.pct + "% off" : "Off"}</p>{/if}
+      </div>
+    {/if}
 
     <div class="card space-y-2">
       <div class="flex flex-wrap items-center justify-between gap-2">

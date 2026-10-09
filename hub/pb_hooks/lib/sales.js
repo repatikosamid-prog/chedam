@@ -42,8 +42,9 @@ function newApproval(app, e, body) {
   if (until) throw auth.lockedError(until);
   if (!auth.checkSecret(user, "pin", String(body.pin || ""))) auth.failAndThrow(app, user, e, new BadRequestError("Wrong name or PIN."));
   auth.registerSuccess(app, user, e);
-  const perm = body.permission === "sales.void" ? "sales.void" : "sales.approve";
-  if (!can(app, user, perm)) throw new ForbiddenError(user.getString("name") + " cannot approve this.");
+  // "staff": a staff member confirms a staff discount for themselves (FR-5.20); it approves nothing else.
+  const perm = body.permission === "sales.void" ? "sales.void" : body.permission === "staff" ? "staff" : "sales.approve";
+  if (perm !== "staff" && !can(app, user, perm)) throw new ForbiddenError(user.getString("name") + " cannot approve this.");
   const id = $security.randomString(20);
   const all = approvals(app);
   all[id] = { user: user.id, name: user.getString("name"), perm: perm, expires: Date.now() + 5 * 60000 };
@@ -55,6 +56,7 @@ function approvalFor(app, id, perm) {
   const a = id ? approvals(app)[id] : null;
   if (!a) return null;
   if (perm === "sales.void" && a.perm !== "sales.void") return null;
+  if ((perm === "staff") !== (a.perm === "staff")) return null;      // a staff PIN is never a manager's approval
   return a;
 }
 
@@ -168,7 +170,7 @@ function build(app, input, actor) {
         depositFull = ratesOf(app, f.getString("tax_class"), [], taxCache);
       });
     }
-    out.push({ key, p, u, name, qty, base, tare, regular, price, reason, gross, disc: ln.discount, ld: 0, dl: "", pc: 0, pl: "", pids: [], deposit,
+    out.push({ key, p, u, name, qty, base, tare, regular, price, reason, gross, disc: ln.discount, ld: 0, dl: "", pc: 0, pl: "", pids: [], sc: 0, deposit,
       rates: ratesOf(app, p.getString("tax_class"), exemptTypes, taxCache), fullRates: ratesOf(app, p.getString("tax_class"), [], taxCache),
       depositRates, depositFull,
       age_checked: !!ln.age_checked, break_pack: !!ln.break_pack });
@@ -177,8 +179,11 @@ function build(app, input, actor) {
   const live = out.filter((l) => !l.voided);
   // Promotions (FR-5.07-5.10, BR-20): the best deal per item, then the cashier's own discount on what is
   // left (needs sales.discount; the limit counts against the price after the deal).
-  const promo = promoOn ? promoCore().evaluate(live.map((l) => ({ key: l.key, product: l.p.id, category: l.p.getString("category"),
-    kind: l.u.getString("kind"), qty: l.qty, price_cents: l.price, no_promo: !!l.reason })), deals.promos, { now: now, coupons: coupons }) : { lines: {}, applied: [] };
+  const engineLines = live.map((l) => ({ key: l.key, product: l.p.id, category: l.p.getString("category"), kind: l.u.getString("kind"),
+    qty: l.qty, base_qty: l.u.getFloat("base_qty") || 1, price_cents: l.price, no_promo: !!l.reason }));
+  // Near-expiry markdowns (FR-5.11): the cart's products' marked-down lots, in selling order
+  const segs = promoOn && !training ? require(`${__hooks}/lib/promotions.js`).markdownSegments(app, Object.keys(live.reduce((a, l) => { a[l.p.id] = true; return a; }, {}))) : {};
+  const promo = promoOn ? promoCore().evaluate(engineLines, deals.promos, { now: now, coupons: coupons, markdowns: promoCore().markdowns(engineLines, segs) }) : { lines: {}, applied: [] };
   live.forEach((l) => {
     const pr = promo.lines[l.key];
     if (pr && pr.promo_cents) { l.pc = Math.min(pr.promo_cents, l.gross); l.pl = pr.label; l.pids = pr.ids; }
@@ -190,6 +195,35 @@ function build(app, input, actor) {
     }
     l.ld = l.pc + md;
   });
+  // Staff discount (FR-5.20): the staff member buying confirmed with their own PIN; % off what is left of
+  // each eligible line, up to their monthly limit.
+  let staff = null;
+  if (input.staff_approval) {
+    const cfg = setting(app, "sales.staff_discount", {}) || {};
+    const a = approvalFor(app, String(input.staff_approval), "staff");
+    if (!cfg.enabled) problems.push({ type: "staff", message: "Staff discounts are switched off." });
+    else if (!a) problems.push({ type: "staff", message: "Staff discount: the staff member enters their PIN again." });
+    else {
+      const pct = Math.max(0, Math.min(100, Number(cfg.pct) || 0));
+      const limit = Math.max(0, Number(cfg.monthly_limit_cents) || 0);
+      const monthStart = st().today().substring(0, 8) + "01";
+      const used = app.findRecordsByFilter("sales", "staff_user = {:u} && status = 'completed' && training = false && completed_at >= {:m}", "", 0, 0,
+        { u: a.user, m: require(`${__hooks}/lib/reports.js`).dayStart(monthStart) }).reduce((x, r) => x + r.getInt("staff_discount_cents"), 0);
+      let left = limit ? Math.max(0, limit - used) : Infinity;
+      const excl = Array.isArray(cfg.exclude_categories) ? cfg.exclude_categories : [];
+      let total = 0;
+      live.forEach((l) => {
+        l.sc = 0;
+        if (excl.indexOf(l.p.getString("category")) >= 0 || (l.pc > 0 && !cfg.on_promotions) || left <= 0) return;
+        const sc = Math.min(left, core().roundHalfUp(((l.gross - l.ld) * pct) / 100));
+        if (sc <= 0) return;
+        l.sc = sc; l.ld += sc; left -= sc; total += sc;
+      });
+      staff = { approval: String(input.staff_approval), user: a.user, name: a.name, pct: pct, cents: total, used_cents: used, limit_cents: limit,
+        left_cents: limit ? Math.max(0, limit - used - total) : null };
+      if (limit && total === 0 && used >= limit) problems.push({ type: "staff", message: a.name + " has used this month's staff discount (" + (limit / 100).toFixed(2) + ")." });
+    }
+  }
   const usedCodes = {};
   promo.applied.forEach((a) => { const d = deals.promos.find((x) => x.id === a.id); if (d && d.coupon_code) usedCodes[d.coupon_code] = true; });
   const couponsUnused = coupons.filter((c) => !usedCodes[c]);
@@ -214,7 +248,7 @@ function build(app, input, actor) {
 
   if (!training) stockCheck(app, live, input.cart_id, problems, need);
   return { lines: out, live, priced, mode, exempt, exemptCents, problems, needs, training, cartDisc,
-    cartDiscLabel: cartDisc ? core().discountLabel(input.cart_discount) : "", promotions: promo.applied, coupons, couponsUnused };
+    cartDiscLabel: cartDisc ? core().discountLabel(input.cart_discount) : "", promotions: promo.applied, coupons, couponsUnused, staff };
 }
 
 // Stock before payment (BR-11): enough on hand (minus other carts' soft holds, BR-13), loose units or
@@ -335,10 +369,11 @@ function quoteView(b, approval) {
     lines: b.lines.map((l) => l.voided ? { key: l.key, voided: true, name: l.name } : {
       key: l.key, name: l.name, product: l.p.id, selling_unit: l.u.id, qty: l.qty, base_qty: l.base, tare: l.tare,
       regular_price_cents: l.regular, price_cents: l.price, gross_cents: l.gross, line_discount_cents: l.ld, discount_label: l.dl,
-      promo_cents: l.pc, promo_label: l.pl, promotions: l.pids, cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, taxes: pl[l.key].taxes, deposit_cents: l.deposit,
+      promo_cents: l.pc, promo_label: l.pl, promotions: l.pids, staff_cents: l.sc, cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, taxes: pl[l.key].taxes, deposit_cents: l.deposit,
       age_restricted: l.p.getBool("age_restricted"), min_age: l.p.getInt("min_age") }),
     tax_mode: b.mode, subtotal_cents: b.priced.subtotal_cents, discount_cents: b.priced.discount_cents, cart_discount_cents: b.cartDisc,
-    cart_discount_label: b.cartDiscLabel, promotions: b.promotions, coupons: b.coupons, coupons_unused: b.couponsUnused, taxes: b.priced.taxes, tax_cents: b.priced.tax_cents, deposit_cents: b.priced.deposit_cents, total_cents: b.priced.total_cents,
+    cart_discount_label: b.cartDiscLabel, promotions: b.promotions, coupons: b.coupons, coupons_unused: b.couponsUnused,
+    staff: b.staff ? { name: b.staff.name, pct: b.staff.pct, cents: b.staff.cents, left_cents: b.staff.left_cents } : null, taxes: b.priced.taxes, tax_cents: b.priced.tax_cents, deposit_cents: b.priced.deposit_cents, total_cents: b.priced.total_cents,
     cash_total_cents: core().cashRound(b.priced.total_cents), exempt: b.exempt, exempt_cents: b.exemptCents,
     problems: b.problems, needs_approval: approval ? [] : b.needs, training: b.training,
   };
@@ -362,7 +397,7 @@ function saleView(app, id, showCost) {
     const v = { id: l.id, line_no: l.getInt("line_no"), name: l.getString("name"), product: l.getString("product"), selling_unit: l.getString("selling_unit"),
       qty: l.getFloat("qty"), base_qty: l.getFloat("base_qty"), regular_price_cents: l.getInt("regular_price_cents"), price_cents: l.getInt("price_cents"),
       override_reason: l.getString("override_reason"), gross_cents: l.getInt("gross_cents"), line_discount_cents: l.getInt("line_discount_cents"),
-      discount_label: l.getString("discount_label"), promo_cents: l.getInt("promo_cents"), promo_label: l.getString("promo_label"), cart_discount_cents: l.getInt("cart_discount_cents"), net_cents: l.getInt("net_cents"), taxes: j(l, "taxes", []), deposit_cents: l.getInt("deposit_cents"),
+      discount_label: l.getString("discount_label"), promo_cents: l.getInt("promo_cents"), promo_label: l.getString("promo_label"), staff_cents: l.getInt("staff_cents"), cart_discount_cents: l.getInt("cart_discount_cents"), net_cents: l.getInt("net_cents"), taxes: j(l, "taxes", []), deposit_cents: l.getInt("deposit_cents"),
       voided: l.getBool("voided"), age_checked: l.getBool("age_checked") };
     if (showCost) v.cost_cents = l.getInt("cost_cents");
     return v;
@@ -379,6 +414,7 @@ function saleView(app, id, showCost) {
     subtotal_cents: s.getInt("subtotal_cents"), discount_cents: s.getInt("discount_cents"), tax_cents: s.getInt("tax_cents"),
     cart_discount_cents: s.getInt("cart_discount_cents"), cart_discount_label: s.getString("cart_discount_label"),
     promotions: j(s, "promotions", []), coupons: j(s, "coupons", []),
+    staff_name: s.getString("staff_name"), staff_discount_cents: s.getInt("staff_discount_cents"),
     deposit_cents: s.getInt("deposit_cents"), total_cents: s.getInt("total_cents"), rounding_cents: s.getInt("rounding_cents"),
     paid_cents: s.getInt("paid_cents"), change_cents: s.getInt("change_cents"), taxes: j(s, "taxes", []), exempt: j(s, "exempt", null),
     approvals: j(s, "approvals", []), note: s.getString("note"), void_reason: s.getString("void_reason"),
@@ -463,6 +499,7 @@ function complete(app, input, ctx, internal) {
   s.load({ number, till: till ? till.id : "", cashier: actor ? actor.id : "", status: "completed", training: b.training, offline: false,
     tax_mode: b.mode, subtotal_cents: b.priced.subtotal_cents, discount_cents: b.priced.discount_cents, tax_cents: b.priced.tax_cents,
     cart_discount_cents: b.cartDisc, cart_discount_label: b.cartDiscLabel, promotions: b.promotions, coupons: b.coupons.filter((c) => b.couponsUnused.indexOf(c) < 0),
+    staff_user: b.staff ? b.staff.user : "", staff_name: b.staff ? b.staff.name : "", staff_discount_cents: b.staff ? b.staff.cents : 0,
     deposit_cents: b.priced.deposit_cents, total_cents: b.priced.total_cents, rounding_cents: pay.rounding_cents, paid_cents: pay.paid_cents,
     change_cents: pay.change_cents, taxes: b.priced.taxes, exempt: b.exempt, approvals: appr, note: String(input.note || "").substring(0, 500),
     items: b.live.reduce((a, l) => a + (st().isLooseUnit(l.u) && l.u.getString("kind") === "weight" ? 1 : l.qty), 0),
@@ -496,7 +533,7 @@ function complete(app, input, ctx, internal) {
       costTotal += cost;
       line.load({ sale: id, line_no: i + 1, product: l.p.id, selling_unit: l.u.id, name: l.name, qty: l.qty, base_qty: l.base, tare: l.tare,
         regular_price_cents: l.regular, price_cents: l.price, override_reason: l.reason, gross_cents: l.gross, line_discount_cents: l.ld,
-        discount_label: l.dl, promo_cents: l.pc, promo_label: l.pl, promotions: l.pids, cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, tax_class: l.p.getString("tax_class"),
+        discount_label: l.dl, promo_cents: l.pc, promo_label: l.pl, promotions: l.pids, staff_cents: l.sc, cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, tax_class: l.p.getString("tax_class"),
         taxes: pl[l.key].taxes, deposit_cents: l.deposit, lots: lots, cost_cents: cost, age_checked: l.age_checked });
     }
     st().stamp(line, ctx);
@@ -520,7 +557,8 @@ function complete(app, input, ctx, internal) {
   }
   if (input.cart_id) app.findRecordsByFilter("soft_holds", "cart_id = {:c}", "", 0, 0, { c: String(input.cart_id) }).forEach((h) => app.delete(h));
   if (approval) useApproval(app, input.approval);
-  if (!b.training && b.promotions.length) require(`${__hooks}/lib/promotions.js`).usage(app, b.promotions, ctx);
+  if (!b.training && b.promotions.length) require(`${__hooks}/lib/promotions.js`).usage(app, b.promotions.filter((a) => a.id !== "markdown"), ctx);
+  if (b.staff) useApproval(app, b.staff.approval);
   return { duplicate: false, sale: saleView(app, id, ctx.showCost) };
 }
 

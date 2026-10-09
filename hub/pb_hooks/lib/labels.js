@@ -18,13 +18,18 @@ function reasonsOf(r) { try { return JSON.parse(r.getString("reasons") || "[]") 
 
 // One pending line per product + unit (FR-5.13 "duplicates merged"). qty: labels wanted (manual adds may
 // raise it; automatic adds keep what is there).
-function queue(app, productId, unitId, reason, ctx, qty) {
+// markdownPct: a near-expiry sticker at that % off (P2, FR-5.11), kept apart from the shelf label.
+function queue(app, productId, unitId, reason, ctx, qty, markdownPct) {
   if (REASONS.indexOf(reason) < 0) reason = "manual";
-  const found = app.findRecordsByFilter("label_batch_items", "status = 'pending' && product = {:p} && selling_unit = {:u}", "", 1, 0, { p: productId, u: unitId });
+  const md = Number(markdownPct) || 0;
+  // Migrations before P2 step 2 (sample data) run before the markdown field exists.
+  const hasMd = !!app.findCollectionByNameOrId("label_batch_items").fields.getByName("markdown_pct");
+  const found = app.findRecordsByFilter("label_batch_items", "status = 'pending' && product = {:p} && selling_unit = {:u}" + (hasMd ? " && markdown_pct = {:m}" : ""), "", 1, 0, { p: productId, u: unitId, m: md });
   const r = found.length ? found[0] : new Record(app.findCollectionByNameOrId("label_batch_items"));
   const reasons = found.length ? reasonsOf(r) : [];
   if (reasons.indexOf(reason) < 0) reasons.push(reason);
   r.load({ product: productId, selling_unit: unitId, reasons: reasons, status: "pending" });
+  if (hasMd) r.set("markdown_pct", md);
   const want = Math.max(1, Math.min(999, Math.floor(Number(qty) || 1)));
   if (!found.length) r.set("qty", want);
   else if (qty && want > r.getInt("qty")) r.set("qty", want);
@@ -64,7 +69,11 @@ function labelData(app, p, u, cache) {
 function itemView(app, r, cache) {
   let p, u;
   try { p = app.findRecordById("products", r.getString("product")); u = app.findRecordById("selling_units", r.getString("selling_unit")); } catch (_) { return null; }
-  return Object.assign(labelData(app, p, u, cache), { id: r.id, qty: r.getInt("qty"), reasons: reasonsOf(r), version: r.getString("updated_at"),
+  const d = labelData(app, p, u, cache);
+  // A near-expiry sticker: the marked-down price (the deal on the shelf label does not apply to it)
+  const md = r.getFloat("markdown_pct");
+  if (md > 0) d.promo = { price_cents: d.price_cents - Math.floor((d.price_cents * md) / 100 + 0.5), regular_cents: d.price_cents, text: "Near expiry " + md + "% off", until: "" };
+  return Object.assign(d, { markdown_pct: md, id: r.id, qty: r.getInt("qty"), reasons: reasonsOf(r), version: r.getString("updated_at"),
     added_at: r.getString("created_at"), removed: !!(p.getString("deleted_at") || u.getString("deleted_at")) });
 }
 

@@ -23,6 +23,12 @@
 // buy-get, every item of a Y-for-$X) are used up by their deal.
 //
 // scheduledPrice(unitId, regular_cents, scheduled, now) -> {price_cents, id} the price in force (FR-5.06).
+//
+// Near-expiry markdowns (FR-5.11, P2 step 2): markdownPct(days left, steps) is a lot's % off; segments are
+// a product's marked-down stock in the order it sells (FEFO): {product: [{qty (base units), pct}]}.
+// markdowns(lines, segments) gives each line's items their % off (`md`), and evaluate() treats the markdown
+// as one more deal, so an item gets the markdown or another deal, whichever saves more (BR-20).
+//   lines also carry base_qty (base units in one item) for markdowns.
 
 function roundHalfUp(x) { return Math.floor(x + 0.5 + 1e-9); }
 
@@ -87,11 +93,13 @@ function describe(p) {
 
 // The saving of one promotion on the free units. Returns {saving (exact), per: [{u, s}], used: [unit indexes], times}.
 function tryPromo(p, units, free) {
-  const cand = free.filter((i) => inScope(p, units[i]));
+  const cand = p.type === "markdown" ? free.filter((i) => units[i].md > 0) : free.filter((i) => inScope(p, units[i]));
   const limit = Number(p.per_transaction) > 0 ? Number(p.per_transaction) : Infinity;
   const per = [], used = [];
   let times = 0;
-  if (PER_ITEM[p.type]) {
+  if (p.type === "markdown") {
+    cand.forEach((i) => { const s = (units[i].net * units[i].md) / 100; if (s > 0) { per.push({ u: i, s: s }); used.push(i); times++; } });
+  } else if (PER_ITEM[p.type]) {
     cand.forEach((i) => {
       if (times >= limit) return;
       const u = units[i];
@@ -132,6 +140,40 @@ function tryPromo(p, units, free) {
   return { saving: per.reduce((a, x) => a + x.s, 0), per: per, used: used, times: times };
 }
 
+function markdownPct(daysLeft, steps) {
+  if (!(daysLeft >= 0)) return 0;
+  let pct = 0;
+  (steps || []).forEach((st) => { if (daysLeft <= Number(st.days) && Number(st.pct) > pct) pct = Number(st.pct); });
+  return Math.min(100, pct);
+}
+
+// {key: [pct of each item]} (a weighed line is one item). Lines of one product share its marked-down stock in order.
+function markdowns(lines, segments) {
+  const left = {};
+  Object.keys(segments || {}).forEach((pid) => { left[pid] = (segments[pid] || []).map((x) => ({ qty: Number(x.qty), pct: Number(x.pct) })); });
+  const out = {};
+  const take = (pid, want) => {
+    // Weighted % over the base units taken (unmarked stock counts as 0%).
+    let need = want, sum = 0;
+    const segs = left[pid] || [];
+    while (need > 1e-9 && segs.length) {
+      const t = Math.min(need, segs[0].qty);
+      sum += t * segs[0].pct; need -= t; segs[0].qty -= t;
+      if (segs[0].qty <= 1e-9) segs.shift();
+    }
+    return want > 0 ? sum / want : 0;
+  };
+  lines.forEach((l) => {
+    if (!left[l.product] || !left[l.product].length || l.no_promo) return;
+    if (l.kind === "weight") { out[l.key] = [take(l.product, Number(l.qty))]; return; }
+    const per = Number(l.base_qty) > 0 ? Number(l.base_qty) : 1;
+    const md = [];
+    for (let i = 0; i < Math.round(Number(l.qty) || 0) && i < 1000; i++) md.push(take(l.product, per));
+    out[l.key] = md;
+  });
+  return out;
+}
+
 function evaluate(lines, promos, opts) {
   const o = opts || {};
   const now = o.now || new Date();
@@ -140,15 +182,22 @@ function evaluate(lines, promos, opts) {
   lines.forEach((l) => { out[l.key] = { promo_cents: 0, label: "", ids: [] }; });
   const live = (promos || []).filter((p) => TYPES.indexOf(p.type) >= 0 && inForce(p, now)
     && (!p.coupon_code || codes.indexOf(String(p.coupon_code).trim().toUpperCase()) >= 0));
-  if (!live.length) return { lines: out, applied: [] };
+  if (!live.length && !Object.keys(o.markdowns || {}).length) return { lines: out, applied: [] };
 
   // Units: one per item (whole quantities), one per weighed line.
   const units = [];
   lines.forEach((l) => {
     if (l.no_promo || !(Number(l.price_cents) > 0)) return;
-    if (l.kind === "weight") units.push({ key: l.key, product: l.product, category: l.category, weight: Number(l.qty), net: Number(l.price_cents) * Number(l.qty) });
-    else for (let i = 0; i < Math.round(Number(l.qty) || 0) && i < 1000; i++) units.push({ key: l.key, product: l.product, category: l.category, net: Number(l.price_cents) });
+    const md = (o.markdowns && o.markdowns[l.key]) || [];
+    if (l.kind === "weight") units.push({ key: l.key, product: l.product, category: l.category, weight: Number(l.qty), net: Number(l.price_cents) * Number(l.qty), md: md[0] || 0 });
+    else for (let i = 0; i < Math.round(Number(l.qty) || 0) && i < 1000; i++) units.push({ key: l.key, product: l.product, category: l.category, net: Number(l.price_cents), md: md[i] || 0 });
   });
+  // The markdown competes with the other deals as one more deal (BR-20).
+  const mdPcts = {};
+  units.forEach((u) => { if (u.md > 0) mdPcts[Math.round(u.md * 10) / 10] = true; });
+  const mdList = Object.keys(mdPcts);
+  if (mdList.length) live.push({ id: "markdown", type: "markdown", status: "active", products: [], categories: [], exclude: [],
+    name: mdList.length === 1 ? "Near expiry " + mdList[0] + "% off" : "Near expiry markdown" });
   const claimed = units.map(() => false);
   const applied = [];
 
@@ -170,20 +219,57 @@ function evaluate(lines, promos, opts) {
     if (total > 0) applied.push({ id: p.id, name: label, times: r.times, saving_cents: total });
   };
 
-  // 1. Item and category deals that do not stack: the best one first, until none saves anything.
-  let pool = live.filter((p) => !p.stackable && p.type !== "spend");
-  for (let guard = 0; pool.length && guard < 200; guard++) {
+  // 1. Deals that do not stack (BR-20: the customer's best price).
+  //    a. Bundles (buy-get, X for $Y, mix and match): the one that gains most over the best per-item deals
+  //       on the same items goes first, until no bundle gains anything.
+  //    b. Per-item deals (% off, $ off, sale price, near-expiry markdown): each remaining item gets the deal
+  //       that saves most on it; ties go to item > category > cart.
+  const noStack = live.filter((p) => !p.stackable && p.type !== "spend");
+  const perItem = noStack.filter((p) => PER_ITEM[p.type] || p.type === "markdown");
+  const itemSaving = (p, i) => {
+    const u = units[i];
+    if (p.type === "markdown") return u.md > 0 ? (u.net * u.md) / 100 : 0;
+    if (!inScope(p, u)) return 0;
+    const w = u.weight || 1;
+    if (p.type === "pct_off") return (u.net * Number(p.pct || 0)) / 100;
+    if (p.type === "amount_off") return Math.min(u.net, Number(p.amount_cents || 0) * w);
+    return Math.max(0, u.net - Number(p.price_cents || 0) * w);
+  };
+  const bestItem = (i) => perItem.reduce((a, p) => Math.max(a, itemSaving(p, i)), 0);
+  let bundles = noStack.filter((p) => !PER_ITEM[p.type] && p.type !== "markdown");
+  for (let guard = 0; bundles.length && guard < 200; guard++) {
     const free = units.map((u, i) => i).filter((i) => !claimed[i]);
-    let best = null, bestP = null;
-    pool.forEach((p) => {
+    let best = null, bestP = null, bestGain = 0;
+    bundles.forEach((p) => {
       const r = tryPromo(p, units, free);
-      if (r.saving <= 0.0001) return;
-      if (!best || r.saving > best.saving + 1e-9 || (Math.abs(r.saving - best.saving) <= 1e-9 && rank(p) > rank(bestP))) { best = r; bestP = p; }
+      const gain = r.saving - r.used.reduce((a, i) => a + bestItem(i), 0);
+      if (gain > bestGain + 1e-9 || (best && Math.abs(gain - bestGain) <= 1e-9 && gain > 1e-9 && rank(p) > rank(bestP))) { best = r; bestP = p; bestGain = gain; }
     });
     if (!best) break;
     record(bestP, best);
     best.used.forEach((i) => { claimed[i] = true; });
-    pool = pool.filter((p) => p !== bestP);
+    bundles = bundles.filter((p) => p !== bestP);
+  }
+  if (perItem.length) {
+    const byPromo = new Map();
+    const count = new Map();
+    units.forEach((u, i) => {
+      if (claimed[i]) return;
+      let bp = null, bs = 0;
+      perItem.forEach((p) => {
+        const limit = Number(p.per_transaction) > 0 ? Number(p.per_transaction) : Infinity;
+        if ((count.get(p) || 0) >= limit) return;
+        const sv = itemSaving(p, i);
+        if (sv > bs + 1e-9 || (bp && Math.abs(sv - bs) <= 1e-9 && sv > 0 && rank(p) > rank(bp))) { bp = p; bs = sv; }
+      });
+      if (!bp || bs <= 0.0001) return;
+      count.set(bp, (count.get(bp) || 0) + 1);
+      if (!byPromo.has(bp)) byPromo.set(bp, { saving: 0, per: [], used: [], times: 0 });
+      const r = byPromo.get(bp);
+      r.saving += bs; r.per.push({ u: i, s: bs }); r.used.push(i); r.times++;
+      claimed[i] = true;
+    });
+    perItem.filter((p) => byPromo.has(p)).forEach((p) => record(p, byPromo.get(p)));
   }
   // 2. Stackable item deals, on top (on what is left of each price).
   live.filter((p) => p.stackable && p.type !== "spend").forEach((p) => {
@@ -233,4 +319,4 @@ function itemPrice(p, regular) {
   return null;
 }
 
-module.exports = { evaluate, inForce, inScope, describe, scheduledPrice, itemPrice, TYPES };
+module.exports = { evaluate, inForce, inScope, describe, scheduledPrice, itemPrice, markdownPct, markdowns, TYPES };
