@@ -51,6 +51,7 @@ try {
   const sv = sale.json.sale;
   check("saved sale keeps what each discount was", sale.status === 200 && sv.lines[0].discount_label === "10% off" && sv.lines[1].discount_label === "$0.50 off"
     && sv.cart_discount_label === "5% off" && sv.cart_discount_cents === q.json.cart_discount_cents, JSON.stringify(sale.json).slice(0, 300));
+  check("the sale carries its till number (for the receipt PDF, DL-116)", sv.till_number === 2, JSON.stringify(sv.till_number));
   const rt = (await M.get(`/api/chedam/sales/${sv.id}/receipt-text?chars=48`)).json.text;
   check("printed receipt: discount under its item, the sale's discount on its own line", /Potato chips 200 g[^\n]*\n\s+Discount 10% off\s+-\$0\.40/.test(rt) && /Discount \$0\.50 off\s+-\$0\.50/.test(rt)
     && /Sale discount 5% off\s+-\$/.test(rt), rt);

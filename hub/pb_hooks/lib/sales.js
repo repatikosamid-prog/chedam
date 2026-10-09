@@ -354,6 +354,7 @@ function saleView(app, id, showCost) {
   return {
     id: s.id, number: s.getString("number"), status: s.getString("status"), training: s.getBool("training"), tax_mode: s.getString("tax_mode"),
     completed_at: s.getString("completed_at"), cashier: cashier, till: s.getString("till"),
+    till_number: (() => { try { return require(`${__hooks}/lib/tills.js`).tillNo(app.findRecordById("tills", s.getString("till"))); } catch (_) { return 0; } })(),
     subtotal_cents: s.getInt("subtotal_cents"), discount_cents: s.getInt("discount_cents"), tax_cents: s.getInt("tax_cents"),
     cart_discount_cents: s.getInt("cart_discount_cents"), cart_discount_label: s.getString("cart_discount_label"),
     deposit_cents: s.getInt("deposit_cents"), total_cents: s.getInt("total_cents"), rounding_cents: s.getInt("rounding_cents"),

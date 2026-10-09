@@ -290,4 +290,4 @@ function escpos(L, chars) {
   return out;
 }
 
-module.exports = { receipt, returnReceipt, tillReport, testPage, text, escpos, ascii, money, wrap };
+module.exports = { receipt, returnReceipt, tillReport, testPage, text, lines, escpos, ascii, money, wrap };

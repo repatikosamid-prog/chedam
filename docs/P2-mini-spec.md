@@ -1,6 +1,6 @@
 # P2 Engage: mini-spec
 
-Baseline: Master Specification v1.0 (Sections 7-11, 13). Status: **draft for Sreya's review, 2026-10-09**. Sprint 2.
+Baseline: Master Specification v1.0 (Sections 7-11, 13). Status: **agreed 2026-10-09**, build started. Sprint 2.
 
 ## Goal
 
@@ -8,7 +8,7 @@ The store brings customers back and staff work together. It needs promotions and
 
 **Done when** (Section 13 phase gate): every Must below passes its tests; promotions and loyalty work offline at the till; permissions are enforced on the hub; every write is in the event log; lists export; it is tested on the Pi with 3 devices and a power pull mid-sale; backup and restore are verified; it is piloted for a week.
 
-**Before P2 code starts:** the spec says each phase is released and piloted before the next one starts. P1's gate still has open items: L01-L06 (3 devices, 10 plug pulls, Android camera, spare-card restore, pilot week), Q1 (accountant review of tax), N1 (real GST/PST/BN numbers) and H1 (printer). See "Decisions needed" below.
+**Order (DL-116):** P1 development is done. The pilot week is skipped (the Pi has run since the start; production will be a Pi 4). The tax review (Q1), real tax numbers (N1) and printer tests (H1) are done at the end.
 
 ## Build order
 
@@ -20,7 +20,7 @@ Each step: schema migration and sample data first, then hub rules with tests, th
 | 2. Near-expiry markdowns and staff discounts | Automatic % off by days left, per lot, label queued; staff discount rules (who, %, limits per day/month), logged | FR-5.11, 5.20 |
 | 3. Customers and loyalty | `customers` (first name, phone and/or card, notes; never contacted), find or join at the till in under 10 s with "customer agreed"; points earn and redeem (before tax, spread across lines, BR-21/24), receipt shows earned / redeemed / balance; loyalty cards printed with label layouts, card linked to a phone, lost card blocked with points moved; offline earn/redeem against the cached balance, double use becomes a task; returns reverse points; access and deletion on request (BC PIPA) | FR-7.01-7.06, 7.08, 4.12, BR-24 |
 | 4. Promotion and loyalty reports | Promotion results (units, sales, margin, savings vs the prior period); members, active, points liability in $, top customers | FR-5.12, 7.07 |
-| 5. Customer-facing display | A second screen (old tablet or phone, paired as "customer display") shows items, savings and the total live from its till | FR-3.14 |
+| 5. Customer-facing display | A separate screen facing the customer shows the items, savings and total live from its till. Any device with a browser works: a spare tablet or phone on a stand, or a small monitor with a cheap stick PC or Chromecast-type device. It is paired like any device, marked "customer display", and linked to one till. It needs no sign-in and has no buttons; when idle it shows the store's logo. (A second monitor on a laptop till also works: the display page opens in its own window on that monitor.) | FR-3.14 |
 | 6. Dashboard and sales insights | Role-based dashboard: attention list first, then KPI tiles and charts (sales, margin by category, P&L month to date as far as P2 data allows, inventory health, wastage); sales by hour/day heatmap, best/worst sellers, sell-through, year over year, margin by category | FR-2.01, 10.10 |
 | 7. Tasks, checklists, reminders | Manual tasks (owner, due date, link to a record); opening/closing checklists and shift handover notes; licence, permit and insurance expiry reminders; wrong-storage alert (product temperature range vs its storage area) | FR-2.03, 2.11, 2.12, 6.16 |
 | 8. Messages and announcements | 1:1, groups and an Everyone channel; attachments, mentions, reactions, read receipts, links to records; follows the person across devices; pinned announcements that need acknowledging, the owner sees who did | FR-2.04, 2.05 |
@@ -43,14 +43,14 @@ Each step: schema migration and sample data first, then hub rules with tests, th
 
 ## Open questions
 
-- **Q6** (spec): pilot loyalty settings. The defaults are 1 point per $1 after discounts and before tax, 100 points = $1, 500 points minimum to redeem (BR-24). Earn points on promoted items? Do points expire?
+- **Q6 answered (Sreya, 2026-10-09):** the **business owner decides** the loyalty settings (points per $1, points per $1 off, minimum to redeem, points on promoted items, expiry). Loyalty stays off until the owner has set them in loyalty set-up; the spec's values (1 point per $1, 100 points = $1, minimum 500) are shown only as suggestions.
 - **P2-Q1:** which promotion types does the pilot store actually run? All are Musts, but the order inside step 1 can follow what the store uses first.
 - **P2-Q2:** customer display hardware: a spare tablet or phone on a stand?
 - **P2-Q3:** who gets the end-of-day report, and by when (Q5 in the spec: 8 am the next morning by default)?
 - **P2-Q4:** Google or Microsoft for the owner's email and cloud connection (client IDs, the same need as FR-12.08).
 
-## Decisions needed before building
+## Decided
 
-1. **Order:** finish P1's gate first (Sreya: L01-L06 with real devices, and the pilot week; Q1 accountant; N1 real tax numbers), or build P2 alongside while the P1 pilot runs? The spec allows reordering P2-P5, but says P1 must be released first.
-2. Accept the build order above, or move something earlier (e.g. loyalty before promotions)?
-3. Q6: the loyalty defaults.
+1. Order: P2 now; P1's tax review, tax numbers and printer tests at the end (DL-116).
+2. Build order as above.
+3. Loyalty settings: the owner decides (Q6).

@@ -6,10 +6,12 @@
   // return slip (the drawer opens for a cash refund).
   // Reprints need a manager (security): a manager's PIN on the till, unless the person signed in may
   // approve. A browser reprint is checked and counted on the hub too. Offline receipts (local) are
-  // printed by this device only.
+  // printed by this device only. "Save as PDF" (DL-116) gives the same receipt as the printer's, as a PDF to keep
+  // or print anywhere; a second copy counts as a reprint.
   import { onMount } from "svelte";
   import { money } from "../lib/catalogue.js";
   import { api } from "../lib/api.js";
+  import { download } from "../lib/export.js";
   import { can } from "../lib/session.svelte.js";
   import { pr, loadPrinter, printSale, printReturn } from "../lib/printer.svelte.js";
   import Approve from "./Approve.svelte";
@@ -28,12 +30,24 @@
   async function go(where, body, approval) {
     need = null;
     if (where === "hub") return print({ ...body, approval });
+    let copy = 0;
     if (again && !local) {
       const r = await api("POST", `/api/chedam/${kind === "return" ? "returns" : "sales"}/${sale.id}/reprint`, { approval }, { quiet: true });
       if (!r.ok) { bad = true; msg = r.message; return; }
+      copy = r.json.copy;
     }
     localPrinted++;
+    if (where === "pdf") return savePdf(copy);
     window.print();
+  }
+
+  async function savePdf(copy) {
+    try {
+      const { receiptPdf } = await import("../lib/receipt_pdf.js");
+      const doc = await receiptPdf(sale, { kind, copy });
+      download((kind === "return" ? "return-" : "receipt-") + (sale.number || sale.id) + (copy ? "-copy" + copy : "") + ".pdf", doc.output("blob"));
+      bad = false; msg = "Saved as PDF" + (copy ? " (copy " + copy + ")" : "") + ".";
+    } catch (e) { bad = true; msg = "The PDF could not be made: " + e.message; }
   }
 
   const hubPrint = $derived(!local && !!pr.mine);
@@ -63,6 +77,7 @@
   <div class="flex flex-wrap justify-center gap-2">
     {#if hubPrint}<button class="btn-ghost" disabled={busy} onclick={() => ask("hub")}>{busy ? "Printing…" : again ? "Reprint" : kind === "return" ? "Print return slip" : "Print receipt"}</button>{/if}
     <button class="btn-ghost" onclick={() => ask("device")}>{hubPrint ? (again ? "Reprint on this device" : "Print on this device") : again ? "Reprint" : "Print receipt"}</button>
+    <button class="btn-ghost" onclick={() => ask("pdf")}>Save as PDF</button>
     {#if full && buyer === null}<button class="btn-ghost" onclick={() => (buyer = "")}>Full tax receipt (name)</button>{/if}
   </div>
   {#if need}

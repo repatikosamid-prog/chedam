@@ -30,16 +30,18 @@ function serviceWorker() {
   };
 }
 
-// The till prices offline sales with the hub's own arithmetic (hub/pb_hooks/lib/pricing_core.js, a
-// CommonJS file for the hub's JS engine): served to the app as `virtual:pricing-core` (DL-86).
+// The hub's own pure libraries (CommonJS files for the hub's JS engine) served to the app, so both use the
+// same code: `virtual:pricing-core` (the till prices offline sales, DL-86) and `virtual:receipt-layout`
+// (a receipt saved as PDF is what the receipt printer prints, DL-116).
+const HUB_LIBS = { "virtual:pricing-core": "pricing_core.js", "virtual:receipt-layout": "receipt_layout.js" };
 function pricingCore() {
-  const file = fileURLToPath(new URL("../hub/pb_hooks/lib/pricing_core.js", import.meta.url));
-  const ID = "\0virtual:pricing-core";
   return {
-    name: "chedam-pricing-core",
-    resolveId(id) { return id === "virtual:pricing-core" ? ID : null; },
+    name: "chedam-hub-libs",
+    resolveId(id) { return HUB_LIBS[id] ? "\0" + id : null; },
     load(id) {
-      if (id !== ID) return null;
+      const lib = id.startsWith("\0") && HUB_LIBS[id.slice(1)];
+      if (!lib) return null;
+      const file = fileURLToPath(new URL("../hub/pb_hooks/lib/" + lib, import.meta.url));
       this.addWatchFile(file);
       return "const module = { exports: {} };\n" + readFileSync(file, "utf8") + "\nexport default module.exports;\n";
     },

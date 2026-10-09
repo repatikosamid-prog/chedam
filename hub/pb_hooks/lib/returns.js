@@ -447,7 +447,8 @@ function view(app, id, showCost) {
   try { saleNumber = app.findRecordById("sales", r.getString("sale")).getString("number"); } catch (_) { saleNumber = ""; }
   try { exNumber = app.findRecordById("sales", r.getString("exchange_sale")).getString("number"); } catch (_) { exNumber = ""; }
   const v = { id: r.id, number: r.getString("number"), sale: r.getString("sale"), sale_number: saleNumber, receipt: r.getBool("receipt"),
-    till: r.getString("till"), cashier, reason: r.getString("reason"), tax_mode: r.getString("tax_mode"), completed_at: r.getString("completed_at"),
+    till: r.getString("till"), till_number: (() => { try { return require(`${__hooks}/lib/tills.js`).tillNo(app.findRecordById("tills", r.getString("till"))); } catch (_) { return 0; } })(),
+    cashier, reason: r.getString("reason"), tax_mode: r.getString("tax_mode"), completed_at: r.getString("completed_at"),
     net_cents: r.getInt("net_cents"), tax_cents: r.getInt("tax_cents"), deposit_cents: r.getInt("deposit_cents"), fee_cents: r.getInt("fee_cents"),
     refund_cents: r.getInt("refund_cents"), rounding_cents: r.getInt("rounding_cents"), paid_cents: r.getInt("paid_cents"), taxes: j(r, "taxes", []),
     approvals: j(r, "approvals", []), exchange_sale: r.getString("exchange_sale"), exchange_number: exNumber, reprints: r.getInt("reprints"),
