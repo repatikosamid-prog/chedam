@@ -96,7 +96,7 @@
 </script>
 
 <section class="space-y-4">
-  <div>
+  <div class="screen-head">
     <button class="mb-1 min-h-10 text-sm underline" onclick={() => (cur ? (cur = null) : go("stock"))}>← {cur ? "Counts" : "Stock"}</button>
     <h1 class="text-xl font-bold">{cur ? cur.name : "Stock counts"}</h1>
     {#if cur}<p class="text-muted">{STATUS[cur.status]}</p>{/if}

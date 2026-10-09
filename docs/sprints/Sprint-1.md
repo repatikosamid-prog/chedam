@@ -9,7 +9,8 @@
 | 1-10 | Build steps 1-10 (products, tax, till, selling, printing, returns, labels, import/export, reports, gate) | Claude | Done, deployed `dev-b0e54bb` |
 | T1 | Functional testing: `docs/testing/Chedam-Manual-Tests-P1-1-10.xlsx` (109 checks) | Sreya | In progress (2026-10-08) |
 | T2 | Fix the bugs found in T1 | Claude | Round 1 built, tested and deployed 2026-10-09 (`dev-c5587c9`; DL-109..113, 808 hub tests): remove one line, item and sale discounts on receipts, 15 s back to selling, reprint needs a manager, till numbers, batch numbers, stock colours, label layout, iPhone PDF error, import template, export choice, "Saved ✓". Retest: `docs/testing/Chedam-Retest-2026-10-09.xlsx` (21 checks) |
-| U1 | UI requests (after the functional work): Home button (the Chedam C), the business logo on Home (after asking the owner), top bar with Back and the menu fixed while the page scrolls | Claude | Later (Sreya, 2026-10-09) |
+| T3 | Retest of round 1 (`Chedam-Retest-2026-10-09.xlsx`, 21 checks) | Sreya | **All passed** (2026-10-09) |
+| U1 | UI requests: Home button (the Chedam C), the business logo in the app (after asking the owner), fixed top bar and screen header | Claude | Built and tested 2026-10-09 (DL-115); deploy waits for Sreya's go-ahead |
 | N2 | Proposal: linked card terminal and a web store fed by the store's stock: `docs/proposals/card-terminal-and-webstore.md` | Sreya | Decided 2026-10-09 (DL-114): the store's own processor, P5; web store added to the plan (option A); owner manages DNS. Web store: option A |
 | Q1 | Accountant review of the tax rules (blocks release) | Sreya | Due 2026-10-08 EOD |
 | Q2 | Accept or change the return-policy defaults | Sreya | Open |

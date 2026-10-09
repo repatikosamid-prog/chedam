@@ -119,7 +119,7 @@
 </script>
 
 <section class="space-y-4">
-  <div class="flex flex-wrap items-center justify-between gap-2">
+  <div class="screen-head flex flex-wrap items-center justify-between gap-2">
     <div>
       <button class="mb-1 min-h-10 text-sm underline" onclick={() => (step === "find" || step === "done" ? go("sell") : (step = step === "refund" ? "items" : "find"))}>← {step === "find" || step === "done" ? "Sell" : "Back"}</button>
       <h1 class="text-xl font-bold">Return or exchange</h1>

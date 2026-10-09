@@ -80,7 +80,7 @@
 </script>
 
 <section class="space-y-4">
-  <div class="flex flex-wrap items-center justify-between gap-3">
+  <div class="screen-head flex flex-wrap items-center justify-between gap-3">
     <div>
       <button class="mb-1 min-h-10 text-sm underline" onclick={() => go("home")}>← Back</button>
       <h1 class="text-xl font-bold">Devices</h1>

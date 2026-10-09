@@ -67,7 +67,7 @@
 </script>
 
 <section class="space-y-4">
-  <div class="flex flex-wrap items-end justify-between gap-2">
+  <div class="screen-head flex flex-wrap items-end justify-between gap-2">
     <div>
       <button class="mb-1 min-h-10 text-sm underline" onclick={() => go("home")}>← Home</button>
       <h1 class="text-2xl font-bold">Set up your store</h1>

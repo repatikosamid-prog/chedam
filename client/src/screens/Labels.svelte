@@ -165,7 +165,7 @@
 </script>
 
 <section class="space-y-4">
-  <div>
+  <div class="screen-head">
     <button class="mb-1 min-h-10 text-sm underline" onclick={() => go("home")}>← Back</button>
     <h1 class="text-xl font-bold">Labels</h1>
   </div>

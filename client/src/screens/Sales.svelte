@@ -44,7 +44,7 @@
 </script>
 
 <section class="space-y-4">
-  <div class="flex flex-wrap items-end justify-between gap-2">
+  <div class="screen-head flex flex-wrap items-end justify-between gap-2">
     <div>
       <button class="mb-1 min-h-10 text-sm underline" onclick={() => (sale ? (sale = null) : go("sell"))}>← {sale ? "Sales" : "Sell"}</button>
       <h1 class="text-xl font-bold">{sale ? sale.number : "Sales"}</h1>

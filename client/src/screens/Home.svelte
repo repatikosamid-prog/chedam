@@ -66,7 +66,8 @@
 {#if s.me}
 <section class="space-y-4">
   <div class="card flex flex-wrap items-center justify-between gap-3">
-    <div>
+    {#if s.brand && s.brand.logo}<img src={s.brand.logo} alt={s.brand.name} class="max-h-16 max-w-40 object-contain" onerror={(e) => (e.currentTarget.style.display = "none")} />{/if}
+    <div class="mr-auto">
       <h1 class="text-xl font-bold">Hello, {s.me.user.name}</h1>
       <p class="text-muted">{s.me.role ? s.me.role.name : ""}{s.device ? " · on " + s.device.name : " · on a browser that is not paired"}</p>
     </div>

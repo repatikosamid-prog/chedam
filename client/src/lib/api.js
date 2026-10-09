@@ -12,7 +12,7 @@ export const VERSION = __APP_VERSION__;
 
 // me: who is signed in (GET /api/chedam/access/me), kept so a till that reloads while the hub is
 // unreachable can keep selling as the same person (DL-89).
-const KEYS = { device: "chedam.device", token: "chedam.token", me: "chedam.me" };
+const KEYS = { device: "chedam.device", token: "chedam.token", me: "chedam.me", brand: "chedam.brand" };
 const PROBE = "/api/chedam/status";
 
 let hubDown = false;

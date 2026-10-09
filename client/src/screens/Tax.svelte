@@ -71,7 +71,7 @@
 </script>
 
 <section class="space-y-4">
-  <div>
+  <div class="screen-head">
     <button class="mb-1 min-h-10 text-sm underline" onclick={() => go("products")}>← Products</button>
     <h1 class="text-xl font-bold">Tax</h1>
     <p class="text-muted">Province: {province}</p>

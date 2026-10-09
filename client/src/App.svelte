@@ -1,6 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  import { s, refresh, signOut, notify, can } from "./lib/session.svelte.js";
+  import { s, refresh, signOut, notify, can, go, loadBrand } from "./lib/session.svelte.js";
   import { startMonitor, net } from "./lib/connectivity.svelte.js";
   import { startOffline, syncQueue, off } from "./lib/offline.svelte.js";
   import { load } from "./lib/api.js";
@@ -62,6 +62,20 @@
     else if (net.hub === "ok" && wasDown) { wasDown = false; refresh(); if (off.pending) syncQueue(); }
   });
 
+  // The store's name and logo (DL-115), once someone is signed in.
+  let brandFor = "";
+  $effect(() => { const id = s.me && s.me.user ? s.me.user.id : ""; if (id && id !== brandFor) { brandFor = id; loadBrand(); } });
+
+  // The top bar stays at the top while the page scrolls; each screen's own header row (Back, title and its
+  // buttons, class "screen-head") stays right under it (app.css). Its height goes in --app-top.
+  function trackHeight(node) {
+    const ro = new ResizeObserver(() => document.documentElement.style.setProperty("--app-top", node.offsetHeight + "px"));
+    ro.observe(node);
+    return { destroy: () => ro.disconnect() };
+  }
+  const signedIn = $derived(!!s.me && !["boot", "pair", "wait", "names", "pin", "newpin", "owner", "setup", "recovery"].includes(s.screen));
+  let logoOk = $state(true);
+
   // While waiting for approval or unlock, check more often.
   $effect(() => {
     if (s.screen !== "wait") return;
@@ -70,14 +84,22 @@
   });
 </script>
 
-<div class="print:hidden"><ConnectivityBar /></div>
-<Toast />
-
-<main class="mx-auto w-full {s.screen === 'sell' ? 'max-w-6xl' : 'max-w-3xl'} px-4 pt-4 pb-12">
-  <header class="mb-4 flex items-center justify-between gap-3 print:hidden">
-    <div class="flex items-center gap-2">
-      <img src="./icons/icon-192.png" alt="" class="h-8 w-8 rounded-lg" />
-      <span class="text-lg font-bold">Chedam</span>
+<div class="app-top sticky top-0 z-40 bg-bg print:hidden" use:trackHeight>
+  <ConnectivityBar />
+  <header class="mx-auto flex w-full {s.screen === 'sell' ? 'max-w-6xl' : 'max-w-3xl'} items-center justify-between gap-3 px-4 py-1">
+    <div class="flex min-w-0 items-center gap-2">
+      {#if signedIn}
+        <button class="flex min-h-12 items-center gap-2 rounded-xl pr-2" onclick={() => go("home")} aria-label="Home" title="Home">
+          <img src="./icons/icon-192.png" alt="" class="h-8 w-8 rounded-lg" />
+          <span class="text-lg font-bold">Chedam</span>
+        </button>
+      {:else}
+        <img src="./icons/icon-192.png" alt="" class="h-8 w-8 rounded-lg" />
+        <span class="text-lg font-bold">Chedam</span>
+      {/if}
+      {#if signedIn && s.brand && s.brand.logo && logoOk}
+        <img src={s.brand.logo} alt={s.brand.name} class="h-8 max-w-28 object-contain" onerror={() => (logoOk = false)} />
+      {/if}
     </div>
     {#if s.device}
       <span class="truncate text-sm text-muted">{s.device.name}</span>
@@ -85,6 +107,10 @@
       <span class="text-sm text-muted">Not a paired device</span>
     {/if}
   </header>
+</div>
+<Toast />
+
+<main class="mx-auto w-full {s.screen === 'sell' ? 'max-w-6xl' : 'max-w-3xl'} px-4 pt-2 pb-12">
 
   {#if s.notice.text}
     <div role="status" class="mb-4 flex items-start justify-between gap-3 rounded-xl px-3 py-2

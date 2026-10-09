@@ -158,7 +158,7 @@
 </script>
 
 <section class="space-y-4">
-  <div>
+  <div class="screen-head">
     <button class="mb-1 min-h-10 text-sm underline" onclick={() => { const to = s.returnTo || "products"; s.returnTo = ""; go(to); }}>← {s.returnTo === "receive" ? "Add stock" : "Products"}</button>
     <h1 class="text-xl font-bold">{isNew ? "New product" : p.name || "Product"}
       {#if !isNew}<span class="ml-2 rounded-lg px-2 py-0.5 text-sm align-middle {p.status === 'active' ? 'bg-ok/10 text-ok' : p.status === 'draft' ? 'bg-warn/10 text-warn' : 'bg-soft text-muted'}">{STATUS[p.status]}</span>{/if}

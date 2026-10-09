@@ -34,6 +34,7 @@
   let payments = $state([]), saleId = "", sale = $state(null), busy = $state(false);
   let dialog = $state(null);                     // {kind: weight|choose|age|edit|approve|discount|exempt|holds|card|usd|other|void, ...}
   let scanning = $state(false);
+  let headH = $state(0);                         // the fixed header row: the cart stays just under it
   let codeInput;
   let qTimer;
   let ix = null;                                 // offline pack (indexed)
@@ -361,14 +362,14 @@
 </script>
 
 <section class="space-y-3">
-  <div class="flex flex-wrap items-center justify-between gap-2">
+  <div class="screen-head flex flex-wrap items-center justify-between gap-2" bind:clientHeight={headH}>
     <div class="flex items-center gap-3">
       <button class="min-h-10 text-sm underline" onclick={() => go("home")}>← Back</button>
       <h1 class="text-xl font-bold">Sell</h1>
       {#if off.pending || off.problems}<span class="rounded-lg bg-warn/10 px-2 py-0.5 text-sm text-warn">{off.pending} offline {off.pending === 1 ? "sale" : "sales"} waiting{off.problems ? " · " + off.problems + " need a manager" : ""}</span>{/if}
       {#if info}<span class="rounded-lg px-2 py-0.5 text-sm {info.till ? 'bg-ok/10 text-ok' : 'bg-warn/10 text-warn'}">{info.till ? (info.till.number ? "Till " + info.till.number + " open" : "Till open (opened offline)") : "Till closed"}</span>{/if}
     </div>
-    <div class="flex flex-wrap gap-2">
+    <div class="flex gap-2 overflow-x-auto max-sm:-mx-1 max-sm:w-full max-sm:px-1 [&>button]:shrink-0">
       {#if can("sales.return")}<button class="btn-ghost min-h-10 text-sm" onclick={() => go("returns")}>Return</button>{/if}
       <button class="btn-ghost min-h-10 text-sm" onclick={showHolds}>Recall</button>
       <button class="btn-ghost min-h-10 text-sm" onclick={() => go("sales")}>Sales</button>
@@ -459,7 +460,7 @@
     </div>
 
     <!-- Cart -->
-    <div class="card flex flex-col gap-3 lg:sticky lg:top-2 lg:self-start">
+    <div class="card flex flex-col gap-3 lg:sticky lg:self-start" style="top: calc(var(--app-top, 0px) + {headH}px + 0.5rem)">
       {#if dialog && dialog.kind === "weight"}
         <form class="space-y-2 rounded-xl border border-accent p-3" onsubmit={(e) => { e.preventDefault(); const w = Number(dialog.value); if (w > 0) { const d = dialog; dialog = null; add(d.p, d.u, { weight: w }); } }}>
           <label class="block"><span class="font-semibold">{dialog.p.name}: weight ({dialog.p.base_unit})</span>

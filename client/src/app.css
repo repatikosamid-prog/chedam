@@ -70,3 +70,12 @@
 @keyframes shake { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
 .shake { animation: shake .3s; }
 @media (prefers-reduced-motion: reduce) { .shake { animation: none; } }
+
+/* Fixed top (U1, DL-115): the app's top bar stays at the top while the page scrolls, and each screen's
+   own header row (Back, title, its buttons) stays right under it. */
+.screen-head {
+  position: sticky; top: var(--app-top, 0px); z-index: 30;
+  background: var(--bg); margin-inline: -1rem; padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+@media print { .app-top, .screen-head { position: static; border: 0; } }

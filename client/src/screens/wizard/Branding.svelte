@@ -3,7 +3,7 @@
   // FR-1.02 branding: logo upload, colours (automatically from the logo, can be changed), receipt
   // header and footer, live receipt preview.
   import { api, apiForm } from "../../lib/api.js";
-  import { handleRefusal } from "../../lib/session.svelte.js";
+  import { handleRefusal, loadBrand } from "../../lib/session.svelte.js";
   import { coloursFromImage, contrast, rgb } from "../../lib/colours.js";
   import StepActions from "../../components/StepActions.svelte";
 
@@ -16,6 +16,7 @@
   let header = $state(business.receipt_header || [business.trade_name, business.address && business.address.line1].filter(Boolean).join("\n"));
   let footer = $state(business.receipt_footer || "Thank you for shopping with us!");
   let logoFile = $state(null);
+  let inApp = $state(!!business.logo_in_app);               // DL-115: the owner's choice, asked here
   let logoUrl = $state(business.logo ? `/api/files/${business.collectionId}/${business.id}/${business.logo}` : "");
   let busy = $state(false), error = $state(""), note = $state("");
 
@@ -42,9 +43,10 @@
       const up = await apiForm("PATCH", "/api/collections/business/records/" + business.id, form);
       if (!up.ok) { busy = false; if (!(await handleRefusal(up))) error = up.message; return; }
     }
-    const r = await api("PATCH", "/api/collections/business/records/" + business.id, { colours, receipt_header: header, receipt_footer: footer });
+    const r = await api("PATCH", "/api/collections/business/records/" + business.id, { colours, receipt_header: header, receipt_footer: footer, logo_in_app: !!(inApp && logoUrl) });
     busy = false;
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
+    loadBrand();
     onsaved();
   }
 </script>
@@ -57,6 +59,12 @@
         <label for="logo" class="block font-semibold">Logo (PNG, JPG, WebP or SVG, under 2 MB)</label>
         <input id="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" class="field py-2" onchange={pick} />
         {#if note}<p class="mt-1 text-sm text-muted">{note}</p>{/if}
+        {#if logoUrl}
+          <label class="mt-2 flex min-h-10 items-start gap-3 rounded-xl border border-line p-2">
+            <input type="checkbox" class="mt-1 h-5 w-5 accent-accent" bind:checked={inApp} />
+            <span>Also show this logo in the app, at the top of every screen and on Home, on all devices</span>
+          </label>
+        {/if}
       </div>
       <fieldset class="grid grid-cols-3 gap-2">
         <legend class="mb-1 font-semibold">Colours</legend>

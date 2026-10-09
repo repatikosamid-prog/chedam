@@ -18,7 +18,18 @@ export const s = $state({
   receiveProduct: "",   // product to add to the "Add stock" list when it opens
   newBarcode: "",       // unknown barcode scanned while adding stock: the new product form starts with it
   returnTo: "",         // screen to go back to from the product form (e.g. "receive")
+  brand: load("brand"), // {name, logo}: the store's logo in the top bar and on Home, when the owner chose it (DL-115)
 });
+
+// The store's name and logo for the app (DL-115). Kept on this device so the top bar shows them offline;
+// the logo is used only when the owner said yes in Store setup > Logo and receipt.
+export async function loadBrand() {
+  const r = await api("GET", "/api/collections/business/records?perPage=1&fields=id,collectionId,trade_name,legal_name,logo,logo_in_app", null, { quiet: true });
+  if (!r.ok || !r.json.items.length) return;
+  const b = r.json.items[0];
+  s.brand = { name: b.trade_name || b.legal_name || "", logo: b.logo && b.logo_in_app ? `/api/files/${b.collectionId}/${b.id}/${b.logo}` : "" };
+  save("brand", s.brand);
+}
 
 export function notify(text, kind = "") { s.notice = { text, kind }; }
 
