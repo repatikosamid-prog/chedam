@@ -14,7 +14,8 @@ const RETAINED = {
   stock_counts: "Stock counts", stock_count_lines: "Counted lines", price_history: "Price and cost history", products: "Products",
   selling_units: "Selling units", categories: "Categories", tax_types: "Tax types", tax_rates: "Tax rates", tax_classes: "Tax classes",
   deposits_fees: "Deposits and fees", users: "People", devices: "Devices", business: "The business", import_jobs: "Import log",
-  backups: "Backup runs", label_batches: "Printed label batches", events: "Audit log (never deleted)",
+  backups: "Backup runs", label_batches: "Printed label batches", promotions: "Promotions (sales refer to them)", scheduled_prices: "Scheduled prices",
+  events: "Audit log (never deleted)",
 };
 
 function years(app) {

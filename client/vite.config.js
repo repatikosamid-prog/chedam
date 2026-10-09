@@ -33,7 +33,7 @@ function serviceWorker() {
 // The hub's own pure libraries (CommonJS files for the hub's JS engine) served to the app, so both use the
 // same code: `virtual:pricing-core` (the till prices offline sales, DL-86) and `virtual:receipt-layout`
 // (a receipt saved as PDF is what the receipt printer prints, DL-116).
-const HUB_LIBS = { "virtual:pricing-core": "pricing_core.js", "virtual:receipt-layout": "receipt_layout.js" };
+const HUB_LIBS = { "virtual:pricing-core": "pricing_core.js", "virtual:receipt-layout": "receipt_layout.js", "virtual:promotions-core": "promotions_core.js" };
 function pricingCore() {
   return {
     name: "chedam-hub-libs",

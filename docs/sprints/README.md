@@ -6,7 +6,7 @@ Chedam is built in agile sprints: **one phase of the Master Specification (Secti
 | --- | --- | --- | --- |
 | 0 | P0 Foundation | Pi hub, PWA shell, sign-in, backups, updates | Done (2026-10-03..05) |
 | 1 | P1 Sell | A store can sell on the Pi hub | Done (2026-10-09); Q1 tax review, real tax numbers and printer tests at the end (DL-116) |
-| **2** | **P2 Engage** | **Customers, promotions, insights** | **Started 2026-10-09** (`docs/P2-mini-spec.md`) |
+| **2** | **P2 Engage** | **Customers, promotions, insights** | **Started 2026-10-09** (see `Sprint-2.md`) |
 | 3 | P3 Buy and spend | Purchasing, vendors, expenses | Planned |
 | 4 | P4 People and money | Staff, payroll inputs, accounting | Planned |
 | 5 | P5 Connect and enrich | Integrations (linked card terminal: the store's own processor, DL-114), product data | Planned |

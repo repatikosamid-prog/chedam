@@ -195,7 +195,13 @@
           <span class="text-sm text-muted">Shelf labels: new prices, print, reprint</span>
         </button>
       {/if}
-      {#each modules.filter((m) => m.module !== "sell" && m.module !== "stock" && m.module !== "labels") as m (m.id)}
+      {#if (can("promotions.manage") || can("sales.view")) && modules.some((m) => m.module === "promotions")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("promotions")}>
+          <span class="font-semibold">Promotions</span>
+          <span class="text-sm text-muted">Deals, coupons, scheduled prices</span>
+        </button>
+      {/if}
+      {#each modules.filter((m) => m.module !== "sell" && m.module !== "stock" && m.module !== "labels" && m.module !== "promotions") as m (m.id)}
         <div class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-dashed border-line p-3" aria-disabled="true">
           <span class="font-semibold">{m.label}</span>
           <span class="text-sm text-muted">Coming in a later phase</span>

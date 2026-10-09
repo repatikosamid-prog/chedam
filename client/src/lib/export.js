@@ -85,7 +85,7 @@ export function exportFiles(dict, tables, at) {
 // What the owner can choose to export (2026-10-09): tables grouped the way the store thinks of them.
 // A table not listed here (a later phase's) goes under "Other", so nothing is ever left out of "Everything".
 export const GROUPS = [
-  ["products", "Products and prices", ["categories", "products", "selling_units", "price_history", "tax_types", "tax_rates", "tax_classes", "deposits_fees", "storage_areas"]],
+  ["products", "Products and prices", ["categories", "products", "selling_units", "price_history", "tax_types", "tax_rates", "tax_classes", "deposits_fees", "storage_areas", "promotions", "scheduled_prices"]],
   ["stock", "Stock", ["stock_levels", "stock_lots", "stock_movements", "stock_counts", "stock_count_lines"]],
   ["sales", "Sales", ["sales", "sale_lines", "payments", "tax_exemptions", "holds", "soft_holds"]],
   ["transactions", "Tills, returns and refunds", ["tills", "cash_movements", "returns", "return_lines", "refunds", "store_credits"]],

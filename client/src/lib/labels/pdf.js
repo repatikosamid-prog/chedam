@@ -61,8 +61,14 @@ function drawBarcode(doc, code, x, y, maxW, h) {
   return h;
 }
 
-function drawLabel(doc, cell, d, f, opts) {
+function drawLabel(doc, cell, d0, f, opts) {
   const { x, y, w, h } = cell;
+  // A deal in force (P2, template field "promo"): the deal's price is the big price; "SALE", what the deal
+  // is, the regular price and the end date go under the name.
+  const deal = f.promo !== false && d0.promo ? d0.promo : null;
+  const d = deal ? { ...d0, price_cents: deal.price_cents } : d0;
+  const until = deal && deal.until ? new Date(String(deal.until).replace(" ", "T")).toLocaleDateString([], { month: "short", day: "numeric" }) : "";
+  const dealText = deal ? "SALE " + deal.text + " · Reg " + money(deal.regular_cents) + (until ? " · until " + until : "") : "";
   const s = Math.max(0.55, Math.min(w / 63.5, h / 33.9, 1.8));     // scale against a 63.5 × 33.9 mm label
   const pad = Math.max(1.2, 2 * s);
   const ix = x + pad, iw = w - 2 * pad;
@@ -80,7 +86,7 @@ function drawLabel(doc, cell, d, f, opts) {
     originText = "Product of " + (COUNTRY[d.origin] || d.origin) + (f.name_fr ? " / " + fr : "");
   }
   const upRow = f.unit_price && unitPrice(d, f.unit_price_basis || "auto") ? small / PT * 1.25 : 0;
-  const headH = Math.max(logoH, lines.length * nameSize / PT * 1.15 + (sub ? small / PT * 1.2 : 0) + (originText ? small / PT * 1.2 : 0));
+  const headH = Math.max(logoH, lines.length * nameSize / PT * 1.15 + (sub ? small / PT * 1.2 : 0) + (originText ? small / PT * 1.2 : 0) + (dealText ? small / PT * 1.3 : 0));
   const inner = h - 2 * pad;
   const rowH = Math.max(0, Math.min(inner - headH, 12 * s + upRow));
   let top = y + pad + Math.max(0, (inner - headH - rowH) / 2);
@@ -100,6 +106,7 @@ function drawLabel(doc, cell, d, f, opts) {
   doc.setFontSize(small);
   if (sub) { doc.text(doc.splitTextToSize(sub, iw)[0], ix, top, { baseline: "top" }); top += small / PT * 1.2; }
   if (originText) { doc.text(doc.splitTextToSize(originText, iw)[0], ix, top, { baseline: "top" }); top += small / PT * 1.2; }
+  if (dealText) { doc.setFont("helvetica", "bold"); doc.text(doc.splitTextToSize(dealText, iw)[0], ix, top, { baseline: "top" }); doc.setFont("helvetica", "normal"); }
   top = headTop + headH;
   // Price, bottom right of the block; unit price under it
   const bottom = blockBottom;

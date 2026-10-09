@@ -27,6 +27,12 @@ function rows(app, col, filter, fields) {
   });
 }
 
+// The deals an offline sale used, as the till reported them (counted for max_uses; never re-priced).
+function promosOf(input) {
+  return (Array.isArray(input.promotions) ? input.promotions : []).slice(0, 50).map((a) => ({ id: String(a.id || ""), name: String(a.name || "").substring(0, 80),
+    times: Math.max(1, Math.floor(Number(a.times) || 1)), saving_cents: Math.max(0, Math.floor(Number(a.saving_cents) || 0)) })).filter((a) => a.id);
+}
+
 function pack(app) {
   const mods = {};
   app.findRecordsByFilter("modules", "id != ''", "", 0, 0).forEach((m) => { mods[m.getString("module")] = m.getBool("enabled"); });
@@ -37,7 +43,10 @@ function pack(app) {
     business: sales().business(app),
     tax_mode: mode,
     province: require(`${__hooks}/lib/tax.js`).province(app),
-    modules: { weighed_goods: !!mods.weighed_goods, regulated_items: !!mods.regulated_items },
+    modules: { weighed_goods: !!mods.weighed_goods, regulated_items: !!mods.regulated_items, promotions: !!mods.promotions },
+    // P2: deals and scheduled prices the till applies itself (its clock decides days and hours, P2-b)
+    promotions: mods.promotions ? require(`${__hooks}/lib/promotions.js`).current(app) : [],
+    scheduled_prices: mods.promotions ? require(`${__hooks}/lib/promotions.js`).currentScheduled(app) : [],
     settings: {
       payment_methods: setting(app, "sales.payment_methods", ["cash", "card"]), cash_rounding: setting(app, "sales.cash_rounding", true),
       usd_rate: setting(app, "sales.usd_rate", 1.35), discount_limit_pct: setting(app, "sales.discount_limit_pct", 10),
@@ -93,14 +102,15 @@ function complete(app, input, ctx) {
     if (u.getString("product") !== p.id) bad("Line " + (i + 1) + ": that unit belongs to another product.");
     const qty = Number(ln.qty);
     if (!(qty > 0) || (u.getString("kind") === "weight" ? Math.abs(r3(qty) - qty) > 1e-9 : qty !== Math.floor(qty))) bad("Line " + (i + 1) + ": quantity is not valid.");
-    const ints = ["gross_cents", "line_discount_cents", "deposit_cents", "regular_price_cents", "price_cents"];
+    const ints = ["gross_cents", "line_discount_cents", "promo_cents", "deposit_cents", "regular_price_cents", "price_cents"];
     ints.forEach((f) => { const v = Number(ln[f] || 0); if (!(v >= 0) || v !== Math.floor(v)) bad("Line " + (i + 1) + ": " + f + " is not valid."); });
     const okRates = (a) => Array.isArray(a) && a.every((t) => t && typeof t.code === "string" && Number(t.rate) >= 0 && Number(t.rate) <= 100);
     if (!okRates(ln.rates || []) || !okRates(ln.deposit_rates || [])) bad("Line " + (i + 1) + ": tax rates are not valid.");
     return { key: String(ln.key || "l" + i), p, u, voided: !!ln.voided, name: String(ln.name || p.getString("name")).substring(0, 200), qty,
       base: r3(qty * (u.getFloat("base_qty") || 1)), tare: Number(ln.tare || 0), regular: Number(ln.regular_price_cents || 0), price: Number(ln.price_cents || 0),
       reason: String(ln.override_reason || "").substring(0, 200), gross: Number(ln.gross_cents || 0), ld: Math.min(Number(ln.line_discount_cents || 0), Number(ln.gross_cents || 0)),
-      dl: String(ln.discount_label || "").substring(0, 40),
+      dl: String(ln.discount_label || "").substring(0, 40), pc: Math.min(Number(ln.promo_cents || 0), Number(ln.line_discount_cents || 0)),
+      pl: String(ln.promo_label || "").substring(0, 200), pids: Array.isArray(ln.promotions) ? ln.promotions.map(String).slice(0, 20) : [],
       deposit: Number(ln.deposit_cents || 0), rates: ln.rates || [], depositRates: ln.deposit_rates || [], age_checked: !!ln.age_checked };
   });
   const live = out.filter((l) => !l.voided);
@@ -129,6 +139,7 @@ function complete(app, input, ctx) {
   s.load({ number, till: till ? till.id : "", cashier: cashier ? cashier.id : "", status: "completed", training, offline: true, tax_mode: mode,
     subtotal_cents: priced.subtotal_cents, discount_cents: priced.discount_cents, tax_cents: priced.tax_cents, deposit_cents: priced.deposit_cents,
     cart_discount_cents: priced.cart_discount_cents, cart_discount_label: String(input.cart_discount_label || "").substring(0, 40),
+    promotions: promosOf(input), coupons: Array.isArray(input.coupons) ? input.coupons.map(String).slice(0, 10) : [],
     total_cents: priced.total_cents, rounding_cents: pay.rounding_cents, paid_cents: pay.paid_cents, change_cents: pay.change_cents, taxes: priced.taxes,
     exempt: input.exempt || null, approvals: [], note: String(input.note || "").substring(0, 500),
     items: live.reduce((a, l) => a + (l.u.getString("kind") === "weight" ? 1 : l.qty), 0),
@@ -157,7 +168,7 @@ function complete(app, input, ctx) {
       costTotal += cost;
       line.load({ sale: id, line_no: i + 1, product: l.p.id, selling_unit: l.u.id, name: l.name, qty: l.qty, base_qty: l.base, tare: l.tare,
         regular_price_cents: l.regular, price_cents: l.price, override_reason: l.reason, gross_cents: l.gross, line_discount_cents: l.ld,
-        discount_label: l.ld ? l.dl : "", cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, tax_class: l.p.getString("tax_class"),
+        discount_label: l.ld ? l.dl : "", promo_cents: l.pc, promo_label: l.pl, promotions: l.pids, cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, tax_class: l.p.getString("tax_class"),
         taxes: pl[l.key].taxes, deposit_cents: l.deposit, lots: lots, cost_cents: cost, age_checked: l.age_checked });
     }
     st().stamp(line, ctx);
@@ -179,6 +190,7 @@ function complete(app, input, ctx) {
     st().stamp(r, ctx);
     app.save(r);
   }
+  if (!training && promosOf(input).length) require(`${__hooks}/lib/promotions.js`).usage(app, promosOf(input), ctx);
   // A sale that reached a closed till needs a look from the manager.
   if (note && !training) {
     const t = new Record(app.findCollectionByNameOrId("tasks"));

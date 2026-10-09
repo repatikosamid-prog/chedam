@@ -15,7 +15,7 @@
   const REASON = { price_change: "new price", new_product: "new product", manual: "added", promotion: "promotion", markdown: "markdown" };
   const BASIS = [["auto", "per 100 g / 100 mL"], ["kg", "per kg / L"]];
   const FIELDS = [["name", "Name"], ["name_fr", "French name"], ["price", "Price"], ["unit_price", "Unit price"], ["barcode", "Barcode"],
-    ["plu", "PLU (instead of the barcode)"], ["origin", "Country of origin"], ["logo", "Store logo"]];
+    ["plu", "PLU (instead of the barcode)"], ["origin", "Country of origin"], ["logo", "Store logo"], ["promo", "Promotion (sale price, regular price, end date)"]];
   let tab = $state("batch");
   let items = $state([]), layouts = $state([]), templates = $state([]), cats = $state([]), recent = $state([]);
   let layoutId = $state(""), templateId = $state(""), start = $state(1);
@@ -315,7 +315,7 @@
         </div>
       {/each}
       <button class="btn-ghost" onclick={() => (editT = { name: "My template", fields: { name: true, price: true, unit_price: true, unit_price_basis: "auto", barcode: true, plu: true } })}>New template</button>
-      <p class="text-sm text-muted">Promotion prices and the struck regular price come with promotions (later phase).</p>
+      <p class="text-sm text-muted">A product on a deal prints the deal's price with "SALE", the regular price and the end date (template field "Promotion").</p>
     </div>
     {#if editT}
       <form class="card space-y-3" onsubmit={saveTemplate}>

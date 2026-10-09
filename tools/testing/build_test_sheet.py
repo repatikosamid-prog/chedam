@@ -5,7 +5,8 @@ notes, tester and date. A Summary tab counts the results per area. Rerun after a
 overwrites the sheet, so fill in a copy (or rename it) once testing starts.
 --retest: the retest sheet for the fixes and changes from testing feedback (RETEST), in its own file,
 so the main sheet being filled in is left alone.
-Usage: python tools/testing/build_test_sheet.py [--retest]
+--p2: the P2 sheet (P2_TESTS), grown step by step.
+Usage: python tools/testing/build_test_sheet.py [--retest | --p2]
 """
 import sys
 from pathlib import Path
@@ -168,6 +169,29 @@ RETEST = [
     ("R21", "Export", "Laptop", "Export data: tick only Sales (or Products, People…), choose Excel workbook, download", "Only the chosen data, one sheet per table plus a Dictionary sheet"),
 ]
 
+# P2 (Sprint 2): one block per build step.
+P2_OUT = Path(__file__).resolve().parents[2] / "docs" / "testing" / "Chedam-Manual-Tests-P2.xlsx"
+P2_TESTS = [
+    # ---- Receipts as PDF (DL-116)
+    ("P01", "Receipt PDF", "Laptop / iPhone", "After a sale (or Sales → a sale): Save as PDF", "A PDF of the receipt (same as the printer's: store, lines, discounts, taxes, total, barcode); it opens, saves and prints"),
+    ("P02", "Receipt PDF", "Till", "As a cashier, save the PDF a second time", "Asks for a manager (a copy is a reprint); the PDF says COPY"),
+    # ---- Step 1: promotions and scheduled prices (DL-117..123)
+    ("P10", "Promotions", "Laptop", "Home → Promotions → New promotion: '10% off' on a category; Preview prices", "Each product: regular price, price with the deal, cost and margin; below cost in red"),
+    ("P11", "Promotions", "Laptop", "Switch it on", "Listed under 'On now'; its products are on the label batch with 'promotion'"),
+    ("P12", "Promotions", "Till", "Ring up a product of that category", "The line shows the deal's name and saving; the total line shows the deal; the receipt shows it under the product"),
+    ("P13", "Promotions", "Laptop + till", "Add a 'Sale price' deal on one product of the same category (better than 10%)", "That product gets the sale price only (no stacking); the others keep 10%"),
+    ("P14", "Promotions", "Laptop + till", "'X for $Y': 3 for $5.00 on one product; ring up 4", "3 cost exactly $5.00, the 4th the regular price"),
+    ("P15", "Promotions", "Laptop + till", "'Buy X, get Y': buy 2 get 1 free; ring up 3 items of the category", "The cheapest of the 3 is free"),
+    ("P16", "Promotions", "Laptop + till", "'Spend and save': spend $20, get 10% off; ring up $15, then $25", "Nothing at $15; 10% off at $25"),
+    ("P17", "Promotions", "Laptop + till", "A deal 'only on some days or hours' (e.g. now until in 5 minutes)", "Applies now; after the end time it no longer applies"),
+    ("P18", "Promotions", "Laptop + till", "A deal with a coupon code; ring up the product, then Coupon → type the code", "No deal without the code; with it, the deal applies; a wrong code says it gives nothing"),
+    ("P19", "Promotions", "Laptop", "End now on a running deal", "It moves to Ended; the till no longer applies it; labels queued back at the regular price"),
+    ("P20", "Promotions", "Laptop + till", "Scheduled prices → New: a new price from now", "The till sells at the new price (receipt shows 'was'); its label is queued"),
+    ("P21", "Promotions", "Laptop", "Labels: print the batch with a product on a deal", "The label shows the deal price big, 'SALE', the deal, 'Reg' price and the end date"),
+    ("P22", "Promotions", "Till (hub off)", "Switch the Pi off; ring up a product on a deal", "The offline till applies the same deal; after the Pi is back the sale arrives with the deal"),
+    ("P23", "Promotions", "Till", "As a cashier: open Promotions", "Can see the deals but not create, change or end them"),
+]
+
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):
@@ -245,7 +269,15 @@ def build(OUT=OUT, TESTS=TESTS, intro=None):
     print(OUT, len(TESTS), "checks")
 
 if __name__ == "__main__":
-    if "--retest" in sys.argv:
+    if "--p2" in sys.argv:
+        build(P2_OUT, P2_TESTS, [
+            "Chedam manual tests: P2 Engage (grows with each build step)",
+            "",
+            "Test after the update with these changes is on the hub (Claude says when). Laptop and iPhone; Android later.",
+            "Sample people: Demo Owner, Mira Manager (manages promotions), Cal Cashier, Sam Staff.",
+            "For each row: do what it says, compare with 'What should happen', choose Pass / Fail / Blocked, and write what happened when it is not a Pass.",
+        ])
+    elif "--retest" in sys.argv:
         build(RETEST_OUT, RETEST, [
             "Chedam retest: fixes and changes from testing on 2026-10-09",
             "",

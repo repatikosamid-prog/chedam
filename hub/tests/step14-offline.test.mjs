@@ -20,10 +20,13 @@ const PIN = Object.fromEntries([...seed.matchAll(/"([^"]+)":\s*"(\d+)"/g)].map((
 const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((y) => [y, x[y]])) : x));
 const sid = () => Array.from(randomBytes(15), (b) => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join("");
 
-// The client's offline pricing, with its `virtual:pricing-core` import pointed at the hub's file.
+// The client's offline pricing, with its `virtual:pricing-core` and `virtual:promotions-core` imports
+// pointed at the hub's files.
 globalThis.__pricingCore = createRequire(import.meta.url)(join(HUB, "pb_hooks", "lib", "pricing_core.js"));
+globalThis.__promoCore = createRequire(import.meta.url)(join(HUB, "pb_hooks", "lib", "promotions_core.js"));
 const src = readFileSync(join(HUB, "..", "client", "src", "lib", "offline_price.js"), "utf8")
-  .replace('import core from "virtual:pricing-core";', "const core = globalThis.__pricingCore;");
+  .replace('import core from "virtual:pricing-core";', "const core = globalThis.__pricingCore;")
+  .replace('import promoCore from "virtual:promotions-core";', "const promoCore = globalThis.__promoCore;");
 const tmp = join(mkdtempSync(join(tmpdir(), "chedam-op-")), "offline_price.mjs");
 writeFileSync(tmp, src);
 const OP = await import(pathToFileURL(tmp).href);

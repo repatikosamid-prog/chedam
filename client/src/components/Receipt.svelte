@@ -31,7 +31,8 @@
     <div>
       <p class="flex justify-between gap-2"><span>{l.name}</span><span>{money(l.gross_cents)}</span></p>
       {#if l.qty !== 1 || l.price_cents !== l.regular_price_cents}<p class="pl-2 text-xs">{qtyText(l)} × {money(l.price_cents)}{l.price_cents !== l.regular_price_cents ? " (was " + money(l.regular_price_cents) + ")" : ""}</p>{/if}
-      {#if l.line_discount_cents}<p class="flex justify-between pl-2 text-xs"><span>Discount{l.discount_label ? " " + l.discount_label : ""}</span><span>-{money(l.line_discount_cents)}</span></p>{/if}
+      {#if l.promo_cents}<p class="flex justify-between pl-2 text-xs"><span>{l.promo_label || "Promotion"}</span><span>-{money(l.promo_cents)}</span></p>{/if}
+      {#if l.line_discount_cents - (l.promo_cents || 0) > 0}<p class="flex justify-between pl-2 text-xs"><span>Discount{l.discount_label ? " " + l.discount_label : ""}</span><span>-{money(l.line_discount_cents - (l.promo_cents || 0))}</span></p>{/if}
       {#if l.deposit_cents}<p class="flex justify-between pl-2 text-xs"><span>Deposit/fee</span><span>{money(l.deposit_cents)}</span></p>{/if}
     </div>
   {/each}

@@ -61,6 +61,10 @@ const TABLES = {
   label_batch_items:    { list: "labels.manage", view: "labels.manage", create: null, update: null, delete: null },
   // P1 import (step 8): written only by /api/chedam/imports.
   import_jobs:          { list: "catalogue.edit", view: "catalogue.edit", create: null, update: null, delete: null },
+  // P2 promotions (step 1): read by anyone (the till shows deals); changed only through /api/chedam/promotions
+  // and /api/chedam/scheduled-prices (checks and labels in one transaction).
+  promotions:           { list: ANY, view: ANY, create: null, update: null, delete: null },
+  scheduled_prices:     { list: ANY, view: ANY, create: null, update: null, delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".

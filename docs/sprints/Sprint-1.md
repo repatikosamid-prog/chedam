@@ -11,7 +11,7 @@
 | T2 | Fix the bugs found in T1 | Claude | Round 1 built, tested and deployed 2026-10-09 (`dev-c5587c9`; DL-109..113, 808 hub tests): remove one line, item and sale discounts on receipts, 15 s back to selling, reprint needs a manager, till numbers, batch numbers, stock colours, label layout, iPhone PDF error, import template, export choice, "Saved ✓". Retest: `docs/testing/Chedam-Retest-2026-10-09.xlsx` (21 checks) |
 | T3 | Retest of round 1 (`Chedam-Retest-2026-10-09.xlsx`, 21 checks) | Sreya | **All passed** (2026-10-09) |
 | U1 | UI requests: Home button (the Chedam C), the business logo in the app (after asking the owner), fixed top bar and screen header | Claude | Done, deployed `dev-c80615e` (DL-115) |
-| R1 | Receipts as PDF (save or print anywhere, no printer needed) | Claude | Built and tested 2026-10-09 (DL-116); deploys with the next update |
+| R1 | Receipts as PDF (save or print anywhere, no printer needed) | Claude | Built and tested 2026-10-09 (DL-116); deploys with P2 step 1 |
 | N2 | Proposal: linked card terminal and a web store fed by the store's stock: `docs/proposals/card-terminal-and-webstore.md` | Sreya | Decided 2026-10-09 (DL-114): the store's own processor, P5; web store added to the plan (option A); owner manages DNS. Web store: option A |
 | Q1 | Accountant review of the tax rules (blocks release) | Sreya | Due 2026-10-08 EOD |
 | Q2 | Accept or change the return-policy defaults | Sreya | Open |

@@ -39,6 +39,7 @@
   import Sell from "./screens/Sell.svelte";
   import Till from "./screens/Till.svelte";
   import Sales from "./screens/Sales.svelte";
+  import Promotions from "./screens/Promotions.svelte";
 
   onMount(() => {
     startMonitor();
@@ -154,5 +155,6 @@
   {:else if s.screen === "sell"}<Sell />
   {:else if s.screen === "till"}<Till />
   {:else if s.screen === "sales"}<Sales />
+  {:else if s.screen === "promotions"}<Promotions />
   {/if}
 </main>

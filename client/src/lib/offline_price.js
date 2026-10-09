@@ -3,7 +3,10 @@
 // has the hub quote's shape plus `upload_lines`, what the hub needs to check the sale later.
 // Offline there is no stock check (BR-12) and no manager PIN (only the hub can check PINs), so
 // anything needing approval is refused unless the person signed in may approve.
+// P2: scheduled prices and promotions from the pack, with the hub's own engine (promotions_core.js via
+// `virtual:promotions-core`) and this device's clock (P2-b).
 import core from "virtual:pricing-core";
+import promoCore from "virtual:promotions-core";
 
 const r3 = (n) => Math.round(n * 1000) / 1000;
 
@@ -69,6 +72,9 @@ function amountOf(d, gross) {
 // perms: { discount, approve, exempt } for the person signed in.
 export function quoteOffline(cart, ix, perms) {
   const s = ix.settings;
+  const now = new Date();
+  const promoOn = !!(ix.modules && ix.modules.promotions);
+  const coupons = (cart.coupons || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean);
   const problems = [], lines = [], upload = [];
   const needApproval = (msg, key) => { if (!perms.approve) problems.push({ key, type: "approval_offline", message: msg + ": needs a manager's PIN, which works only when the hub is reachable." }); };
   let exempt = null, exemptTypes = [];
@@ -88,18 +94,14 @@ export function quoteOffline(cart, ix, perms) {
     else qty = Math.max(1, Math.round(Number(ln.qty) || 1));
     const base = r3(qty * (u.base_qty || 1));
     const regular = u.price_cents;
-    let price = regular, reason = "";
-    if (ln.price_cents !== undefined && ln.price_cents !== null && ln.price_cents !== regular) {
+    const listed = promoOn ? promoCore.scheduledPrice(u.id, regular, ix.scheduled_prices || [], now).price_cents : regular;
+    let price = listed, reason = "";
+    if (ln.price_cents !== undefined && ln.price_cents !== null && ln.price_cents !== listed) {
       price = ln.price_cents; reason = String(ln.override_reason || "").trim();
       if (!reason) problems.push({ key: ln.key, type: "override_reason", message: "Give a reason for the new price of '" + p.name + "'." });
       if (price < regular * (1 - s.override_limit_pct / 100) - 1e-9) needApproval("Price of '" + p.name + "' lowered by more than " + s.override_limit_pct + "%", ln.key);
     }
     const gross = core.roundHalfUp(price * qty);
-    const ld = amountOf(ln.discount, gross);
-    if (ld > 0) {
-      if (!perms.discount) problems.push({ key: ln.key, type: "discount", message: "You cannot give discounts." });
-      else if (core.discountPct(ln.discount, ld, gross) > s.discount_limit_pct + 1e-9) needApproval("Discount on '" + p.name + "' above " + s.discount_limit_pct + "%", ln.key);
-    }
     if (p.age_restricted && !ln.age_checked) problems.push({ key: ln.key, type: "age", message: "Check ID: '" + p.name + "' is " + p.min_age + "+." });
     let deposit = 0, depositRates = [], depositFull = [];
     if ((p.deposits_fees || []).length && ix.modules.regulated_items) {
@@ -111,12 +113,28 @@ export function quoteOffline(cart, ix, perms) {
     }
     const rates = ratesFor(ix, p.tax_class, exemptTypes);
     lines.push({ key: ln.key, name, product: p.id, selling_unit: u.id, qty, base_qty: base, tare, regular_price_cents: regular, price_cents: price,
-      gross_cents: gross, line_discount_cents: ld, discount_label: ld ? core.discountLabel(ln.discount) : "", deposit_cents: deposit, age_restricted: !!p.age_restricted, min_age: p.min_age,
-      _rates: rates, _full: ratesFor(ix, p.tax_class, []), _dep: depositRates, _depFull: depositFull });
+      gross_cents: gross, line_discount_cents: 0, discount_label: "", promo_cents: 0, promo_label: "", promotions: [], deposit_cents: deposit, age_restricted: !!p.age_restricted, min_age: p.min_age,
+      _rates: rates, _full: ratesFor(ix, p.tax_class, []), _dep: depositRates, _depFull: depositFull, _disc: ln.discount, _cat: p.category, _kind: u.kind, _hand: !!reason });
     upload.push({ key: ln.key, product: p.id, selling_unit: u.id, name, qty, tare, regular_price_cents: regular, price_cents: price, override_reason: reason,
-      gross_cents: gross, line_discount_cents: ld, discount_label: ld ? core.discountLabel(ln.discount) : "", rates, deposit_cents: deposit, deposit_rates: depositRates, age_checked: !!ln.age_checked });
+      gross_cents: gross, line_discount_cents: 0, discount_label: "", rates, deposit_cents: deposit, deposit_rates: depositRates, age_checked: !!ln.age_checked });
   }
   const live = lines.filter((l) => !l.voided);
+  // Promotions first (BR-20), then the cashier's own discount on what is left: the hub's order.
+  const promo = promoOn ? promoCore.evaluate(live.map((l) => ({ key: l.key, product: l.product, category: l._cat, kind: l._kind, qty: l.qty, price_cents: l.price_cents, no_promo: l._hand })),
+    ix.promotions || [], { now, coupons }) : { lines: {}, applied: [] };
+  const up = Object.fromEntries(upload.map((x) => [x.key, x]));
+  live.forEach((l) => {
+    const pr = promo.lines[l.key];
+    if (pr && pr.promo_cents) { l.promo_cents = Math.min(pr.promo_cents, l.gross_cents); l.promo_label = pr.label; l.promotions = pr.ids; }
+    const md = amountOf(l._disc, l.gross_cents - l.promo_cents);
+    if (md > 0) {
+      if (!perms.discount) problems.push({ key: l.key, type: "discount", message: "You cannot give discounts." });
+      else if (core.discountPct(l._disc, md, l.gross_cents - l.promo_cents) > s.discount_limit_pct + 1e-9) needApproval("Discount on '" + l.name + "' above " + s.discount_limit_pct + "%", l.key);
+      l.discount_label = core.discountLabel(l._disc);
+    }
+    l.line_discount_cents = l.promo_cents + md;
+    Object.assign(up[l.key], { line_discount_cents: l.line_discount_cents, discount_label: l.discount_label, promo_cents: l.promo_cents, promo_label: l.promo_label, promotions: l.promotions });
+  });
   const after = live.reduce((a, l) => a + Math.max(0, l.gross_cents - l.line_discount_cents), 0);
   const cartDisc = amountOf(cart.cart_discount, after);
   if (cartDisc > 0) {
@@ -131,10 +149,11 @@ export function quoteOffline(cart, ix, perms) {
   if (!live.length) problems.push({ type: "empty", message: "The cart is empty." });
   return {
     offline: true,
-    lines: lines.map((l) => l.voided ? l : { ...l, _rates: undefined, _full: undefined, _dep: undefined, _depFull: undefined,
+    lines: lines.map((l) => l.voided ? l : { ...l, _rates: undefined, _full: undefined, _dep: undefined, _depFull: undefined, _disc: undefined, _cat: undefined, _kind: undefined, _hand: undefined,
       cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, taxes: pl[l.key].taxes }),
     tax_mode: ix.tax_mode, subtotal_cents: priced.subtotal_cents, discount_cents: priced.discount_cents, cart_discount_cents: cartDisc,
-    cart_discount_label: cartDisc ? core.discountLabel(cart.cart_discount) : "",
+    cart_discount_label: cartDisc ? core.discountLabel(cart.cart_discount) : "", promotions: promo.applied, coupons,
+    coupons_unused: coupons.filter((c) => !promo.applied.some((a) => ((ix.promotions || []).find((x) => x.id === a.id) || {}).coupon_code === c)),
     taxes: priced.taxes, tax_cents: priced.tax_cents, deposit_cents: priced.deposit_cents, total_cents: priced.total_cents,
     cash_total_cents: core.cashRound(priced.total_cents), exempt, exempt_cents: exemptCents, problems, needs_approval: [], training: !!cart.training,
     upload_lines: upload,

@@ -74,8 +74,10 @@
     saveTillInfo({ till: r.json.till ? { id: r.json.till.id, number: r.json.till.number } : null, settings: r.json.settings, business: r.json.business });
   }
 
+  let promoOn = $state(false);                   // Promotions module on: the Coupon button
   function usePack(p) {
     ix = p;
+    promoOn = !!(p.modules && p.modules.promotions);
     products = [...p.products].sort((a, b) => a.name.localeCompare(b.name));
     units = p.unitsOf;
     cats = [...p.categories].sort((a, b) => (a.sort || 0) - (b.sort || 0) || a.name.localeCompare(b.name));
@@ -282,7 +284,7 @@
     const now = new Date();
     const payload = { id: saleId, offline: true, offline_ref: ref, device_time: now.toISOString(), cashier: s.me.user.id,
       till: info && info.till ? info.till.id : "", training: cart.training, tax_mode: q.tax_mode, lines: q.upload_lines,
-      cart_discount_cents: q.cart_discount_cents, cart_discount_label: q.cart_discount_label, exempt: q.exempt, exempt_cents: q.exempt_cents,
+      cart_discount_cents: q.cart_discount_cents, cart_discount_label: q.cart_discount_label, promotions: q.promotions || [], coupons: q.coupons || [], exempt: q.exempt, exempt_cents: q.exempt_cents,
       totals: { total_cents: q.total_cents, tax_cents: q.tax_cents, subtotal_cents: q.subtotal_cents, discount_cents: q.discount_cents, deposit_cents: q.deposit_cents },
       payments: $state.snapshot(payments) };
     const live2 = q.lines.filter((l) => !l.voided);
@@ -345,7 +347,7 @@
     if (live.length) { error = "Finish or hold the current sale first."; return; }
     const r = await api("POST", "/api/chedam/holds/" + h.id + "/recall", {});
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
-    cart = { ...newCart(cart.training), lines: r.json.cart.lines || [], cart_discount: r.json.cart.cart_discount || null, exempt: r.json.cart.exempt || null };
+    cart = { ...newCart(cart.training), lines: r.json.cart.lines || [], cart_discount: r.json.cart.cart_discount || null, exempt: r.json.cart.exempt || null, coupons: r.json.cart.coupons || [] };
     dialog = null; changed();
   }
 
@@ -514,6 +516,13 @@
           </div>
           <div class="flex gap-2"><button class="btn" type="submit">Apply</button><button class="btn-ghost" type="button" onclick={() => { cart.cart_discount = null; dialog = null; changed(); }}>Remove discount</button></div>
         </form>
+      {:else if dialog && dialog.kind === "coupon"}
+        <form class="space-y-2 rounded-xl border border-accent p-3" onsubmit={(e) => { e.preventDefault(); const c = dialog.code.trim().toUpperCase(); if (c && !(cart.coupons || []).includes(c)) cart.coupons = [...(cart.coupons || []), c]; dialog = null; changed(); }}>
+          <label class="block"><span class="font-semibold">Coupon code</span>
+            <input class="field uppercase" bind:value={dialog.code} autocomplete="off" maxlength="30" placeholder="Scan or type the code" use:focusNow /></label>
+          {#each cart.coupons || [] as c (c)}<p class="flex items-center justify-between text-sm"><span>{c}</span><button type="button" class="text-bad underline" onclick={() => { cart.coupons = cart.coupons.filter((x) => x !== c); changed(); }}>Remove</button></p>{/each}
+          <div class="flex gap-2"><button class="btn" type="submit">Add</button><button class="btn-ghost" type="button" onclick={() => (dialog = null)}>Close</button></div>
+        </form>
       {:else if dialog && dialog.kind === "exempt"}
         <form class="space-y-2 rounded-xl border border-accent p-3" onsubmit={(e) => { e.preventDefault(); cart.exempt = dialog.reason ? { reason: dialog.reason, reference: dialog.reference } : null; dialog = null; changed(); }}>
           <p class="font-semibold">Tax-exempt sale</p>
@@ -544,7 +553,8 @@
                 <button class="min-w-0 text-left" disabled={mode !== "sell"} onclick={() => (dialog = { kind: "edit", key: l.key })}>
                   <span class="block font-semibold leading-tight">{l.name}{l.age_checked ? " · ID ✓" : ""}</span>
                   <span class="block text-sm text-muted">{l.kind === "weight" ? l.qty + " " + l.base_unit : l.qty} × {ql ? money(ql.price_cents) : "…"}{l.price_cents !== undefined ? " (new price)" : ""}</span>
-                  {#if ql && ql.line_discount_cents}<span class="block text-sm text-ok">Item discount {ql.discount_label ? "(" + ql.discount_label + ") " : ""}−{money(ql.line_discount_cents)}</span>{/if}
+                  {#if ql && ql.promo_cents}<span class="block text-sm text-ok">🏷 {ql.promo_label} −{money(ql.promo_cents)}</span>{/if}
+                  {#if ql && ql.line_discount_cents - (ql.promo_cents || 0) > 0}<span class="block text-sm text-ok">Item discount {ql.discount_label ? "(" + ql.discount_label + ") " : ""}−{money(ql.line_discount_cents - (ql.promo_cents || 0))}</span>{/if}
                   {#if ql && ql.deposit_cents}<span class="block text-xs text-muted">+ deposit {money(ql.deposit_cents)}</span>{/if}
                 </button>
                 <div class="flex shrink-0 items-center gap-1">
@@ -573,7 +583,9 @@
 
       {#if quote && live.length}
         <div class="space-y-1 border-t border-line pt-2 text-sm">
-          {#if quote.discount_cents - quote.cart_discount_cents > 0}<p class="flex justify-between text-ok"><span>Item discounts</span><span>−{money(quote.discount_cents - quote.cart_discount_cents)}</span></p>{/if}
+          {#each quote.promotions || [] as a (a.id)}<p class="flex justify-between text-ok"><span>🏷 {a.name}{a.times > 1 ? " ×" + a.times : ""}</span><span>−{money(a.saving_cents)}</span></p>{/each}
+          {#if quote.discount_cents - quote.cart_discount_cents - (quote.promotions || []).reduce((x, a) => x + a.saving_cents, 0) > 0}<p class="flex justify-between text-ok"><span>Item discounts</span><span>−{money(quote.discount_cents - quote.cart_discount_cents - (quote.promotions || []).reduce((x, a) => x + a.saving_cents, 0))}</span></p>{/if}
+          {#if (quote.coupons_unused || []).length}<p class="text-warn">Coupon {quote.coupons_unused.join(", ")} gives nothing on this sale (unknown, not now, or no items for it).</p>{/if}
           {#if quote.cart_discount_cents}<p class="flex justify-between text-ok"><span>Sale discount{quote.cart_discount_label ? " (" + quote.cart_discount_label + ")" : ""}</span><span>−{money(quote.cart_discount_cents)}</span></p>{/if}
           {#if quote.deposit_cents}<p class="flex justify-between"><span>Deposits and fees</span><span>{money(quote.deposit_cents)}</span></p>{/if}
           {#each quote.taxes as x (x.code + x.rate)}<p class="flex justify-between"><span>{x.label} {x.rate}%{quote.tax_mode === "tax_included" ? " incl." : ""}</span><span>{money(x.tax_cents)}</span></p>{/each}
@@ -591,6 +603,7 @@
         <div class="flex flex-wrap gap-2 text-sm">
           {#if can("sales.discount")}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={() => (dialog = { kind: "discount", type: cart.cart_discount ? cart.cart_discount.type : "pct", value: "" })}>Sale discount</button>{/if}
           {#if can("sales.tax_exempt")}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={() => (dialog = { kind: "exempt", reason: cart.exempt ? cart.exempt.reason : "", reference: cart.exempt ? cart.exempt.reference : "" })}>Tax exempt</button>{/if}
+          {#if promoOn}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={() => (dialog = { kind: "coupon", code: "" })}>Coupon{(cart.coupons || []).length ? " (" + cart.coupons.length + ")" : ""}</button>{/if}
           <button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={hold}>Hold</button>
           <button class="btn-ghost min-h-10 text-sm text-bad" disabled={!cart.lines.length} onclick={() => clearCart()}>Clear sale</button>
         </div>

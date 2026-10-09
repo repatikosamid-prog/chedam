@@ -3,7 +3,7 @@
 import { newId } from "./catalogue.js";
 
 export function newCart(training = false) {
-  return { id: "c" + newId(), lines: [], cart_discount: null, exempt: null, training, approval: "" };
+  return { id: "c" + newId(), lines: [], cart_discount: null, exempt: null, training, approval: "", coupons: [] };
 }
 
 // What the hub needs for a quote or a sale.
@@ -13,7 +13,7 @@ export function toInput(cart) {
     lines: cart.lines.map((l) => ({ key: l.key, product: l.product, selling_unit: l.selling_unit, qty: l.qty, weight: l.weight,
       price_cents: l.price_cents, override_reason: l.override_reason, discount: l.discount, age_checked: l.age_checked,
       break_pack: l.break_pack, voided: l.voided })),
-    cart_discount: cart.cart_discount, exempt: cart.exempt, approval: cart.approval || undefined,
+    cart_discount: cart.cart_discount, exempt: cart.exempt, approval: cart.approval || undefined, coupons: cart.coupons || [],
   };
 }
 

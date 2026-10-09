@@ -81,7 +81,9 @@ function receipt(sale, opts) {
     if (Number(l.qty) !== 1 || l.price_cents !== l.regular_price_cents) {
       add({ t: "text", s: "  " + qtyText(l.qty) + " x " + money(l.price_cents) + (l.price_cents !== l.regular_price_cents ? " (was " + money(l.regular_price_cents) + ")" : "") });
     }
-    if (l.line_discount_cents) add({ t: "pair", l: "  Discount" + (l.discount_label ? " " + l.discount_label : ""), r: "-" + money(l.line_discount_cents) });
+    const promo = l.promo_cents || 0, manual = (l.line_discount_cents || 0) - promo;
+    if (promo) add({ t: "pair", l: "  " + (l.promo_label || "Promotion"), r: "-" + money(promo) });
+    if (manual > 0) add({ t: "pair", l: "  Discount" + (l.discount_label ? " " + l.discount_label : ""), r: "-" + money(manual) });
     if (l.deposit_cents) add({ t: "pair", l: "  Deposit/fee", r: money(l.deposit_cents) });
   });
   add({ t: "rule" });

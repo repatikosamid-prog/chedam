@@ -50,23 +50,27 @@ function autoNewProduct(app, product, actor, device) {
 
 function firstBarcode(u) { try { const b = JSON.parse(u.getString("barcodes") || "[]") || []; return b[0] || ""; } catch (_) { return ""; } }
 
-// What one label shows, from the product and unit as they are now.
-function labelData(app, p, u) {
+// What one label shows, from the product and unit as they are now: the price in force (a scheduled price,
+// FR-5.06) and the deal in force, if any (P2: {price_cents, regular_cents, text, until}). cache: shared by
+// the labels of one batch, so promotions are read once.
+function labelData(app, p, u, cache) {
+  const now = require(`${__hooks}/lib/promotions.js`).labelPromo(app, p, u, cache || {});
   return { product: p.id, selling_unit: u.id, name: p.getString("name"), name_fr: p.getString("name_fr"), unit_name: u.getString("name"),
-    kind: u.getString("kind"), price_cents: u.getInt("price_cents"), base_unit: p.getString("base_unit"), base_qty: u.getFloat("base_qty") || 1,
+    kind: u.getString("kind"), price_cents: now.price_cents, base_unit: p.getString("base_unit"), base_qty: u.getFloat("base_qty") || 1,
     size_qty: p.getFloat("size_qty"), size_unit: p.getString("size_unit"), barcode: firstBarcode(u), plu: p.getString("plu"),
-    origin: p.getString("origin_country"), promo: null };
+    origin: p.getString("origin_country"), promo: now.promo };
 }
 
-function itemView(app, r) {
+function itemView(app, r, cache) {
   let p, u;
   try { p = app.findRecordById("products", r.getString("product")); u = app.findRecordById("selling_units", r.getString("selling_unit")); } catch (_) { return null; }
-  return Object.assign(labelData(app, p, u), { id: r.id, qty: r.getInt("qty"), reasons: reasonsOf(r), version: r.getString("updated_at"),
+  return Object.assign(labelData(app, p, u, cache), { id: r.id, qty: r.getInt("qty"), reasons: reasonsOf(r), version: r.getString("updated_at"),
     added_at: r.getString("created_at"), removed: !!(p.getString("deleted_at") || u.getString("deleted_at")) });
 }
 
 function view(app) {
-  const items = app.findRecordsByFilter("label_batch_items", "status = 'pending'", "created_at", 0, 0).map((r) => itemView(app, r)).filter((x) => x);
+  const cache = {};
+  const items = app.findRecordsByFilter("label_batch_items", "status = 'pending'", "created_at", 0, 0).map((r) => itemView(app, r, cache)).filter((x) => x);
   return { items: items, labels: items.reduce((a, x) => a + x.qty, 0) };
 }
 
@@ -140,11 +144,12 @@ function make(app, body, ctx) {
   if (!(start >= 1 && start <= perPage)) bad("Start position 1 to " + perPage + ".");
   const pick = Array.isArray(body.items) && body.items.length ? body.items : null;
   const items = [];
+  const cache = {};
   (pick || app.findRecordsByFilter("label_batch_items", "status = 'pending'", "created_at", 0, 0).map((r) => ({ id: r.id }))).forEach((x) => {
     let r;
     try { r = app.findRecordById("label_batch_items", String(x.id)); } catch (_) { bad("Unknown label line."); }
     if (r.getString("status") !== "pending") return;
-    const v = itemView(app, r);
+    const v = itemView(app, r, cache);
     if (!v || v.removed) return;
     const q = x.qty !== undefined ? Math.floor(Number(x.qty)) : v.qty;
     if (!(q >= 1 && q <= 999)) bad("1 to 999 labels for '" + v.name + "'.");
