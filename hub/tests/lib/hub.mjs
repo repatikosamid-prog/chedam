@@ -11,11 +11,19 @@ const PB = process.env.PB_BIN || "pocketbase";
 
 export function rid(n = 6) { return randomBytes(n).toString("hex"); }
 
+// Remote mode: CHEDAM_TEST_REMOTE=http://127.0.0.1:18099 and CHEDAM_TEST_SU_TOKEN=<superuser token> run a
+// suite against a hub that is already running (the throwaway test hub on the Pi, tools/loadtest/pi-loadtest.sh,
+// through an SSH tunnel): the Pi's own PocketBase and the deployed hooks, with fresh sample data. Suites that
+// start the hub with their own settings or use its command line (step2, step7, step15) stay local.
+const REMOTE = process.env.CHEDAM_TEST_REMOTE || "";
+
 export class TestHub {
   // skipDev: dev sample migrations to leave out (e.g. sample stock, for tests that start from empty shelves)
   constructor({ port = 8091, sample = true, skipDev = [] } = {}) {
     this.port = port;
-    this.base = `http://127.0.0.1:${port}`;
+    this.base = REMOTE || `http://127.0.0.1:${port}`;
+    // The hub's own address as the hub sees it (remote: the throwaway hub's port on the Pi, not the tunnel)
+    this.self = REMOTE ? (process.env.CHEDAM_TEST_REMOTE_SELF || "http://127.0.0.1:8099") : this.base;
     this.work = mkdtempSync(join(tmpdir(), "chedam-test-"));
     this.dataDir = join(this.work, "pb_data");
     this.migDir = join(this.work, "pb_migrations");
@@ -37,6 +45,13 @@ export class TestHub {
   }
 
   async start(env = {}) {
+    if (REMOTE) {
+      this.su = process.env.CHEDAM_TEST_SU_TOKEN;
+      const r = await this.api("POST", "/api/collections/_superusers/auth-refresh", null, { token: this.su });
+      if (r.status !== 200) throw new Error("remote hub: superuser token refused (" + r.status + ")");
+      this.su = r.json.token; this.suId = r.json.record.id;
+      return;
+    }
     if (!this.suPass) {
       this.suEmail = "test@chedam.test";
       this.suPass = "Pw" + randomBytes(18).toString("base64url");   // never starts with "-" (would be read as a CLI flag)

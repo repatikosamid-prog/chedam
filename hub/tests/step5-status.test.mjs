@@ -20,7 +20,7 @@ try {
   await setting("network.check_url", "http://127.0.0.1:9/nothing-here");
   const off = await t.su_("GET", "/api/chedam/status?check=1");
   check("unreachable check address = offline", off.json.internet === "offline", JSON.stringify(off.json));
-  await setting("network.check_url", `${t.base}/api/health`);
+  await setting("network.check_url", `${t.self}/api/health`);
   const on = await t.su_("GET", "/api/chedam/status?check=1");
   check("reachable check address = online (router: not on a hotspot Wi-Fi)", on.json.internet === "router", JSON.stringify(on.json));
   check("a guest cannot force a check (cached answer)", (await t.api("GET", "/api/chedam/status?check=1")).json.checked_at === on.json.checked_at);
