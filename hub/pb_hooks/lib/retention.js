@@ -15,7 +15,7 @@ const RETAINED = {
   selling_units: "Selling units", categories: "Categories", tax_types: "Tax types", tax_rates: "Tax rates", tax_classes: "Tax classes",
   deposits_fees: "Deposits and fees", users: "People", devices: "Devices", business: "The business", import_jobs: "Import log",
   backups: "Backup runs", label_batches: "Printed label batches", promotions: "Promotions (sales refer to them)", scheduled_prices: "Scheduled prices",
-bills: "Bills, invoices and credits", bill_payments: "Payments of bills and invoices", vendor_returns: "Returns to vendors",
+expenses: "Expense claims", petty_cash: "Petty cash", bills: "Bills, invoices and credits", bill_payments: "Payments of bills and invoices", vendor_returns: "Returns to vendors",
   purchase_orders: "Purchase orders", po_lines: "Purchase order lines", po_receipts: "Receipts against orders",
     loyalty_ledger: "Loyalty points (a liability)", customers: "Customers (deleted on request: details removed, record kept)",
   events: "Audit log (never deleted)",

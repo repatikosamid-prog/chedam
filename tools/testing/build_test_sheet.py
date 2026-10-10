@@ -328,6 +328,13 @@ P3_TESTS = [
     ("Q43", "Bill photo", "Laptop (manager)", "A PDF bill for an open order; freight on the bill; tick 'Also record the bill'", "Order suggested, lines 'as ordered'; freight filled in; order received; bill B-… with freight as a line"),
     ("Q44", "Landed cost", "Laptop (manager)", "Receive an order by hand with Freight 10.00", "Each item's cost (Stock → the product → lots) includes its share of the $10 by value"),
     ("Q45", "Bill photo", "Laptop", "A bill whose lines do not add up", "A warning saying by how much"),
+    # ---- Step 6: expenses and petty cash (DL-170..172)
+    ("Q50", "Expenses", "iPhone (staff)", "Expenses → New claim: Home Depot, $23.50 with GST, own money, 📷 the receipt", "EX-… waiting; shown under My claims with the photo"),
+    ("Q51", "Expenses", "Till (cashier)", "The same amount and place without a photo", "Flags: 'same as EX-…?' and 'no receipt photo'"),
+    ("Q52", "Expenses", "Laptop (accountant)", "All claims: reject the duplicate with a reason; approve the first", "Rejected / Approved, to pay back"),
+    ("Q53", "Expenses", "Laptop (manager)", "Pay back → Cash from the till (a till is open)", "Done; the till's Z report shows the pay-out"),
+    ("Q54", "Expenses", "Laptop (manager)", "Your own claim: Approve", "Refused: someone else approves it"),
+    ("Q55", "Petty cash", "Laptop (manager)", "Petty cash → Top up 200; a claim paid from the box (5.00); Count 194.00", "Box 200 → 195 → count 'Short 1.00', balance 194"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):
