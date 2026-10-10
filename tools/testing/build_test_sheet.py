@@ -298,6 +298,17 @@ P4_TESTS = [
     ("H08", "Leave", "Laptop (owner)", "Adjust a balance: vacation +16 h without a reason, then with one", "Refused without; added with the reason in the history"),
     ("H09", "People", "Laptop (owner)", "Change the record: add a PDF contract", "The document is listed and opens"),
     ("H10", "People", "Laptop (owner)", "Export the staff list (CSV); open Settings → Export data", "The list has no pay, SIN or bank columns; the data export has no SIN or bank fields"),
+    # ---- Step 2: time clock (DL-189..191)
+    ("H20", "Time clock", "Phone (Cal)", "Home → Time clock → Me → Clock in", "Clocked in at the hub's time; Today counts up"),
+    ("H21", "Time clock", "Till (shared)", "Time clock → Someone else: Sam, PIN → Next → Clock in", "Sam clocked in; the till stays signed in as before; 'On the clock now' lists Sam"),
+    ("H22", "Time clock", "Till (shared)", "Someone else with a wrong PIN", "Refused: wrong name or PIN"),
+    ("H23", "Time clock", "Phone (Cal)", "Start a break, then Back after 30+ minutes", "On a break since …; back: break time shown, not paid"),
+    ("H24", "Alerts", "Phone (Cal)", "Stay clocked in 4 h 30 without a break (or ask Claude to set meal_after_hours to 1 to try it quickly)", "Warning: take a meal break by …; the inbox has the alert for Cal and the managers, once"),
+    ("H25", "Alerts", "Phone (Cal)", "Near 8 hours in a day", "Warning: overtime starts at …"),
+    ("H26", "Shifts", "Laptop (manager)", "Time clock → Shifts: this week", "Each person with paid hours, regular, overtime; flags on shifts without a meal break"),
+    ("H27", "Shifts", "Laptop (manager)", "Fix Cal's shift (out time) without, then with a reason", "Refused without; saved with 'Fixed' and the original punch shown"),
+    ("H28", "Shifts", "Laptop (manager)", "Fix your own shift", "Refused: someone else fixes your own punches"),
+    ("H29", "Shifts", "Laptop (manager)", "Add a missed shift for Sam yesterday 9-13", "Added, marked 'Added'; an overlapping one is refused"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

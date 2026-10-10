@@ -181,6 +181,10 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
+      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("clock")}>
+        <span class="font-semibold">Time clock</span>
+        <span class="text-sm text-muted">Clock in and out, breaks, shifts</span>
+      </button>
       <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("people")}>
         <span class="font-semibold">People</span>
         <span class="text-sm text-muted">Staff records, leave; my record</span>
