@@ -15,14 +15,18 @@ SUITES=("$@")
   step23-customers-loyalty)
 
 SOCK="${TMPDIR:-/tmp}/chedam-pitest-$$"
-ssh -f -N -M -S "$SOCK" -o ExitOnForwardFailure=yes -L 18099:127.0.0.1:8099 chedam || { echo "tunnel failed"; exit 1; }
+ssh -f -N -M -S "$SOCK" -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -L 18099:127.0.0.1:8099 chedam || { echo "tunnel failed"; exit 1; }
 trap 'ssh -S "$SOCK" -O exit chedam 2>/dev/null; ssh chedam "bash -s stop" < tools/loadtest/pi-loadtest.sh >/dev/null' EXIT
 
 bad=0
 for s in "${SUITES[@]}"; do
-  ssh chedam 'bash -s start' < tools/loadtest/pi-loadtest.sh >/dev/null || { echo "FAIL  $s  (test hub did not start)"; bad=$((bad+1)); continue; }
+  # A start that fails (e.g. one still finishing on the Pi) is cleaned up and tried once more
+  if ! ssh chedam 'bash -s start' < tools/loadtest/pi-loadtest.sh >/dev/null 2>&1; then
+    ssh chedam 'bash -s stop' < tools/loadtest/pi-loadtest.sh >/dev/null 2>&1
+    ssh chedam 'bash -s start' < tools/loadtest/pi-loadtest.sh >/dev/null || { echo "FAIL  $s  (test hub did not start)"; bad=$((bad+1)); continue; }
+  fi
   TOKEN=$(ssh chedam 'cat /tmp/chedam-loadtest-token')
-  out=$(CHEDAM_TEST_REMOTE=http://127.0.0.1:18099 CHEDAM_TEST_SU_TOKEN="$TOKEN" node "hub/tests/$s.test.mjs" 2>&1)
+  out=$(CHEDAM_TEST_REMOTE=http://127.0.0.1:18099 CHEDAM_TEST_SU_TOKEN="$TOKEN" timeout 900 node "hub/tests/$s.test.mjs" 2>&1)   # 15 min at most a suite
   sum=$(echo "$out" | grep -oE "[0-9]+ passed, [0-9]+ failed" | tail -1)
   if echo "$sum" | grep -q " 0 failed"; then echo "PASS  $s  ($sum)"; else echo "FAIL  $s  (${sum:-no summary})"; echo "$out" | grep -E "FAIL|ERROR|└" | head -15; bad=$((bad+1)); fi
 done

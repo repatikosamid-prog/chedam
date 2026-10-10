@@ -92,6 +92,8 @@ export class TestHub {
       headers: { "Content-Type": "application/json", ...(token ? { Authorization: token } : {}),
         ...(dev ? TestHub.deviceHeaders(dev) : {}), ...headers },
       body: body ? JSON.stringify(body) : undefined,
+      // Remote: a stalled tunnel must fail the request, not hang the suite
+      signal: REMOTE ? AbortSignal.timeout(90000) : undefined,
     });
     const text = await res.text();
     let json = null;
