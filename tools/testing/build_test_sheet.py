@@ -311,6 +311,16 @@ P3_TESTS = [
     ("Q24", "Purchase orders", "Laptop (manager)", "Another order: receive part, tick 'The rest will not come'", "Closed; 'short' shown; incoming back down"),
     ("Q25", "Purchase orders", "Laptop (manager)", "Order from Maple Snacks (USD)", "Shows USD, the rate and the CAD total"),
     ("Q26", "Reorder", "Laptop (manager)", "A product: reorder when stock falls to 50, order up to 100 (above its stock)", "Purchase orders lists it; Make the orders makes a draft for its vendor in whole cases up to 100"),
+    # ---- Step 4: bills, invoices, payments, vendor returns (DL-163..166)
+    ("Q30", "Bills", "Laptop (accountant)", "Buying → Bills and invoices → New bill: Coastal, their no. CB-1, two lines, GST, a photo", "B-… open, due from Coastal's 30 days, total with tax; the photo opens"),
+    ("Q31", "Bills", "Laptop (accountant)", "Record a payment: part by cheque with its number", "Partly paid; the rest shown; the cheque on the bill"),
+    ("Q32", "Bills", "Laptop (accountant)", "Vendor credit for Coastal, then apply it to the bill", "The credit is used; the bill's balance goes down"),
+    ("Q33", "Bills", "Laptop (accountant)", "Take the credit payment off", "The bill and the credit are open again"),
+    ("Q34", "Invoices", "Laptop (accountant)", "Owed to us → New invoice to Cafe Luna; record money received", "INV-…; aging; Statement shows invoice, payment, balance; PDF"),
+    ("Q35", "Bills", "Laptop (manager)", "A received PO → Make the bill from what was received", "A bill with the received quantities; a bill for more than received says 'above what was received'"),
+    ("Q36", "Vendor returns", "Laptop (manager)", "Returns to vendors → Send goods back: 2 damaged chips, RMA", "VR-…; stock down by 2 at once; Record their credit makes a vendor credit"),
+    ("Q37", "Vendor returns", "Laptop (manager)", "Vendor performance", "On time, short and damaged % for vendors with received orders"),
+    ("Q38", "Bills", "Phone (staff)", "Buying as Sam Staff", "No Bills and invoices tab"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):

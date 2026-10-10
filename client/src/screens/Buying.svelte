@@ -11,9 +11,11 @@
   import ExportMenu from "../components/ExportMenu.svelte";
   import Orders from "../components/buying/Orders.svelte";
   import Bills from "../components/buying/Bills.svelte";
+  import VendorReturns from "../components/buying/VendorReturns.svelte";
 
   const manage = can("purchasing.manage");
-  const tabs = [["orders", "Purchase orders"], ["bills", "Bills and invoices"], ["prices", "Vendor prices"], ["compare", "Compare vendors"], ["better", "Better prices"]];
+  const tabs = [["orders", "Purchase orders", true], ["bills", "Bills and invoices", can("finance.manage") || can("purchasing.manage")], ["returns", "Returns to vendors", true],
+    ["prices", "Vendor prices", true], ["compare", "Compare vendors", true], ["better", "Better prices", true]].filter((x) => x[2]);
   let tab = $state(location.hash === "#buying-bills" ? "bills" : "orders"), error = $state("");
   let vendors = $state([]), vendor = $state(""), items = $state([]), edit = $state(null), units = $state([]);
   let pq = $state(""), hits = $state([]), cmp = $state(null), cmpName = $state("");
@@ -97,6 +99,7 @@
 
   {#if tab === "orders"}<Orders {vendors} />{/if}
   {#if tab === "bills"}<Bills />{/if}
+  {#if tab === "returns"}<VendorReturns {vendors} />{/if}
 
   {#if tab === "prices"}
     <div class="flex flex-wrap items-end gap-2">

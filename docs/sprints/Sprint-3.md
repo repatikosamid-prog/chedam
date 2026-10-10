@@ -9,8 +9,8 @@ Started 2026-10-10. Goal: purchasing, vendors, payables and receivables, expense
 | 1 | Parties: vendors and clients, contacts, communication log, follow-ups (DL-154..156) | Claude | Done, deployed (21 tests) |
 | 2 | Vendor products and price lists (DL-157..159) | Claude | Done, deployed (18 tests) |
 | 3 | Purchase orders and min/max reorder (DL-160..162) | Claude | Done, deployed (24 tests) |
-| 4 | Bills, invoices, payments, statements, vendor returns, vendor performance | Claude | Next |
-| 5 | Receive from a bill photo; landed cost | Claude | Planned |
+| 4 | Bills, invoices, payments, statements, vendor returns, vendor performance (DL-163..166) | Claude | Done, deployed (26 tests) |
+| 5 | Receive from a bill photo; landed cost | Claude | Next |
 | 6 | Expenses and petty cash | Claude | Planned |
 | 7 | Layaway, special orders, quotes, house accounts | Claude | Planned |
 | 8 | Variants, bundles, serial numbers | Claude | Planned |

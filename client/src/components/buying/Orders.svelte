@@ -81,6 +81,14 @@
     doc.save(open.number + ".pdf");
   }
 
+  async function makeBill() {
+    const ref = prompt("The vendor's invoice number (optional):", "");
+    if (ref === null) return;
+    const r = await api("POST", `/api/chedam/bills/from-po/${open.id}`, { party_ref: ref });
+    if (!r.ok) return fail(r);
+    ok = "Bill " + r.json.number + " made for " + money(r.json.total_cad_cents) + (r.json.match_note ? " · " + r.json.match_note : "") + ". See Bills and invoices.";
+  }
+
   // ---- Receiving
   function startReceive() {
     recv = { op: newId(), close: false, note: "", lines: open.lines.map((l) => ({ po_line: l.id, name: l.product_name + " · " + l.unit_name, left: Math.max(0, l.qty - l.received_qty),
@@ -136,6 +144,7 @@
       <button class="btn-ghost min-h-10 text-sm" onclick={pdf}>PDF</button>
       {#if manage && open.status === "draft"}<button class="btn min-h-10 text-sm" onclick={() => act("send")}>Send (marks sent, makes the PDF)</button><button class="btn-ghost min-h-10 text-sm" onclick={editDraft}>Change</button>{/if}
       {#if receiver && (open.status === "sent" || open.status === "partial")}<button class="btn min-h-10 text-sm" onclick={startReceive}>Receive</button>{/if}
+      {#if (can("finance.manage") || manage) && open.lines.some((l) => l.received_qty > 0)}<button class="btn-ghost min-h-10 text-sm" onclick={makeBill}>Make the bill from what was received</button>{/if}
       {#if manage && (open.status === "sent" || open.status === "partial")}<button class="btn-ghost min-h-10 text-sm" onclick={() => act("close")}>Close (no more coming)</button>{/if}
       {#if manage && (open.status === "draft" || open.status === "sent")}<button class="btn-danger min-h-10 text-sm" onclick={() => act("cancel")}>Cancel</button>{/if}
     </div>
