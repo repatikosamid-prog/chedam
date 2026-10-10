@@ -177,6 +177,12 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
+      {#if can("tasks.view")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("team")}>
+          <span class="font-semibold">Tasks and checklists</span>
+          <span class="text-sm text-muted">Tasks, opening and closing, handover notes{can("documents.manage") ? ", licences" : ""}</span>
+        </button>
+      {/if}
       <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("dashboard")}>
         <span class="font-semibold">Dashboard</span>
         <span class="text-sm text-muted">{can("sales.view") ? "What needs attention, today, this month, stock" : "What needs attention, stock"}</span>

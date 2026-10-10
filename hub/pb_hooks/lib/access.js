@@ -70,6 +70,13 @@ const TABLES = {
   customers:            { list: "customers.view", view: "customers.view", create: null, update: null, delete: null },
   loyalty_cards:        { list: "customers.manage", view: "customers.manage", create: null, update: null, delete: null },
   loyalty_ledger:       { list: "customers.view", view: "customers.view", create: null, update: null, delete: null },
+  // P2 tasks and checklists (step 7): checklists are set up by managers; a day's run, handover notes and
+  // tasks change through /api/chedam/checklists, /handover, /tasks. Documents (licences, insurance) are
+  // kept by managers, through the generic API (their file is protected).
+  checklists:           { list: "tasks.view", view: "tasks.view", create: "checklists.manage", update: "checklists.manage", delete: null },
+  checklist_runs:       { list: "tasks.view", view: "tasks.view", create: null, update: null, delete: null },
+  handover_notes:       { list: "tasks.view", view: "tasks.view", create: null, update: null, delete: null },
+  documents:            { list: "documents.manage", view: "documents.manage", create: "documents.manage", update: "documents.manage", delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".

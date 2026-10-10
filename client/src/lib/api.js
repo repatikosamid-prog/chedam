@@ -42,7 +42,8 @@ const DOWN = { status: 0, ok: false, json: null, message: "The hub is not answer
 // pops up "Saved ✓" (lib/toast.svelte.js); quiet: true leaves it out.
 export async function api(method, path, body, { timeout = 6000, quiet = false } = {}) {
   if (hubDown && !path.startsWith(PROBE)) return DOWN;
-  const h = { "Content-Type": "application/json", "X-Chedam-Version": VERSION };
+  const form = typeof FormData !== "undefined" && body instanceof FormData;   // a file upload: the browser sets the type
+  const h = form ? { "X-Chedam-Version": VERSION } : { "Content-Type": "application/json", "X-Chedam-Version": VERSION };
   const dev = load("device");
   if (dev) { h["X-Chedam-Device"] = dev.id; h["X-Chedam-Device-Key"] = dev.key; }
   const tok = load("token");
@@ -51,7 +52,7 @@ export async function api(method, path, body, { timeout = 6000, quiet = false } 
   const timer = setTimeout(() => ctl.abort(), timeout);
   let res;
   try {
-    res = await fetch(path, { method, headers: h, body: body ? JSON.stringify(body) : undefined, signal: ctl.signal, cache: "no-store" });
+    res = await fetch(path, { method, headers: h, body: form ? body : body ? JSON.stringify(body) : undefined, signal: ctl.signal, cache: "no-store" });
   } catch {
     setDown(true);
     return DOWN;

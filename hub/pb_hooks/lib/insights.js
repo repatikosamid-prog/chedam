@@ -139,6 +139,16 @@ function dashboard(app, c) {
     out.tasks = tasks.map((t) => ({ id: t.id, title: t.getString("title"), created_at: t.getString("created_at") }));
     add("tasks", "Open tasks", app.countRecords("tasks", $dbx.exp("status = 'open' AND deleted_at = ''")), "home");
   }
+  if (can("tasks.view") && c.user) {
+    // Handover notes of the last 2 days this person has not read (FR-2.12), today's checklists not finished
+    const since = new Date(Date.now() - 2 * 86400000).toISOString().replace("T", " ");
+    const unread = app.findRecordsByFilter("handover_notes", "created_at >= {:s} && deleted_at = '' && author != {:a}", "", 0, 0, { s: since, a: c.actor })
+      .filter((n) => { try { return JSON.parse(n.getString("read_by") || "[]").indexOf(c.user.id) < 0; } catch (_) { return true; } }).length;
+    add("handover", "Handover notes you have not read", unread, "team");
+    const lists = app.findRecordsByFilter("checklists", "active = true && deleted_at = ''", "", 0, 0);
+    const doneToday = app.findRecordsByFilter("checklist_runs", "day = {:d} && status = 'done'", "", 0, 0, { d: today }).map((r) => r.getString("checklist"));
+    add("checklists", "Checklists not finished today", lists.filter((k) => doneToday.indexOf(k.id) < 0).length, "team");
+  }
   if (can("stock.approve")) add("approvals", "Stock changes waiting for approval", app.countRecords("stock_movements", $dbx.exp("status = 'pending'")), "approvals");
   if (can("till.manage")) add("tills", "Closed tills not reconciled", app.countRecords("tills", $dbx.exp("status = 'closed' AND reconciled_at = ''")), "reports");
 

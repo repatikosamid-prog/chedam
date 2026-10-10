@@ -17,7 +17,7 @@
 
   let p = $state({ name: "", name_fr: "", category: "", base_unit: "each", tax_class: "", plu: "", pos_button: false,
     reorder_point: 0, description: "", tare: 0, scale_code: "", scale_ack: false, perishable: false, shelf_life_days: 0,
-    expiry_at_receiving: false, storage_area: "", age_restricted: false, min_age: 19, deposits_fees: [], imported: false,
+    expiry_at_receiving: false, storage_area: "", temp_min_c: 0, temp_max_c: 0, age_restricted: false, min_age: 19, deposits_fees: [], imported: false,
     hs_code: "", origin_country: "", non_returnable: false, size_qty: 0, size_unit: "", status: "draft" });
   let costText = $state("");
   let units = $state([]);          // { id, saved, name, kind, contains_qty, contains_unit, codes, priceText, sell_at_pos, is_default }
@@ -304,6 +304,11 @@
             <option value="">Choose…</option>
             {#each areas as a (a.id)}<option value={a.id}>{a.name}{a.temp_min_c != null && a.temp_max_c != null && (a.temp_min_c || a.temp_max_c) ? ` (${a.temp_min_c} to ${a.temp_max_c} °C)` : ""}</option>{/each}
           </select></label>
+        <div class="grid grid-cols-2 gap-2 sm:col-span-2">
+          <label class="block"><span class="text-sm text-muted">Keep between (°C, lowest)</span><input class="field" type="number" step="1" min="-60" max="60" bind:value={p.temp_min_c} /></label>
+          <label class="block"><span class="text-sm text-muted">and (°C, highest)</span><input class="field" type="number" step="1" min="-60" max="60" bind:value={p.temp_max_c} /></label>
+          <p class="col-span-2 text-xs text-muted">Leave both 0 when it does not matter. Kept somewhere colder or warmer, Chedam raises a task (wrong storage).</p>
+        </div>
         <label class="flex min-h-12 items-center gap-3 sm:col-span-2"><input type="checkbox" class="h-6 w-6 accent-accent" bind:checked={p.expiry_at_receiving} />
           <span>Expiry date entered for each delivery instead</span></label>
       {/if}

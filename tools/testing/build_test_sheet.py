@@ -240,6 +240,17 @@ P2_TESTS = [
     ("P94", "Insights", "Laptop (manager)", "Reports → Insights; dates: last 30 days", "Totals vs last year; busy-times heatmap (switch Sales $ / Number of sales); best and slowest sellers; categories"),
     ("P95", "Insights", "Laptop (manager)", "Export best sellers to Excel", "Units, sales, margin, on hand and sell-through columns"),
     ("P96", "Insights", "Phone, dark mode", "Open the dashboard and insights in dark mode", "Charts readable in dark colours"),
+    # ---- Step 7: tasks, checklists, reminders (DL-141..143)
+    ("P100", "Tasks", "Laptop (manager)", "Tasks and checklists → New task: for Cal, due in 1 hour, urgent, linked from a product", "Shown under Everyone's; Cal sees it under Mine"),
+    ("P101", "Tasks", "Till (cashier)", "Cal: Done", "Moves to Done with Cal's name and the time; a manager can Reopen"),
+    ("P102", "Checklists", "Laptop (manager)", "Set up checklists: change Closing (add an optional item, done by 22:30)", "Saved; shown in Checklists"),
+    ("P103", "Checklists", "Till", "Checklists → Opening: tick items; Finish with one required item left", "Refused, names the item; ticking it then Finish works"),
+    ("P104", "Checklists", "Phone + till", "Two people tick the same checklist", "Each tick shows who and when"),
+    ("P105", "Checklists", "Laptop", "Leave the closing checklist unfinished past its time", "A task 'Closing not finished by …' appears; finishing it closes the task"),
+    ("P106", "Handover", "Till → laptop", "Leave a handover note; sign in as someone else", "Dashboard: 'Handover notes you have not read'; Read it; the writer sees who read it"),
+    ("P107", "Documents", "Laptop (manager)", "Licences and insurance → add insurance expiring in 5 days with a PDF", "An urgent task 'expires on … (in 5 days)'; Open copy shows the PDF"),
+    ("P108", "Documents", "Laptop", "Change the expiry to next year", "The task closes"),
+    ("P109", "Storage", "Laptop", "Product form: milk keep 0 to 4 °C; storage area Dry store", "Within 10 minutes an urgent task 'needs 0–4 °C but is kept in Dry store'; back to Cooler closes it"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

@@ -43,6 +43,7 @@
   import Customers from "./screens/Customers.svelte";
   import Display from "./screens/Display.svelte";
   import Dashboard from "./screens/Dashboard.svelte";
+  import Team from "./screens/Team.svelte";
 
   // A customer display window opened from Sell on this till (a second monitor): no sign-in, fed by the till.
   const localDisplay = location.hash === "#customer-display";
@@ -168,6 +169,7 @@
   {:else if s.screen === "promotions"}<Promotions />
   {:else if s.screen === "customers"}<Customers />
   {:else if s.screen === "dashboard"}<Dashboard />
+  {:else if s.screen === "team"}<Team />
   {/if}
 </main>
 {/if}
