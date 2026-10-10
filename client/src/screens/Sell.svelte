@@ -143,6 +143,9 @@
   }
 
   function tapProduct(p) {
+    // A parent with variants (P3 step 8): choose size / colour first
+    const kids = products.filter((x) => x.parent === p.id);
+    if (p.variant_axes && p.variant_axes.length && kids.length) { dialog = { kind: "variants", p, options: kids }; return; }
     const list = units[p.id] || [];
     if (list.length === 1) add(p, list[0]);
     else if (list.length > 1) dialog = { kind: "choose", options: list.map((u) => ({ p, u })) };
@@ -532,6 +535,18 @@
             <input class="field" type="number" min="0.001" step="0.001" bind:value={dialog.value} use:focusNow /></label>
           <div class="flex gap-2"><button class="btn" type="submit">Add</button><button class="btn-ghost" type="button" onclick={() => (dialog = null)}>Cancel</button></div>
         </form>
+      {:else if dialog && dialog.kind === "variants"}
+        <div class="space-y-2 rounded-xl border border-accent p-3">
+          <p class="font-semibold">{dialog.p.name}: which one?</p>
+          <div class="flex flex-wrap gap-2">{#each dialog.options as o (o.id)}<button class="btn-ghost" onclick={() => { dialog = null; tapProduct(o); }}>{o.name.replace(dialog.p.name, "").trim() || o.name}</button>{/each}</div>
+          <button class="btn-ghost" onclick={() => (dialog = null)}>Cancel</button>
+        </div>
+      {:else if dialog && dialog.kind === "serials"}
+        <form class="space-y-2 rounded-xl border border-accent p-3" onsubmit={(e) => { e.preventDefault(); const l = cart.lines.find((x) => x.key === dialog.key); if (l) l.serials = dialog.value.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean); dialog = null; changed(); }}>
+          <label class="block"><span class="font-semibold">Serial or IMEI numbers ({dialog.qty}), one per line: scan each</span>
+            <textarea class="field font-mono" rows="4" bind:value={dialog.value} use:focusNow></textarea></label>
+          <div class="flex gap-2"><button class="btn" type="submit">Save</button><button class="btn-ghost" type="button" onclick={() => (dialog = null)}>Cancel</button></div>
+        </form>
       {:else if dialog && dialog.kind === "choose"}
         <div class="space-y-2 rounded-xl border border-accent p-3">
           <p class="font-semibold">Packs or singles?</p>
@@ -645,6 +660,7 @@
                 <p class="mt-1 text-sm text-bad">{pr.message}
                   {#if pr.type === "pack_break"}<button class="ml-1 underline" onclick={() => openPack(l.key)}>Open a pack</button>{/if}
                   {#if pr.type === "age"}<button class="ml-1 underline" onclick={() => { l.age_checked = true; changed(); }}>ID checked</button>{/if}
+                  {#if pr.type === "serials"}<button class="ml-1 underline" onclick={() => (dialog = { kind: "serials", key: l.key, qty: l.qty, value: (l.serials || []).join(" ") })}>Enter serials</button>{/if}
                 </p>
               {/if}
             </li>

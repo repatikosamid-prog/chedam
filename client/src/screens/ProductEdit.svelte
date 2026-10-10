@@ -16,7 +16,7 @@
   const fromReceive = s.returnTo === "receive";
 
   let p = $state({ name: "", name_fr: "", category: "", base_unit: "each", tax_class: "", plu: "", pos_button: false,
-    reorder_point: 0, reorder_max: 0, description: "", tare: 0, scale_code: "", scale_ack: false, perishable: false, shelf_life_days: 0,
+    reorder_point: 0, reorder_max: 0, is_bundle: false, components: [], serial_tracked: false, warranty_days: 0, parent: "", variant: {}, variant_axes: [], description: "", tare: 0, scale_code: "", scale_ack: false, perishable: false, shelf_life_days: 0,
     expiry_at_receiving: false, storage_area: "", temp_min_c: 0, temp_max_c: 0, age_restricted: false, min_age: 19, deposits_fees: [], imported: false,
     hs_code: "", origin_country: "", non_returnable: false, size_qty: 0, size_unit: "", status: "draft" });
   let costText = $state("");
@@ -48,6 +48,27 @@
     show(r.json);
   }
 
+  // ---- Variety (P3 step 8): bundles, variants, serial numbers
+  let compQ = $state(""), compHits = $state([]), variants = $state([]), axes = $state([{ name: "Size", values: "" }, { name: "Colour", values: "" }]), varMsg = $state("");
+  async function findComp() {
+    const q = compQ.trim().replace(/'/g, "");
+    if (!q) { compHits = []; return; }
+    const r = await api("GET", "/api/collections/products/records?perPage=8&fields=id,name&filter=" + encodeURIComponent(`deleted_at='' && is_bundle=false && name~'${q}'`));
+    compHits = r.ok ? r.json.items.filter((x) => x.id !== s.productId) : [];
+  }
+  async function loadVariants() {
+    if (!s.productId) return;
+    const r = await api("GET", `/api/chedam/products/${s.productId}/variants`, null, { quiet: true });
+    variants = r.ok ? r.json.items : [];
+  }
+  async function makeVariants() {
+    const body = { axes: Object.fromEntries(axes.filter((a) => a.name.trim() && a.values.trim()).map((a) => [a.name.trim(), a.values.split(",").map((x) => x.trim()).filter(Boolean)])) };
+    const r = await api("POST", `/api/chedam/products/${s.productId}/variants`, body);
+    if (!r.ok) { error = r.message; return; }
+    varMsg = r.json.created.length + " new variant(s). Give each a barcode (or a till button) and activate it.";
+    loadVariants();
+  }
+
   function show(v) {
     Object.keys(p).forEach((k) => { if (v.product[k] !== undefined) p[k] = v.product[k]; });
     costText = v.product.cost_cents ? toDollars(v.product.cost_cents) : "";
@@ -56,6 +77,7 @@
     problems = v.problems;
     history = v.price_history;
     taxes = v.taxes;
+    if (!p.parent) loadVariants();
   }
 
   onMount(async () => {
@@ -116,7 +138,7 @@
     if (!isNew) body.product.id = s.productId;
     if (showCost) body.product.cost_cents = cost ?? 0;
     body.product.min_age = p.age_restricted ? Number(p.min_age) || 0 : 0;
-    ["reorder_point", "reorder_max", "tare", "shelf_life_days", "size_qty"].forEach((k) => (body.product[k] = Number(body.product[k]) || 0));
+    ["reorder_point", "reorder_max", "tare", "shelf_life_days", "size_qty", "warranty_days"].forEach((k) => (body.product[k] = Number(body.product[k]) || 0));
     if (!body.product.size_qty) body.product.size_unit = "";
     units.forEach((u, i) => body.units.push({ id: u.id, name: u.name, kind: u.kind,
       contains_qty: u.kind === "pack" || u.kind === "case" ? Number(u.contains_qty) || 0 : 0,
@@ -313,6 +335,32 @@
         </div>
         <label class="flex min-h-12 items-center gap-3 sm:col-span-2"><input type="checkbox" class="h-6 w-6 accent-accent" bind:checked={p.expiry_at_receiving} />
           <span>Expiry date entered for each delivery instead</span></label>
+      {/if}
+    </div>
+
+    <div class="card space-y-2">
+      <h2 class="font-semibold">Variety</h2>
+      {#if p.parent}<p class="text-sm">A variant ({Object.entries(p.variant || {}).map(([k, v]) => k + " " + v).join(", ")}) of <button class="underline" onclick={() => { s.productId = p.parent; }}>its parent</button>.</p>{/if}
+      <label class="flex min-h-12 items-center gap-3"><input type="checkbox" class="h-6 w-6 accent-accent" bind:checked={p.is_bundle} /> <span><b>Bundle or kit</b>: made of stocked items (selling it takes them out of stock)</span></label>
+      {#if p.is_bundle}
+        {#each p.components as c, i (i)}
+          <div class="flex items-center gap-2"><span class="flex-1 text-sm">{c.name || c.product}</span><input class="field w-24" type="number" min="0" step="any" bind:value={c.qty} aria-label="How many in one" />
+            <button class="text-bad" aria-label="Remove" onclick={() => (p.components = p.components.filter((_, k) => k !== i))}>✕</button></div>
+        {/each}
+        <input class="field" bind:value={compQ} oninput={findComp} placeholder="Add an item: type its name" aria-label="Add a component" />
+        <div class="flex flex-wrap gap-1">{#each compHits as h (h.id)}<button class="btn-ghost min-h-8 text-sm" onclick={() => { p.components = [...p.components, { product: h.id, name: h.name, qty: 1, selling_unit: "" }]; compHits = []; compQ = ""; }}>{h.name}</button>{/each}</div>
+      {/if}
+      <label class="flex min-h-12 items-center gap-3"><input type="checkbox" class="h-6 w-6 accent-accent" bind:checked={p.serial_tracked} /> <span><b>Serial or IMEI number</b> scanned for each one sold</span></label>
+      {#if p.serial_tracked}<label class="block"><span class="text-sm text-muted">Warranty (days)</span><input class="field w-32" type="number" min="0" max="3650" bind:value={p.warranty_days} /></label>{/if}
+      {#if !isNew && !p.parent && !p.is_bundle}
+        <details open={variants.length > 0}><summary class="cursor-pointer font-semibold">Variants (size, colour…){variants.length ? " · " + variants.length : ""}</summary>
+          {#each variants as v (v.id)}<p class="flex justify-between text-sm"><button class="underline" onclick={() => { s.productId = v.id; }}>{v.name}</button><span>{v.status} · {v.on_hand} in stock{v.barcodes.length ? " · " + v.barcodes[0] : ""}</span></p>{/each}
+          {#if can("catalogue.edit")}
+            {#each axes as a, i (i)}<div class="mt-1 grid grid-cols-[8rem_1fr] gap-2"><input class="field min-h-10" bind:value={a.name} aria-label="Axis name" /><input class="field min-h-10" bind:value={a.values} placeholder="S, M, L" aria-label="Values, separated by commas" /></div>{/each}
+            <button class="btn-ghost mt-1 min-h-10 text-sm" onclick={makeVariants}>Make the variants</button>
+            {#if varMsg}<p class="text-sm text-ok">{varMsg}</p>{/if}
+          {/if}
+        </details>
       {/if}
     </div>
 

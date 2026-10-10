@@ -400,7 +400,13 @@ function complete(app, input, ctx) {
   const meta = { id, number, sale: b.sale ? b.sale.getString("number") : "" };
 
   b.lines.forEach((l, i) => {
-    putBack(app, l, meta, ctx);
+    // A bundle comes back as its components, each with its share of the cost (P3 step 8)
+    const comps = require(`${__hooks}/lib/variety.js`).componentsOf(l.p);
+    if (comps.length && l.qty) {
+      const items = require(`${__hooks}/lib/variety.js`).stockItems(app, l);
+      const share = l.cost / items.length;
+      items.forEach((x) => putBack(app, { p: x.p, u: x.u, qty: x.qty, base: x.base, cost: Math.round(share), lots: [], dispo: l.dispo }, meta, ctx));
+    } else putBack(app, l, meta, ctx);
     const r = new Record(app.findCollectionByNameOrId("return_lines"));
     r.load({ return: id, line_no: i + 1, sale_line: l.sl ? l.sl.id : "", product: l.p.id, selling_unit: l.u ? l.u.id : "", name: l.name, qty: l.qty,
       base_qty: l.base, price_cents: l.price, net_cents: l.net, taxes: l.taxes, tax_cents: l.taxes.reduce((a, t) => a + t.tax_cents, 0),

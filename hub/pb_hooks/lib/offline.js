@@ -57,7 +57,7 @@ function pack(app) {
     },
     categories: rows(app, "categories", "deleted_at = '' && pos_visible = true", ["name", "colour", "sort"]),
     products: rows(app, "products", "deleted_at = '' && status = 'active'",
-      ["name", "category", "base_unit", "tax_class", "plu", "scale_code", "tare", "age_restricted", "min_age", "deposits_fees"]),
+      ["name", "category", "base_unit", "tax_class", "plu", "scale_code", "tare", "age_restricted", "min_age", "deposits_fees", "parent", "variant_axes", "serial_tracked", "is_bundle"]),
     units: rows(app, "selling_units", "deleted_at = '' && sell_at_pos = true",
       ["product", "name", "kind", "base_qty", "contains_qty", "barcodes", "price_cents", "is_default", "sort"]),
     tax_types: rows(app, "tax_types", "deleted_at = ''", ["code", "receipt_label"]),
@@ -170,12 +170,15 @@ function complete(app, input, ctx) {
     } else {
       let lots = [], cost = 0;
       if (!training) {
-        const t = forceOut(app, l, ctx);
-        lots = t.taken; cost = t.value;
-        touched[l.p.id] = l.p;
-        st().movement(app, { product: l.p.id, type: "sale", qty_base: -l.base, selling_unit: l.u.id, unit_qty: l.qty, lots_taken: lots,
-          cost_cents: l.base ? Math.round((cost / l.base) * 10000) / 10000 : 0, value_cents: -cost, ref_collection: "sales", ref_id: id,
-          note: number + " (offline " + ref + ")" }, Object.assign({}, ctx, { op: "" }));
+        // A bundle's components leave stock instead of the bundle (P3 step 8)
+        require(`${__hooks}/lib/variety.js`).stockItems(app, l).forEach((x) => {
+          const t = forceOut(app, x, ctx);
+          lots = lots.concat(t.taken); cost += t.value;
+          touched[x.p.id] = x.p;
+          st().movement(app, { product: x.p.id, type: "sale", qty_base: -x.base, selling_unit: x.u.id, unit_qty: x.qty, lots_taken: t.taken,
+            cost_cents: x.base ? Math.round((t.value / x.base) * 10000) / 10000 : 0, value_cents: -t.value, ref_collection: "sales", ref_id: id,
+            note: number + " (offline " + ref + ")" + (x.bundle ? " (" + x.bundle + ")" : "") }, Object.assign({}, ctx, { op: "" }));
+        });
       }
       costTotal += cost;
       line.load({ sale: id, line_no: i + 1, product: l.p.id, selling_unit: l.u.id, name: l.name, qty: l.qty, base_qty: l.base, tare: l.tare,

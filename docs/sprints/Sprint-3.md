@@ -13,7 +13,7 @@ Started 2026-10-10. Goal: purchasing, vendors, payables and receivables, expense
 | 5 | Receive from a bill photo; landed cost (DL-167..169) | Claude | Done, deployed (17 tests) |
 | 6 | Expenses and petty cash (DL-170..172) | Claude | Done, deployed (19 tests) |
 | 7 | Layaway, special orders, quotes, house accounts (DL-173..177) | Claude | Done, deployed (21 tests) |
-| 8 | Variants, bundles, serial numbers | Claude | Next |
-| 9 | Delivery orders (manual), consignment | Claude | Planned |
+| 8 | Variants, bundles, serial numbers (DL-178..180) | Claude | Done, deployed (18 tests) |
+| 9 | Delivery orders (manual), consignment | Claude | Next |
 | 10 | Recall trace, customer feedback | Claude | Planned |
 | 11 | Gate (with the P2-P4 test week) | Claude + Sreya | Planned |

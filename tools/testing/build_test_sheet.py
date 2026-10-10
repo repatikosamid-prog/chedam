@@ -343,6 +343,14 @@ P3_TESTS = [
     ("Q64", "Quote", "Laptop (manager)", "New quote for Cafe Luna at a lower agreed price; PDF; Make it an invoice", "QT-… PDF; turned into INV-… for Luna"),
     ("Q65", "Quote", "Till", "A quote → Ring up at the till", "The agreed price shows as an override with the quote as the reason"),
     ("Q66", "House account", "Till", "Sell → Pay → On account → Cafe Luna", "Sale done; an invoice INV-… for Luna (Bills and invoices); over the limit is refused"),
+    # ---- Step 8: product variety (DL-178..180)
+    ("Q70", "Bundles", "Laptop (manager)", "Products → New: 'Movie night kit', Bundle or kit: chips ×1 + chocolate ×2, barcode, price; activate", "Saved; the components listed"),
+    ("Q71", "Bundles", "Till", "Sell 2 kits", "Stock: chips −2, chocolate −4 (the kit itself has no stock); too many kits for the stock is refused"),
+    ("Q72", "Bundles", "Till", "Return 1 kit to stock", "Chips +1, chocolate +2"),
+    ("Q73", "Variants", "Laptop (manager)", "A product → Variety → Variants: Size S, M, L; Colour Black, White → Make the variants", "6 variants as drafts; adding XL later makes 2 more"),
+    ("Q74", "Variants", "Till", "Give two variants a barcode and activate them; tap the parent on the till", "Asks which one; the chosen variant goes in the cart"),
+    ("Q75", "Serials", "Till", "A product with 'Serial or IMEI' (warranty 365): sell 2 without serials", "'Scan the serial… (0 of 2)'; Enter serials; sold"),
+    ("Q76", "Serials", "Till", "Sell again with a serial already sold", "Refused: 'already sold'"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):

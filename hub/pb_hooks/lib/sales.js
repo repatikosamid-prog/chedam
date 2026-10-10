@@ -173,7 +173,7 @@ function build(app, input, actor) {
     out.push({ key, p, u, name, qty, base, tare, regular, price, reason, gross, disc: ln.discount, ld: 0, dl: "", pc: 0, pl: "", pids: [], sc: 0, deposit,
       rates: ratesOf(app, p.getString("tax_class"), exemptTypes, taxCache), fullRates: ratesOf(app, p.getString("tax_class"), [], taxCache),
       depositRates, depositFull,
-      age_checked: !!ln.age_checked, break_pack: !!ln.break_pack });
+      age_checked: !!ln.age_checked, break_pack: !!ln.break_pack, serials: Array.isArray(ln.serials) ? ln.serials.slice(0, 200) : [] });
   });
 
   const live = out.filter((l) => !l.voided);
@@ -250,7 +250,10 @@ function build(app, input, actor) {
   }
   if (!live.length) problems.push({ type: "empty", message: "The cart is empty." });
 
-  if (!training) stockCheck(app, live, input.cart_id, problems, need);
+  // Bundles take their components (P3 step 8); serial-tracked items need one serial per unit (FR-5.19)
+  const V = require(`${__hooks}/lib/variety.js`);
+  if (!training) stockCheck(app, live.reduce((a, l) => a.concat(V.stockItems(app, l)), []), input.cart_id, problems, need);
+  live.forEach((l) => { l.serialList = V.checkSerials(app, l, problems); });
   // Points earned on what is paid for the items: after every discount and the redemption, before tax
   let loyaltyView = null;
   if (loyalty) {
@@ -542,24 +545,27 @@ function complete(app, input, ctx, internal) {
     } else {
       let lots = [], cost = 0;
       if (!b.training) {
-        openPacksFor(app, l, ctx);
-        const lv = st().level(app, l.p.id, ctx);
-        const sealed = st().sealedOf(lv);
-        st().removeFromLevel(app, l.p, l.u, st().isLooseUnit(l.u) ? l.base : l.qty, lv, sealed);
-        st().saveLevel(app, lv, sealed, ctx);
-        // Expired lots only when fresh ones are not enough (the sale was approved for it, BR-14).
-        const have = st().lotsOf(app, l.p.id);
-        const t = st().takeLots(app, l.p.id, l.base, { lots: have.freshQty + 1e-9 < l.base ? have.all : have.fresh }, ctx);
-        lots = t.taken; cost = t.value;
-        st().movement(app, { product: l.p.id, type: "sale", qty_base: -l.base, selling_unit: l.u.id, unit_qty: l.qty, lots_taken: lots,
-          cost_cents: l.base ? Math.round((cost / l.base) * 10000) / 10000 : 0, value_cents: -cost, ref_collection: "sales", ref_id: id,
-          note: number }, Object.assign({}, ctx, { op: "" }));
+        // A bundle's components leave stock instead of the bundle (P3 step 8)
+        require(`${__hooks}/lib/variety.js`).stockItems(app, l).forEach((x) => {
+          openPacksFor(app, x, ctx);
+          const lv = st().level(app, x.p.id, ctx);
+          const sealed = st().sealedOf(lv);
+          st().removeFromLevel(app, x.p, x.u, st().isLooseUnit(x.u) ? x.base : x.qty, lv, sealed);
+          st().saveLevel(app, lv, sealed, ctx);
+          // Expired lots only when fresh ones are not enough (the sale was approved for it, BR-14).
+          const have = st().lotsOf(app, x.p.id);
+          const t = st().takeLots(app, x.p.id, x.base, { lots: have.freshQty + 1e-9 < x.base ? have.all : have.fresh }, ctx);
+          lots = lots.concat(t.taken); cost += t.value;
+          st().movement(app, { product: x.p.id, type: "sale", qty_base: -x.base, selling_unit: x.u.id, unit_qty: x.qty, lots_taken: t.taken,
+            cost_cents: x.base ? Math.round((t.value / x.base) * 10000) / 10000 : 0, value_cents: -t.value, ref_collection: "sales", ref_id: id,
+            note: number + (x.bundle ? " (" + x.bundle + ")" : "") }, Object.assign({}, ctx, { op: "" }));
+        });
       }
       costTotal += cost;
       line.load({ sale: id, line_no: i + 1, product: l.p.id, selling_unit: l.u.id, name: l.name, qty: l.qty, base_qty: l.base, tare: l.tare,
         regular_price_cents: l.regular, price_cents: l.price, override_reason: l.reason, gross_cents: l.gross, line_discount_cents: l.ld,
         discount_label: l.dl, promo_cents: l.pc, promo_label: l.pl, promotions: l.pids, staff_cents: l.sc, cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, tax_class: l.p.getString("tax_class"),
-        taxes: pl[l.key].taxes, deposit_cents: l.deposit, lots: lots, cost_cents: cost, age_checked: l.age_checked });
+        taxes: pl[l.key].taxes, deposit_cents: l.deposit, lots: lots, cost_cents: cost, age_checked: l.age_checked, serials: l.serialList || [] });
     }
     st().stamp(line, ctx);
     app.save(line);
