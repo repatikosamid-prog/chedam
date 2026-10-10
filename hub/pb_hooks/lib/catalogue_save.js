@@ -7,7 +7,7 @@
 // refused (a list) means the caller must roll back and answer with the list.
 
 const PRODUCT_FIELDS = ["name", "name_fr", "category", "base_unit", "tax_class", "cost_cents", "plu", "pos_button", "reorder_point", "reorder_max",
-  "description", "tare", "scale_code", "scale_ack", "perishable", "shelf_life_days", "expiry_at_receiving", "storage_area", "temp_min_c", "temp_max_c", "is_bundle", "components", "serial_tracked", "warranty_days",
+  "description", "tare", "scale_code", "scale_ack", "perishable", "shelf_life_days", "expiry_at_receiving", "storage_area", "temp_min_c", "temp_max_c", "is_bundle", "components", "serial_tracked", "warranty_days", "consignment_vendor", "consignment_cost_cents",
   "age_restricted", "min_age", "deposits_fees", "imported", "hs_code", "origin_country", "non_returnable",
   "size_qty", "size_unit"];
 const UNIT_FIELDS = ["name", "kind", "contains_qty", "contains_unit", "barcodes", "price_cents", "sell_at_pos", "is_default", "sort"];

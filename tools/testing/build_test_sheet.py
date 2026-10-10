@@ -351,6 +351,13 @@ P3_TESTS = [
     ("Q74", "Variants", "Till", "Give two variants a barcode and activate them; tap the parent on the till", "Asks which one; the chosen variant goes in the cart"),
     ("Q75", "Serials", "Till", "A product with 'Serial or IMEI' (warranty 365): sell 2 without serials", "'Scan the serial… (0 of 2)'; Enter serials; sold"),
     ("Q76", "Serials", "Till", "Sell again with a serial already sold", "Refused: 'already sold'"),
+    # ---- Step 9: delivery orders and consignment (DL-181, 182)
+    ("Q80", "Delivery", "Laptop (manager)", "Delivery orders → Platform prices: Uber Eats price for chips", "Saved"),
+    ("Q81", "Delivery", "Till", "New order: Uber Eats, their number, 2 chips + 1 chocolate → Accept", "Total at the Uber Eats price for chips; Stock shows them reserved"),
+    ("Q82", "Delivery", "Till", "Preparing → Picked up", "A sale on this till paid by 'Platform'; reservation released; the Z report shows Platform"),
+    ("Q83", "Delivery", "Till", "Another order → Cancel", "Cancelled; reservation released"),
+    ("Q84", "Consignment", "Laptop (manager)", "A product → Variety → Consignment: Fresh Fields, $6.00 owed per unit; receive 10", "Dashboard stock value does not change"),
+    ("Q85", "Consignment", "Till + laptop", "Sell 3, return 1; Buying → Consignment", "Fresh Fields: 2 sold, $12.00; Make their bill → a vendor bill, the list is empty"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):

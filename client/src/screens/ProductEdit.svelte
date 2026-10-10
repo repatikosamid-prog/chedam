@@ -16,7 +16,7 @@
   const fromReceive = s.returnTo === "receive";
 
   let p = $state({ name: "", name_fr: "", category: "", base_unit: "each", tax_class: "", plu: "", pos_button: false,
-    reorder_point: 0, reorder_max: 0, is_bundle: false, components: [], serial_tracked: false, warranty_days: 0, parent: "", variant: {}, variant_axes: [], description: "", tare: 0, scale_code: "", scale_ack: false, perishable: false, shelf_life_days: 0,
+    reorder_point: 0, reorder_max: 0, is_bundle: false, components: [], serial_tracked: false, warranty_days: 0, consignment_vendor: "", consignment_cost_cents: 0, parent: "", variant: {}, variant_axes: [], description: "", tare: 0, scale_code: "", scale_ack: false, perishable: false, shelf_life_days: 0,
     expiry_at_receiving: false, storage_area: "", temp_min_c: 0, temp_max_c: 0, age_restricted: false, min_age: 19, deposits_fees: [], imported: false,
     hs_code: "", origin_country: "", non_returnable: false, size_qty: 0, size_unit: "", status: "draft" });
   let costText = $state("");
@@ -56,6 +56,12 @@
     const r = await api("GET", "/api/collections/products/records?perPage=8&fields=id,name&filter=" + encodeURIComponent(`deleted_at='' && is_bundle=false && name~'${q}'`));
     compHits = r.ok ? r.json.items.filter((x) => x.id !== s.productId) : [];
   }
+  let vendorList = $state([]), consCost = $state("");
+  async function loadVendors() {
+    if (vendorList.length) return;
+    const r = await api("GET", "/api/collections/parties/records?perPage=200&sort=name&fields=id,name&filter=" + encodeURIComponent("deleted_at='' && kind!='client'"), null, { quiet: true });
+    vendorList = r.ok ? r.json.items : [];
+  }
   async function loadVariants() {
     if (!s.productId) return;
     const r = await api("GET", `/api/chedam/products/${s.productId}/variants`, null, { quiet: true });
@@ -78,6 +84,7 @@
     history = v.price_history;
     taxes = v.taxes;
     if (!p.parent) loadVariants();
+    if (p.consignment_vendor) { loadVendors(); consCost = (p.consignment_cost_cents / 100).toFixed(2); }
   }
 
   onMount(async () => {
@@ -351,6 +358,13 @@
         <div class="flex flex-wrap gap-1">{#each compHits as h (h.id)}<button class="btn-ghost min-h-8 text-sm" onclick={() => { p.components = [...p.components, { product: h.id, name: h.name, qty: 1, selling_unit: "" }]; compHits = []; compQ = ""; }}>{h.name}</button>{/each}</div>
       {/if}
       <label class="flex min-h-12 items-center gap-3"><input type="checkbox" class="h-6 w-6 accent-accent" bind:checked={p.serial_tracked} /> <span><b>Serial or IMEI number</b> scanned for each one sold</span></label>
+      {#if can("purchasing.view")}
+        <label class="flex min-h-12 items-center gap-3"><input type="checkbox" class="h-6 w-6 accent-accent" checked={!!p.consignment_vendor} onchange={(e) => { if (e.currentTarget.checked) { loadVendors(); p.consignment_vendor = "-"; } else { p.consignment_vendor = ""; p.consignment_cost_cents = 0; } }} />
+          <span><b>Consignment</b>: the vendor owns it until it is sold</span></label>
+        {#if p.consignment_vendor}<div class="grid gap-2 sm:grid-cols-2">
+          <label class="block"><span class="text-sm text-muted">Vendor</span><select class="field" bind:value={p.consignment_vendor}><option value="-">Choose…</option>{#each vendorList as v (v.id)}<option value={v.id}>{v.name}</option>{/each}</select></label>
+          <label class="block"><span class="text-sm text-muted">Owed to them per unit sold ($)</span><input class="field" inputmode="decimal" bind:value={consCost} oninput={() => (p.consignment_cost_cents = Math.round(Number(consCost || 0) * 100))} /></label></div>{/if}
+      {/if}
       {#if p.serial_tracked}<label class="block"><span class="text-sm text-muted">Warranty (days)</span><input class="field w-32" type="number" min="0" max="3650" bind:value={p.warranty_days} /></label>{/if}
       {#if !isNew && !p.parent && !p.is_bundle}
         <details open={variants.length > 0}><summary class="cursor-pointer font-semibold">Variants (size, colour…){variants.length ? " · " + variants.length : ""}</summary>

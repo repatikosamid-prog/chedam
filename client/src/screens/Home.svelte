@@ -182,6 +182,12 @@
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
       {#if can("sales.sell")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("delivery")}>
+          <span class="font-semibold">Delivery orders</span>
+          <span class="text-sm text-muted">Uber Eats, DoorDash, SkipTheDishes orders</span>
+        </button>
+      {/if}
+      {#if can("sales.sell")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("orders")}>
           <span class="font-semibold">Customer orders</span>
           <span class="text-sm text-muted">Layaways, special orders, quotes</span>

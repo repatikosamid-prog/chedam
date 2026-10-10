@@ -316,7 +316,7 @@ function settlePayments(app, total, payments, opts) {
   const o = opts || {};
   const relaxed = !!o.relaxed;
   // Store credit, a layaway / special order deposit and a client's house account are the store's own: always taken (P3 step 7)
-  const methods = (relaxed ? ["cash", "card", "usd_cash", "store_credit", "platform"] : setting(app, "sales.payment_methods", ["cash", "card"]) || []).concat(["store_credit", "deposit", "house_account"]);
+  const methods = (relaxed ? ["cash", "card", "usd_cash", "store_credit", "platform"] : setting(app, "sales.payment_methods", ["cash", "card"]) || []).concat(["store_credit", "deposit", "house_account"]).concat(o.platform ? ["platform"] : []);
   let exchangeLeft = Number(o.exchange_cents || 0);
   const rounding = setting(app, "sales.cash_rounding", true);
   const rate = Number(setting(app, "sales.usd_rate", 1.35));
@@ -516,7 +516,7 @@ function complete(app, input, ctx, internal) {
   if (!b.training && !till) return { refused: 409, message: "Open the till before selling.", quote };
   const number = (b.training ? "T-" : "S-") + ("000000" + nextNumber(app, b.training ? "training" : "sale", ctx)).slice(-6);
   if (b.training && (input.payments || []).some((p) => p.method === "deposit" || p.method === "house_account")) return { refused: 409, message: "Training sales cannot use a deposit or a house account.", quote };
-  const pay = settlePayments(app, b.priced.total_cents, input.payments, { ctx, exchange_cents: internal && internal.exchange_cents, sale_id: id, number: number });
+  const pay = settlePayments(app, b.priced.total_cents, input.payments, { ctx, exchange_cents: internal && internal.exchange_cents, sale_id: id, number: number, platform: !!(internal && internal.delivery) });
   if (pay.remaining > 0) return { refused: 409, message: "Not paid in full: " + pay.remaining + " cents left.", quote };
   const s = new Record(app.findCollectionByNameOrId("sales"));
   s.set("id", id);
@@ -556,6 +556,7 @@ function complete(app, input, ctx, internal) {
           const have = st().lotsOf(app, x.p.id);
           const t = st().takeLots(app, x.p.id, x.base, { lots: have.freshQty + 1e-9 < x.base ? have.all : have.fresh }, ctx);
           lots = lots.concat(t.taken); cost += t.value;
+          require(`${__hooks}/lib/delivery.js`).onSold(app, ctx, x.p, x.base, id, "");      // consignment: owed to the vendor (FR-6.14)
           st().movement(app, { product: x.p.id, type: "sale", qty_base: -x.base, selling_unit: x.u.id, unit_qty: x.qty, lots_taken: t.taken,
             cost_cents: x.base ? Math.round((t.value / x.base) * 10000) / 10000 : 0, value_cents: -t.value, ref_collection: "sales", ref_id: id,
             note: number + (x.bundle ? " (" + x.bundle + ")" : "") }, Object.assign({}, ctx, { op: "" }));

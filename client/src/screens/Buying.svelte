@@ -16,11 +16,11 @@
 
   const manage = can("purchasing.manage");
   const tabs = [["scan", "Receive a bill", can("stock.receive") || can("purchasing.manage")], ["orders", "Purchase orders", true], ["bills", "Bills and invoices", can("finance.manage") || can("purchasing.manage")], ["returns", "Returns to vendors", true],
-    ["prices", "Vendor prices", true], ["compare", "Compare vendors", true], ["better", "Better prices", true]].filter((x) => x[2]);
+    ["prices", "Vendor prices", true], ["compare", "Compare vendors", true], ["better", "Better prices", true], ["consignment", "Consignment", true]].filter((x) => x[2]);
   let tab = $state(s.buyingTab || (location.hash === "#buying-bills" ? "bills" : location.hash === "#buying-scan" ? "scan" : "orders")), error = $state("");
   let vendors = $state([]), vendor = $state(""), items = $state([]), edit = $state(null), units = $state([]);
   let pq = $state(""), hits = $state([]), cmp = $state(null), cmpName = $state("");
-  let better = $state([]), imp = $state(null), impResult = $state(null);
+  let better = $state([]), imp = $state(null), impResult = $state(null), cons = $state([]);
 
   const fail = async (r) => { if (!(await handleRefusal(r))) error = r.message; };
   const cur = (c, code) => (code && code !== "CAD" ? (c / 100).toFixed(2) + " " + code : money(c));
@@ -32,6 +32,7 @@
       if (r.ok) { vendors = r.json.items; if (!vendor && vendors.length) vendor = vendors[0].id; } else return fail(r);
     }
     if (tab === "prices" && vendor) { const r = await api("GET", `/api/chedam/vendors/${vendor}/products`); if (r.ok) items = r.json.items; else await fail(r); }
+    if (tab === "consignment") { const r = await api("GET", "/api/chedam/consignment"); if (r.ok) cons = r.json.items; else await fail(r); }
     if (tab === "better") { const r = await api("GET", "/api/chedam/purchasing/better"); if (r.ok) better = r.json.items; else await fail(r); }
   }
   onMount(() => { s.buyingTab = ""; load(); });
@@ -171,6 +172,18 @@
         {:else}<p class="text-muted">No vendor sells this product yet.</p>{/each}
       </div>
     {/if}
+  {/if}
+
+  {#if tab === "consignment"}
+    <p class="text-sm text-muted">Goods the vendor owns until sold: what is owed for what sold (less returns) since the last bill.</p>
+    {#each [...new Set(cons.map((x) => x.vendor))] as vid (vid)}
+      {@const rows = cons.filter((x) => x.vendor === vid)}
+      <div class="card space-y-1">
+        <div class="flex flex-wrap justify-between gap-2"><p class="font-semibold">{rows[0].vendor_name}</p>
+          {#if can("finance.manage") || manage}<button class="btn min-h-10 text-sm" onclick={async () => { const r = await api("POST", `/api/chedam/consignment/${vid}/bill`, {}); if (r.ok) { error = ""; load(); } else fail(r); }}>Make their bill ({money(rows.reduce((a, x) => a + x.amount_cents, 0))})</button>{/if}</div>
+        {#each rows as x (x.product)}<p class="flex justify-between text-sm"><span>{x.product_name}</span><span>{x.qty_base} sold · {money(x.amount_cents)}</span></p>{/each}
+      </div>
+    {:else}<p class="text-muted">Nothing owed for consignment goods.</p>{/each}
   {/if}
 
   {#if tab === "better"}

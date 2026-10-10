@@ -175,6 +175,7 @@ function complete(app, input, ctx) {
           const t = forceOut(app, x, ctx);
           lots = lots.concat(t.taken); cost += t.value;
           touched[x.p.id] = x.p;
+          require(`${__hooks}/lib/delivery.js`).onSold(app, ctx, x.p, x.base, id, "");
           st().movement(app, { product: x.p.id, type: "sale", qty_base: -x.base, selling_unit: x.u.id, unit_qty: x.qty, lots_taken: t.taken,
             cost_cents: x.base ? Math.round((t.value / x.base) * 10000) / 10000 : 0, value_cents: -t.value, ref_collection: "sales", ref_id: id,
             note: number + " (offline " + ref + ")" + (x.bundle ? " (" + x.bundle + ")" : "") }, Object.assign({}, ctx, { op: "" }));

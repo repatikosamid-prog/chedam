@@ -307,6 +307,7 @@ function newCode(app) {
 // ---- Stock for each returned item (FR-4.11) -------------------------------------------------------
 
 function putBack(app, l, ret, ctx) {
+  require(`${__hooks}/lib/delivery.js`).onSold(app, ctx, l.p, -l.base, "", ret.id);      // consignment: no longer owed
   const note = ret.number + (ret.sale ? " (sale " + ret.sale + ")" : " (no receipt)");
   const perBase = l.base ? l.cost / l.base : 0;
   if (l.dispo === "restock") {

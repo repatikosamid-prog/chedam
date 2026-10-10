@@ -33,6 +33,13 @@ function stockItems(app, l) {
 
 // A bundle saved: components are stocked products (not bundles themselves), whole quantities above 0
 function checkBundle(app, rec) {
+  // Consignment (P3 step 9): the vendor must be a vendor
+  const cv = rec.getString("consignment_vendor");
+  if (cv) {
+    let v = null;
+    try { v = app.findRecordById("parties", cv); } catch (_) { v = null; }
+    if (!v || v.getString("kind") === "client") bad("Choose the vendor who owns the consignment goods.");
+  }
   if (!rec.getBool("is_bundle")) return;
   const comps = j(rec, "components", []);
   if (!Array.isArray(comps) || !comps.length) bad("A bundle needs at least one component.");

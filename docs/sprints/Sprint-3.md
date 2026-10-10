@@ -14,6 +14,6 @@ Started 2026-10-10. Goal: purchasing, vendors, payables and receivables, expense
 | 6 | Expenses and petty cash (DL-170..172) | Claude | Done, deployed (19 tests) |
 | 7 | Layaway, special orders, quotes, house accounts (DL-173..177) | Claude | Done, deployed (21 tests) |
 | 8 | Variants, bundles, serial numbers (DL-178..180) | Claude | Done, deployed (18 tests) |
-| 9 | Delivery orders (manual), consignment | Claude | Next |
-| 10 | Recall trace, customer feedback | Claude | Planned |
+| 9 | Delivery orders (manual), consignment (DL-181, 182) | Claude | Done, deployed (15 tests) |
+| 10 | Recall trace, customer feedback | Claude | Next |
 | 11 | Gate (with the P2-P4 test week) | Claude + Sreya | Planned |

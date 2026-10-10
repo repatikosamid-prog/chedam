@@ -57,7 +57,8 @@ function catalogue(app) {
   app.findRecordsByFilter("categories", "id != ''", "", 0, 0).forEach((c) => { cats[c.id] = c.getString("name"); });
   const prod = {};
   app.findRecordsByFilter("products", "deleted_at = ''", "", 0, 0).forEach((p) => {
-    prod[p.id] = { name: p.getString("name"), category: p.getString("category"), status: p.getString("status"), reorder: p.getFloat("reorder_point"), perishable: p.getBool("perishable") };
+    prod[p.id] = { name: p.getString("name"), category: p.getString("category"), status: p.getString("status"), reorder: p.getFloat("reorder_point"), perishable: p.getBool("perishable"),
+      consignment: !!p.getString("consignment_vendor") };
   });
   return { cats: cats, prod: prod, of: (id) => (prod[id] ? prod[id].category : ""), catName: (id) => cats[id] || "(no category)" };
 }
@@ -96,7 +97,9 @@ function inventory(app, cat, showCost, soldSince) {
   const soon = R().dayStart(require(`${__hooks}/lib/stock.js`).today(3));
   let value = 0, nearExpiry = 0, expired = 0, expiredValue = 0;
   app.findRecordsByFilter("stock_lots", "qty > 0 && deleted_at = ''", "", 0, 0).forEach((l) => {
-    const v = Math.round(l.getFloat("qty") * l.getFloat("cost_cents"));
+    const pr = cat.prod[l.getString("product")];
+    // Consignment stock belongs to the vendor: not in the store's stock value (FR-6.14)
+    const v = pr && pr.consignment ? 0 : Math.round(l.getFloat("qty") * l.getFloat("cost_cents"));
     value += v;
     const e = l.getString("expiry_date");
     if (!e) return;
