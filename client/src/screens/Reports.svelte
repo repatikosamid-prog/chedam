@@ -2,7 +2,8 @@
   // Money and audit reports (P1 step 9). Tills: each till's cash and card against the card terminal's
   // settlement, sales after closing, reconcile (FR-10.01). Loss prevention: per cashier, with flags and the
   // events behind them (FR-10.11). Audit log: who changed what, when, on which device (FR-10.13).
-  // Retention: what is kept and for how long (FR-10.09, BR-34). Every table can be exported.
+  // Retention: what is kept and for how long (FR-10.09, BR-34). Promotions: each deal's results against the
+  // period before (FR-5.12). Loyalty: members, points and what they are worth (FR-7.07). Every table can be exported.
   import { onMount } from "svelte";
   import { api } from "../lib/api.js";
   import { go, can, handleRefusal } from "../lib/session.svelte.js";
@@ -11,13 +12,14 @@
 
   const day = (off = 0) => { const d = new Date(Date.now() + off * 86400000), p = (n) => String(n).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); };
   const tabs = [["tills", "Tills", can("sales.view") || can("till.manage")], ["loss", "Loss prevention", can("sales.view") || can("till.manage")],
+    ["promos", "Promotions", can("sales.view") || can("promotions.manage")], ["loyalty", "Loyalty", can("sales.view") || can("customers.manage")],
     ["audit", "Audit log", can("events.view")], ["retention", "Retention", can("events.view") || can("settings.manage")]].filter((x) => x[2]);
   let tab = $state(tabs.length ? tabs[0][0] : "");
   let from = $state(day(-6)), to = $state(day());
   let error = $state(""), ok = $state(""), busy = $state(false);
   let rec = $state(null), recon = $state(null), loss = $state(null), detail = $state(null);
   let audit = $state(null), opts = $state(null), f = $state({ actor: "", device: "", table: "", action: "", record: "", page: 1 }), open = $state({});
-  let ret = $state(null);
+  let ret = $state(null), promos = $state(null), loy = $state(null), openPromo = $state("");
 
   const when = (t) => (t ? new Date(String(t).replace(" ", "T")).toLocaleString() : "");
   const fail = async (r) => { if (!(await handleRefusal(r))) error = r.message; };
@@ -31,6 +33,8 @@
       const qs = new URLSearchParams({ from, to, ...Object.fromEntries(Object.entries(f).filter(([, v]) => v !== "" && v !== null)) });
       const r = await api("GET", "/api/chedam/audit?" + qs); if (r.ok) audit = r.json; else await fail(r);
     }
+    if (tab === "promos") { const r = await api("GET", `/api/chedam/reports/promotions?from=${from}&to=${to}`); if (r.ok) promos = r.json; else await fail(r); }
+    if (tab === "loyalty") { const r = await api("GET", `/api/chedam/reports/loyalty?from=${from}&to=${to}`); if (r.ok) loy = r.json; else await fail(r); }
     if (tab === "retention") { const r = await api("GET", "/api/chedam/retention"); if (r.ok) ret = r.json; else await fail(r); }
     busy = false;
   }
@@ -50,6 +54,9 @@
     ok = "Till " + r.json.number + " (Z " + r.json.shift + ") reconciled as batch " + r.json.batch_no + "."; recon = null; load();
   }
 
+  // Change against the period before: "+12%", "new", "" (nothing either time)
+  const delta = (now, then) => (!then ? (now ? "new" : "") : (now >= then ? "+" : "−") + Math.round(Math.abs(100 * (now - then) / then)) + "%");
+  const TYPES = { pct_off: "% off", amount_off: "$ off", fixed_price: "Sale price", buy_get: "Buy X get Y", multi_price: "X for $Y", mix_match: "Mix and match", spend: "Spend threshold", markdown: "Markdown" };
   const show = (v) => (v === null || v === undefined || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 </script>
 
@@ -146,6 +153,65 @@
         <div class="flex flex-wrap justify-between gap-2"><h2 class="font-semibold">{detail.name}: {detail.events.length} events</h2>
           <ExportMenu title={"Loss prevention " + detail.name} rows={detail.events} columns={[{ key: "at", label: "When" }, { key: "kind", label: "What" }, { key: "ref", label: "Receipt" }, { key: "amt", label: "Amount", value: (x) => x.amount_cents / 100 }, { key: "note", label: "Note" }]} /></div>
         {#each detail.events as x, i (i)}<p class="text-sm">{when(x.at)} · <b>{x.kind}</b>{x.ref ? " · " + x.ref : ""}{x.amount_cents ? " · " + money(x.amount_cents) : ""}{x.note ? " · " + x.note : ""}</p>{/each}
+      </div>
+    {/if}
+  {/if}
+
+  {#if tab === "promos" && promos}
+    <div class="card space-y-1">
+      <div class="flex flex-wrap justify-between gap-2">
+        <p>{promos.totals.now.with_deal} of {promos.totals.now.sales} sales had a deal · savings given {money(promos.totals.now.savings_cents)}
+          <span class="text-muted">(before: {promos.totals.before.with_deal} sales, {money(promos.totals.before.savings_cents)})</span></p>
+        <ExportMenu title="Promotion results" rows={promos.promotions} columns={[{ key: "name", label: "Deal" }, { key: "type", label: "Type", value: (x) => TYPES[x.type] || x.type }, { key: "coupon", label: "Coupon" },
+          { key: "t", label: "Times used", value: (x) => x.now.times }, { key: "s", label: "Sales", value: (x) => x.now.sales }, { key: "u", label: "Units", value: (x) => x.now.units },
+          { key: "v", label: "Sales $ (before tax)", value: (x) => x.now.sales_cents / 100 }, { key: "sv", label: "Savings $", value: (x) => x.now.savings_cents / 100 },
+          ...(promos.show_cost ? [{ key: "m", label: "Margin $", value: (x) => x.now.margin_cents / 100 }, { key: "mp", label: "Margin %", value: (x) => x.now.margin_pct }] : []),
+          { key: "bt", label: "Times before", value: (x) => (x.before ? x.before.times : 0) }, { key: "bv", label: "Sales $ before", value: (x) => (x.before ? x.before.sales_cents / 100 : 0) },
+          { key: "bs", label: "Savings $ before", value: (x) => (x.before ? x.before.savings_cents / 100 : 0) },
+          { key: "lu", label: "Units of its products", value: (x) => (x.lift ? x.lift.now.units : "") }, { key: "lb", label: "Units of its products before", value: (x) => (x.lift ? x.lift.before.units : "") }]} />
+      </div>
+      <p class="text-sm text-muted">Compared with {promos.before.from} – {promos.before.to}, the same number of days just before. Sales are before tax, after every discount; returns are not taken off.</p>
+    </div>
+    {#each promos.promotions as x (x.id)}
+      <div class="card space-y-1">
+        <button class="flex w-full flex-wrap justify-between gap-2 text-left" onclick={() => (openPromo = openPromo === x.id ? "" : x.id)} aria-expanded={openPromo === x.id}>
+          <span class="font-semibold">{x.name} <span class="text-sm font-normal text-muted">{TYPES[x.type] || ""}{x.coupon ? " · coupon " + x.coupon : ""}{x.status === "ended" ? " · ended" : ""}</span></span>
+          <span>saved customers {money(x.now.savings_cents)} <span class="text-sm text-muted">{delta(x.now.savings_cents, x.before ? x.before.savings_cents : 0)}</span></span>
+        </button>
+        <p class="text-sm">Used {x.now.times}× on {x.now.sales} sales · {x.now.units} units · sales {money(x.now.sales_cents)}{promos.show_cost ? " · margin " + money(x.now.margin_cents) + " (" + x.now.margin_pct + "%)" : ""}
+          <span class="text-muted">· before: {x.before ? x.before.times + "×, " + money(x.before.sales_cents) : "not used"}</span></p>
+        {#if x.lift}<p class="text-sm">All sales of its products: {x.lift.now.units} units, {money(x.lift.now.sales_cents)} <span class="text-muted">(before: {x.lift.before.units} units, {money(x.lift.before.sales_cents)}; {delta(x.lift.now.units, x.lift.before.units) || "no change"})</span></p>{/if}
+        {#if promos.show_cost && x.now.sales_cents && x.now.margin_cents < 0}<p class="text-sm text-warn">⚠ Sold below cost</p>{/if}
+        {#if openPromo === x.id && x.products.length}<p class="text-sm text-muted">Products: {x.products.map((p) => p.name).join(", ")}</p>{/if}
+      </div>
+    {/each}
+    {#if !promos.promotions.length}<p class="text-muted">No deals used in these dates or the period before.</p>{/if}
+    {#if promos.coupons.length}<div class="card"><p class="font-semibold">Coupons used</p>{#each promos.coupons as c (c.code)}<p class="text-sm">{c.code}: {c.sales} sales</p>{/each}</div>{/if}
+  {/if}
+
+  {#if tab === "loyalty" && loy}
+    {#if !loy.program.enabled}<p class="rounded-xl bg-soft px-3 py-2 text-sm">The loyalty programme is off{loy.program.set_by_owner ? "" : " (the owner has not set it yet)"}: customers earn no points.</p>{/if}
+    <div class="grid gap-2 sm:grid-cols-4">
+      <div class="card"><p class="text-sm text-muted">Members</p><p class="text-2xl font-bold">{loy.members.total}</p><p class="text-sm">{loy.members.new} joined · {loy.members.bought} bought</p></div>
+      <div class="card"><p class="text-sm text-muted">Members' share of sales</p><p class="text-2xl font-bold">{loy.sales.member_pct}%</p><p class="text-sm">{loy.sales.members} of {loy.sales.all} sales · {money(loy.sales.member_cents)}</p></div>
+      <div class="card"><p class="text-sm text-muted">Average sale</p><p class="text-2xl font-bold">{money(loy.sales.avg_member_cents)}</p><p class="text-sm">members · others {money(loy.sales.avg_other_cents)}</p></div>
+      <div class="card"><p class="text-sm text-muted">Points held now</p><p class="text-2xl font-bold">{loy.liability.points}</p><p class="text-sm">worth {money(loy.liability.cents)}{loy.program.points_per_dollar_off ? " (" + loy.program.points_per_dollar_off + " points = $1)" : ""}</p></div>
+    </div>
+    <div class="card space-y-1 text-sm">
+      <p class="font-semibold">Points in these dates</p>
+      <p>Earned {loy.points.earned}{loy.points.taken_back ? " · taken back by returns " + loy.points.taken_back : ""} · used {loy.points.used} ({money(loy.points.redeem_cents)} off){loy.points.given_back ? " · given back by returns " + loy.points.given_back : ""}{loy.points.adjusted ? " · adjusted " + loy.points.adjusted : ""}{loy.points.expired ? " · expired " + loy.points.expired : ""}</p>
+      <p class="text-muted">"Worth" is what the store would give in discounts if every point held were used: a liability for the accountant.</p>
+    </div>
+    {#if loy.top}
+      <div class="card space-y-1">
+        <div class="flex flex-wrap justify-between gap-2"><h2 class="font-semibold">Top customers</h2>
+          <ExportMenu title="Top customers" rows={loy.top} columns={[{ key: "first_name", label: "First name" }, { key: "phone", label: "Phone (last 4)" }, { key: "card", label: "Card (last 4)" }, { key: "visits", label: "Visits" },
+            { key: "sp", label: "Spent $", value: (x) => x.spent_cents / 100 }, { key: "earned", label: "Points earned" }, { key: "redeemed", label: "Points used" }, { key: "points", label: "Points now" }]} /></div>
+        <div class="overflow-x-auto"><table class="w-full text-sm">
+          <thead><tr class="text-left">{#each ["Customer", "Visits", "Spent", "Earned", "Used", "Points now"] as h (h)}<th class="border-b border-line px-2 py-1">{h}</th>{/each}</tr></thead>
+          <tbody>{#each loy.top as c (c.id)}<tr><td class="px-2 py-1">{c.first_name} <span class="text-muted">{c.phone || c.card}</span></td><td class="px-2">{c.visits}</td><td class="px-2">{money(c.spent_cents)}</td><td class="px-2">{c.earned}</td><td class="px-2">{c.redeemed}</td><td class="px-2">{c.points}</td></tr>{/each}</tbody>
+        </table></div>
+        {#if !loy.top.length}<p class="text-muted">No member sales in these dates.</p>{/if}
       </div>
     {/if}
   {/if}

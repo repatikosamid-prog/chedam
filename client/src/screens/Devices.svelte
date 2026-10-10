@@ -49,6 +49,14 @@
     load();
   }
 
+  // A customer display shows one till's sale (FR-3.14)
+  async function linkDisplay(d, till) {
+    const r = await api("POST", "/api/chedam/devices/" + d.id + "/display", { till });
+    if (!r.ok && !(await handleRefusal(r))) error = r.message;
+    load();
+  }
+  const tills = $derived(list.filter((x) => x.type !== "customer_display" && x.status !== "revoked"));
+
   async function saveEdit(e) {
     e.preventDefault();
     const d = list.find((x) => x.id === editing.id);
@@ -135,7 +143,15 @@
       </div>
       <dl class="my-2 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5 text-sm">
         <dt class="text-muted">Type</dt><dd>{TYPES[d.type] || d.type}</dd>
-        <dt class="text-muted">Signed in</dt><dd>{d.current_user ? d.current_user.name : "nobody"}</dd>
+        {#if d.type === "customer_display"}
+          <dt class="text-muted">Shows the sale of</dt>
+          <dd>{#if manage && d.status !== "revoked"}<select class="field min-h-10 py-1" aria-label={"Till shown on " + d.name} value={d.display_for || ""} onchange={(e) => linkDisplay(d, e.currentTarget.value)}>
+              <option value="">No till yet (shows the logo)</option>{#each tills as x (x.id)}<option value={x.id}>{x.name}</option>{/each}</select>
+            {:else}{(tills.find((x) => x.id === d.display_for) || {}).name || "no till yet"}{/if}</dd>
+        {:else}
+          {#if d.displays && d.displays.length}<dt class="text-muted">Customer display</dt><dd>{d.displays.join(", ")}</dd>{/if}
+          <dt class="text-muted">Signed in</dt><dd>{d.current_user ? d.current_user.name : "nobody"}</dd>
+        {/if}
         <dt class="text-muted">Assigned to</dt><dd>{d.assigned_user ? d.assigned_user.name : "anyone"}</dd>
         <dt class="text-muted">Last seen</dt><dd>{ago(d.last_seen_at)}</dd>
         <dt class="text-muted">App version</dt><dd>{d.app_version || "unknown"}</dd>

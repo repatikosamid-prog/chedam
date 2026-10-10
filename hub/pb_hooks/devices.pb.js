@@ -143,7 +143,7 @@ routerAdd("GET", "/api/chedam/devices", (e) => {
   return e.json(200, { this_device: devices.currentId(e), devices: list });
 });
 
-// approve | lock | unlock | sign-out | revoke
+// approve | lock | unlock | sign-out | revoke | display (link a customer display to a till)
 routerAdd("POST", "/api/chedam/devices/{id}/{action}", (e) => {
   const access = require(`${__hooks}/lib/access.js`);
   const devices = require(`${__hooks}/lib/devices.js`);
@@ -186,6 +186,9 @@ routerAdd("POST", "/api/chedam/devices/{id}/{action}", (e) => {
     dev.set("pairing_expires_at", "");
     dev.set("current_user", "");
     dev.set("revoked_at", now);
+  } else if (action === "display") {
+    // A customer display shows one till's sale: {till: <device id> | ""}
+    require(`${__hooks}/lib/display.js`).link(e.app, dev, (e.requestInfo().body || {}).till);
   } else {
     throw new NotFoundError("Unknown device action.");
   }

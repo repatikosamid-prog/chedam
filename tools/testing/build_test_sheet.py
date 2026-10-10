@@ -216,6 +216,22 @@ P2_TESTS = [
     ("P60", "Loyalty", "Laptop (manager)", "Their data (download); then Delete on request", "A file with everything held; after deleting, the name and phone are gone and the phone no longer finds them"),
     ("P61", "Loyalty", "Till (hub off)", "Switch the Pi off; Customer → a member's phone; sell with points", "Found offline; points earned/used; the sale arrives with them when the Pi is back"),
     ("P62", "Loyalty", "Till", "As a cashier: Customers screen", "Find by phone or card only; no editing, no points adjusting"),
+    # ---- Step 4: promotion and loyalty reports (DL-135, 136)
+    ("P70", "Reports", "Laptop (manager)", "Home → Reports → Promotions; dates: this week", "Each deal used: times, sales, units, sales $, savings; margin %; 'before' = the week before"),
+    ("P71", "Reports", "Laptop (manager)", "Open a deal's card", "Its products listed; 'All sales of its products' now vs before"),
+    ("P72", "Reports", "Laptop (manager)", "A sale with a coupon, then the report", "The coupon code counted under 'Coupons used'"),
+    ("P73", "Reports", "Laptop (manager)", "Reports → Loyalty", "Members, joined, bought; members' share of sales; points earned/used; points held and what they are worth in $"),
+    ("P74", "Reports", "Laptop (manager)", "Top customers; Export", "First names with the last 4 digits only; the export has the same"),
+    ("P75", "Reports", "Laptop (owner)", "Change 'points for $1 off' in the programme; Reports → Loyalty again", "'Worth' changes with the new value"),
+    ("P76", "Reports", "Laptop (accountant)", "Sign in as Ana Accountant → Reports → Loyalty", "Totals and the liability, but no customer list"),
+    # ---- Step 5: customer display (DL-137, 138)
+    ("P80", "Display", "Tablet or phone", "Devices → Pair a new device: type 'Customer display'; open the code on the tablet", "After approval it shows the store's name/logo and 'Welcome'; no sign-in"),
+    ("P81", "Display", "Laptop (manager)", "Devices → the display → 'Shows the sale of': pick the till", "The till's card says 'Customer display: <name>'"),
+    ("P82", "Display", "Till + display", "Scan items, one with a deal; add a customer", "The display shows the items, 'You save', the total and 'Hi <name> · points' within about a second"),
+    ("P83", "Display", "Till + display", "Pay cash with change", "Display: 'To pay' while paying, then 'Thank you!', the change and the savings"),
+    ("P84", "Display", "Till + display", "Wait 15 s (or New sale)", "The display goes back to the logo and 'Welcome'"),
+    ("P85", "Display", "Laptop till", "Sell → 'Customer screen'; drag the window to a second monitor; sell", "The window follows the sale; still works with the Pi switched off"),
+    ("P86", "Display", "Display", "Remove a deal line, change quantities, clear the sale", "The display follows every change; nothing is left behind"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

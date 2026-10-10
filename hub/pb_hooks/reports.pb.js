@@ -48,3 +48,17 @@ routerAdd("GET", "/api/chedam/retention", (e) => {
   require(`${__hooks}/lib/sales_http.js`).ctx(e, "events.view|settings.manage");
   return e.json(200, require(`${__hooks}/lib/retention.js`).rules(e.app));
 });
+
+// Promotion results (FR-5.12): ?from&to; compared with the period just before. Margin with costs.view.
+routerAdd("GET", "/api/chedam/reports/promotions", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "sales.view|promotions.manage");
+  const q = e.request.url.query();
+  return e.json(200, require(`${__hooks}/lib/engage_reports.js`).promotions(e.app, { from: q.get("from"), to: q.get("to") }, c.showCost));
+});
+
+// Loyalty (FR-7.07): ?from&to[&top=20]; top customers only with customers.manage.
+routerAdd("GET", "/api/chedam/reports/loyalty", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "sales.view|customers.manage");
+  const q = e.request.url.query();
+  return e.json(200, require(`${__hooks}/lib/engage_reports.js`).loyalty(e.app, { from: q.get("from"), to: q.get("to"), top: q.get("top") }, c.can("customers.manage")));
+});

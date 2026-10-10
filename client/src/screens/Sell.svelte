@@ -25,6 +25,7 @@
   import RefundChooser from "../components/RefundChooser.svelte";
   import ReturnSlip from "../components/ReturnSlip.svelte";
   import { ex, endExchange } from "../lib/exchange.svelte.js";
+  import { publish, useHub, openWindow } from "../lib/customer_display.js";
 
   const KEY = "chedam.cart";
   let info = $state(null);                       // /tills/current: till, settings, business
@@ -312,6 +313,32 @@
 
   function newSale() { stopBack(); sale = null; exReturn = null; mode = "sell"; note = ""; focusCode(); }
 
+  // ---- Customer display (FR-3.14): items, savings, total, the member's points; "thank you" after payment.
+  // Sent to a display window on this till and, when a display device shows this till, to the hub.
+  const shown = $derived.by(() => {
+    if (mode === "done" && sale) {
+      return { kind: "done", training: !!sale.training, total_cents: sale.total_cents + (sale.rounding_cents || 0), change_cents: sale.change_cents || 0, savings_cents: sale.savings_cents || 0,
+        customer: sale.customer_name && sale.customer_name !== "Deleted customer" ? { first_name: sale.customer_name, earned: sale.loyalty_earned || 0, balance: sale.loyalty_balance || 0 } : null };
+    }
+    if (!quote || !live.length) return { kind: "idle" };
+    const lines = live.map((l) => {
+      const q = qline(l.key);
+      if (!q) return null;
+      return { name: l.name, qty: l.qty, unit: l.kind === "weight" ? l.base_unit : "", price_cents: q.price_cents, regular_price_cents: q.regular_price_cents,
+        total_cents: q.gross_cents - q.line_discount_cents, promo_label: q.promo_cents ? q.promo_label : "",
+        save_cents: Math.max(0, Math.round(q.regular_price_cents * l.qty) - q.gross_cents) + q.line_discount_cents };
+    }).filter(Boolean);
+    const points = quote.loyalty ? quote.loyalty.redeem_cents || 0 : 0;
+    const L = quote.loyalty;
+    return { kind: mode === "pay" ? "pay" : "sale", training: !!cart.training, lines, discount_cents: quote.cart_discount_cents || 0, discount_label: quote.cart_discount_label || "",
+      points_cents: points, tax_cents: quote.tax_cents, deposit_cents: quote.deposit_cents || 0, total_cents: quote.total_cents,
+      savings_cents: lines.reduce((a, l) => a + l.save_cents, 0) + (quote.cart_discount_cents || 0) + points,
+      paid_cents: mode === "pay" && st ? st.applied.reduce((a, p) => a + p.amount_cents, 0) : 0, remaining_cents: mode === "pay" && st ? st.remaining : quote.total_cents,
+      customer: L && L.customer ? { first_name: L.customer.first_name, points: L.customer.points, earn: L.enabled ? L.earn : 0, redeem: L.redeem_points || 0 } : null };
+  });
+  $effect(() => { useHub(s.device && s.device.displays && s.device.displays.length > 0); publish($state.snapshot(shown)); });
+  onMount(() => () => publish({ kind: "idle" }));
+
   // Back to selling by itself, 15 s after a sale (time to print the receipt). Any tap on the receipt
   // area (reprint, void, the buyer's name) keeps the screen until New sale.
   const BACK_AFTER = 15;
@@ -384,6 +411,7 @@
       <button class="btn-ghost min-h-10 text-sm" onclick={showHolds}>Recall</button>
       <button class="btn-ghost min-h-10 text-sm" onclick={() => go("sales")}>Sales</button>
       <button class="btn-ghost min-h-10 text-sm" onclick={() => go("till")}>Till</button>
+      <button class="btn-ghost min-h-10 text-sm" onclick={openWindow} title="Opens what the customer sees in its own window: drag it onto the screen facing the customer">Customer screen</button>
       <button class="btn-ghost min-h-10 text-sm {cart.training ? 'border-warn text-warn' : ''}" onclick={toggleTraining}>{cart.training ? "Training on" : "Training"}</button>
     </div>
   </div>

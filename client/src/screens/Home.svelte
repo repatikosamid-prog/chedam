@@ -177,10 +177,10 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
-      {#if can("sales.view") || can("till.manage") || can("events.view")}
+      {#if can("sales.view") || can("till.manage") || can("events.view") || can("promotions.manage") || can("customers.manage")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("reports")}>
           <span class="font-semibold">Reports</span>
-          <span class="text-sm text-muted">Till reconciliation, loss prevention, audit log</span>
+          <span class="text-sm text-muted">Tills, loss prevention, promotions, loyalty, audit log</span>
         </button>
       {/if}
       {#if can("catalogue.edit") || can("data.export")}

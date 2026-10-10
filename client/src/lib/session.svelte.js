@@ -84,6 +84,7 @@ export async function refresh() {
   if (!r.ok) return notify(r.message, "bad");
   s.device = r.json;
   if (s.device.status !== "approved") { forgetSignIn(); return go("wait"); }
+  if (s.device.type === "customer_display") { forgetSignIn(); return go("display"); }
   // A token from someone else's session on this device is refused by the hub (one person per device).
   if (load("token")) return loadMe();
   return go(s.screen === "pin" && s.picked ? "pin" : "names");

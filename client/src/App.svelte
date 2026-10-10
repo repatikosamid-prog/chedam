@@ -41,8 +41,13 @@
   import Sales from "./screens/Sales.svelte";
   import Promotions from "./screens/Promotions.svelte";
   import Customers from "./screens/Customers.svelte";
+  import Display from "./screens/Display.svelte";
+
+  // A customer display window opened from Sell on this till (a second monitor): no sign-in, fed by the till.
+  const localDisplay = location.hash === "#customer-display";
 
   onMount(() => {
+    if (localDisplay) return;
     startMonitor();
     refresh();
     // Offline sales upload by themselves whenever the hub answers (FR-3.16).
@@ -86,6 +91,9 @@
   });
 </script>
 
+{#if localDisplay || s.screen === "display"}
+<Display local={localDisplay} />
+{:else}
 <div class="app-top sticky top-0 z-40 bg-bg print:hidden" use:trackHeight>
   <ConnectivityBar />
   <header class="mx-auto flex w-full {s.screen === 'sell' ? 'max-w-6xl' : 'max-w-3xl'} items-center justify-between gap-3 px-4 py-1">
@@ -160,3 +168,4 @@
   {:else if s.screen === "customers"}<Customers />
   {/if}
 </main>
+{/if}

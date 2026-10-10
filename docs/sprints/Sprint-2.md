@@ -9,9 +9,9 @@
 | 1 | Promotions and scheduled prices (DL-117..123) | Claude | Done, deployed `dev-47be3cf` (2026-10-09) |
 | 2 | Near-expiry markdowns and staff discounts (DL-124..127) | Claude | Done, deployed `dev-d20c953`; 16 suites pass on the Pi |
 | 3 | Customers and loyalty (DL-128..134; the owner sets the points) | Claude | Done, deployed `dev-00775f6`; all suites pass on the Pi; manual tests P50-P62 |
-| 4 | Promotion and loyalty reports | Claude | Next |
-| 5 | Customer-facing display | Claude | Planned |
-| 6 | Dashboard and sales insights | Claude | Planned |
+| 4 | Promotion and loyalty reports (DL-135, 136) | Claude | Done 2026-10-09 (23 tests) |
+| 5 | Customer-facing display (DL-137, 138) | Claude | Done 2026-10-09 (19 tests) |
+| 6 | Dashboard and sales insights | Claude | Next |
 | 7 | Tasks, checklists, reminders | Claude | Planned |
 | 8 | Messages and announcements | Claude | Planned |
 | 9 | Pings and the till overlay | Claude | Planned |

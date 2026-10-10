@@ -193,6 +193,8 @@ function view(app, dev) {
     current_user: dev.getString("current_user") ? { id: dev.getString("current_user"), name: nameOf(app, dev.getString("current_user")) } : null,
     assigned_user: dev.getString("assigned_user") ? { id: dev.getString("assigned_user"), name: nameOf(app, dev.getString("assigned_user")) } : null,
     assigned_printer: dev.getString("assigned_printer"),
+    display_for: dev.getString("display_for"),                                     // a customer display: the till it shows
+    displays: require(`${__hooks}/lib/display.js`).displaysOf(app, dev.id),       // a till: the displays showing it
     app_version: dev.getString("app_version"),
     user_agent: dev.getString("user_agent"),
     paired_via: dev.getString("paired_via"),
