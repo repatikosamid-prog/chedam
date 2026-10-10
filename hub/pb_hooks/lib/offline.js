@@ -123,7 +123,7 @@ function complete(app, input, ctx) {
   if (priced.total_cents !== Number(totals.total_cents) || priced.tax_cents !== Number(totals.tax_cents)) {
     bad("The offline sale's figures do not add up (" + totals.total_cents + " vs " + priced.total_cents + ").");
   }
-  const pay = sales().settlePayments(app, priced.total_cents, input.payments, { relaxed: true, ctx });
+  const pay = sales().settlePayments(app, priced.total_cents, input.payments, { relaxed: true, ctx, sale_id: String(input.id || ""), number: String(input.offline_ref || "") });
   if (pay.remaining > 0) bad("The offline sale is not paid in full.");
 
   // Its till: this device's till, normally still open (the till closes only after uploading).

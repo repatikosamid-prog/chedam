@@ -109,6 +109,9 @@ const TABLES = {
   // P3 expenses (step 6): claims through /api/chedam/expenses (everyone sees their own there), petty cash too.
   expenses:             { list: "expenses.approve", view: "expenses.approve", create: null, update: null, delete: null },
   petty_cash:           { list: "expenses.approve", view: "expenses.approve", create: null, update: null, delete: null },
+  // P3 client orders (step 7): through /api/chedam/client-orders (sellers see them; the till rings them up).
+  client_orders:        { list: "sales.sell|sales.view", view: "sales.sell|sales.view", create: null, update: null, delete: null },
+  client_order_payments: { list: "sales.sell|sales.view", view: "sales.sell|sales.view", create: null, update: null, delete: null },
   vendor_returns:       { list: "purchasing.view|purchasing.manage|finance.manage", view: "purchasing.view|purchasing.manage|finance.manage", create: null, update: null, delete: null },
 };
 

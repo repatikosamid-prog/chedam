@@ -5,7 +5,7 @@
 //   {t:"feed", n}   {t:"cut"}   {t:"kick"}
 // Receipt printers print plain ASCII safely (code page 437), so other letters are simplified (é -> e).
 
-const METHOD = { cash: "Cash", card: "Card", usd_cash: "US cash", store_credit: "Store credit", exchange: "Exchange credit", platform: "Platform", other: "Other" };
+const METHOD = { cash: "Cash", card: "Card", usd_cash: "US cash", store_credit: "Store credit", exchange: "Exchange credit", platform: "Platform", other: "Other", deposit: "Deposit", house_account: "On account" };
 
 function ascii(s) {
   let v = String(s === undefined || s === null ? "" : s);

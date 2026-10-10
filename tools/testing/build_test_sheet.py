@@ -335,6 +335,14 @@ P3_TESTS = [
     ("Q53", "Expenses", "Laptop (manager)", "Pay back → Cash from the till (a till is open)", "Done; the till's Z report shows the pay-out"),
     ("Q54", "Expenses", "Laptop (manager)", "Your own claim: Approve", "Refused: someone else approves it"),
     ("Q55", "Petty cash", "Laptop (manager)", "Petty cash → Top up 200; a claim paid from the box (5.00); Count 194.00", "Box 200 → 195 → count 'Short 1.00', balance 194"),
+    # ---- Step 7: layaway, special orders, quotes, house accounts (DL-173..177)
+    ("Q60", "Layaway", "Till", "Customer orders → New layaway: Rita, phone, 2 items, deposit 20% cash", "LA-… open, goods kept aside (Stock shows reserved); the till's expected cash includes the deposit"),
+    ("Q61", "Layaway", "Till", "Take a payment by card; then Ring up at the till", "Sell shows the order's lines and 'the deposit … is used'; Pay starts with Deposit; finish by card; the order is Picked up"),
+    ("Q62", "Layaway", "Till", "Another layaway → Cancel → give the deposit back in cash", "Cancelled; the drawer's expected cash goes down; reservation released"),
+    ("Q63", "Special order", "Till", "New special order (24 chocolate bars) → Ordered → Arrived", "Ready for pickup; reserved only once arrived; Ring up works then"),
+    ("Q64", "Quote", "Laptop (manager)", "New quote for Cafe Luna at a lower agreed price; PDF; Make it an invoice", "QT-… PDF; turned into INV-… for Luna"),
+    ("Q65", "Quote", "Till", "A quote → Ring up at the till", "The agreed price shows as an override with the quote as the reason"),
+    ("Q66", "House account", "Till", "Sell → Pay → On account → Cafe Luna", "Sale done; an invoice INV-… for Luna (Bills and invoices); over the limit is refused"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):

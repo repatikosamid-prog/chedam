@@ -312,7 +312,8 @@ function stockCheck(app, live, cartId, problems, need) {
 function settlePayments(app, total, payments, opts) {
   const o = opts || {};
   const relaxed = !!o.relaxed;
-  const methods = (relaxed ? ["cash", "card", "usd_cash", "store_credit", "platform"] : setting(app, "sales.payment_methods", ["cash", "card"]) || []).concat(["store_credit"]);
+  // Store credit, a layaway / special order deposit and a client's house account are the store's own: always taken (P3 step 7)
+  const methods = (relaxed ? ["cash", "card", "usd_cash", "store_credit", "platform"] : setting(app, "sales.payment_methods", ["cash", "card"]) || []).concat(["store_credit", "deposit", "house_account"]);
   let exchangeLeft = Number(o.exchange_cents || 0);
   const rounding = setting(app, "sales.cash_rounding", true);
   const rate = Number(setting(app, "sales.usd_rate", 1.35));
@@ -332,10 +333,12 @@ function settlePayments(app, total, payments, opts) {
     if (!(amt > 0) || amt !== Math.floor(amt)) bad("Payment " + (i + 1) + ": the amount is not valid.");
     if (status === "declined") { rec.tendered_cents = amt; out.push(rec); return; }
     if (remaining <= 0) bad("The sale is already paid; remove payment " + (i + 1) + ".");
-    if (method === "card" || method === "store_credit" || method === "platform" || method === "exchange") {
+    if (method === "card" || method === "store_credit" || method === "platform" || method === "exchange" || method === "deposit" || method === "house_account") {
       if (amt > remaining) bad("A card payment cannot be more than what is left to pay (" + remaining + " cents).");
       rec.amount_cents = amt; rec.tendered_cents = amt; remaining -= amt;
       if (method === "store_credit") useCredit(app, rec, amt, relaxed, o.ctx);
+      if (method === "deposit") require(`${__hooks}/lib/client_orders.js`).useDeposit(app, rec, amt, relaxed, o);
+      if (method === "house_account") require(`${__hooks}/lib/client_orders.js`).chargeAccount(app, rec, amt, relaxed, o);
     } else {
       // Cash (or US cash converted to CAD). Cash that finishes the sale is rounded to 5 cents.
       const value = method === "usd_cash" ? core().roundHalfUp(amt * rate) : amt;
@@ -508,10 +511,10 @@ function complete(app, input, ctx, internal) {
   // Training sales need no till, but are listed on its Z report when one is open (never in its money).
   const till = openTill(app, ctx.device);
   if (!b.training && !till) return { refused: 409, message: "Open the till before selling.", quote };
-  const pay = settlePayments(app, b.priced.total_cents, input.payments, { ctx, exchange_cents: internal && internal.exchange_cents });
-  if (pay.remaining > 0) return { refused: 409, message: "Not paid in full: " + pay.remaining + " cents left.", quote };
-
   const number = (b.training ? "T-" : "S-") + ("000000" + nextNumber(app, b.training ? "training" : "sale", ctx)).slice(-6);
+  if (b.training && (input.payments || []).some((p) => p.method === "deposit" || p.method === "house_account")) return { refused: 409, message: "Training sales cannot use a deposit or a house account.", quote };
+  const pay = settlePayments(app, b.priced.total_cents, input.payments, { ctx, exchange_cents: internal && internal.exchange_cents, sale_id: id, number: number });
+  if (pay.remaining > 0) return { refused: 409, message: "Not paid in full: " + pay.remaining + " cents left.", quote };
   const s = new Record(app.findCollectionByNameOrId("sales"));
   s.set("id", id);
   const appr = [];

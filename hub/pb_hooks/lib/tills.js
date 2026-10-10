@@ -178,7 +178,15 @@ function summary(app, t) {
       g.tax_cents += x.tax_cents;
     });
   });
-  const expected = t.getInt("float_cents") + cashIn - usdChange - msum("drop") - msum("payout") + msum("float_add") - cashOut;
+  // Layaway and special order deposits taken (or given back) at this till (P3 step 7): cash in the drawer,
+  // card on the terminal
+  let dep = { cash_in: 0, cash_out: 0, card_in: 0, card_out: 0 };
+  try { dep = require(`${__hooks}/lib/client_orders.js`).tillMoney(app, t.id); } catch (_) { /* before P3 */ }
+  if (dep.card_in || dep.card_out) {
+    const g = methods.card || (methods.card = { method: "card", count: 0, amount_cents: 0 });
+    g.amount_cents += dep.card_in - dep.card_out;
+  }
+  const expected = t.getInt("float_cents") + cashIn - usdChange - msum("drop") - msum("payout") + msum("float_add") - cashOut + dep.cash_in - dep.cash_out;
   return {
     till: tillNo(t), shift: t.getInt("number"), opened_at: t.getString("opened_at"), float_cents: t.getInt("float_cents"),
     sales_count: done.length, items: done.reduce((a, s) => a + s.getFloat("items"), 0),
@@ -192,6 +200,7 @@ function summary(app, t) {
     cash_in_cents: cashIn, usd_change_cents: usdChange, usd_tendered_cents: usdTendered, expected_cash_cents: expected,
     returns_count: rets.length, returns_cents: rets.reduce((a, r) => a + r.getInt("refund_cents"), 0), refunds: Object.values(refunds),
     refund_taxes: Object.values(refundTaxes), cash_refunds_cents: cashOut, store_credit_issued_cents: creditIssued,
+    order_deposits: dep,
   };
 }
 

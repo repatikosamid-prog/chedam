@@ -181,6 +181,12 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
+      {#if can("sales.sell")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("orders")}>
+          <span class="font-semibold">Customer orders</span>
+          <span class="text-sm text-muted">Layaways, special orders, quotes</span>
+        </button>
+      {/if}
       <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("expenses")}>
         <span class="font-semibold">Expenses</span>
         <span class="text-sm text-muted">Claim what you paid; approve; petty cash</span>

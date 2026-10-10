@@ -54,6 +54,7 @@
     try { const c = JSON.parse(localStorage.getItem(KEY) || "null"); if (c && Array.isArray(c.lines)) cart = c; } catch { /* none */ }
     (async () => {
       await Promise.all([loadTill(), loadCatalogue()]);
+      if (s.tillOrder) await loadOrder(s.tillOrder);
       if (cart.lines.length) requote();
       focusCode();
     })();
@@ -193,6 +194,20 @@
     cart.training = !cart.training; keep();
   }
 
+  // ---- A layaway, special order or quote rung up (P3 step 7): its lines at the agreed prices; its deposit
+  // is applied first when paying.
+  async function loadOrder(id) {
+    s.tillOrder = "";
+    const r = await api("GET", `/api/chedam/client-orders/${id}/till`);
+    if (!r.ok) { error = r.message; return; }
+    if (cart.lines.length && !confirm("Replace the sale on the screen with " + r.json.order.number + "?")) return;
+    cart = newCart(false);
+    cart.order = { id: r.json.order.id, number: r.json.order.number, deposit_cents: r.json.deposit_cents, who: r.json.order.who };
+    r.json.lines.forEach((l) => cart.lines.push({ key: newId(), product: l.product, selling_unit: l.selling_unit, name: l.name, kind: "single", qty: l.qty,
+      price_cents: l.price_cents, override_reason: l.override_reason }));
+    keep();
+  }
+
   // ---- Pay ---------------------------------------------------------------------------------------
 
   function startPay() {
@@ -202,6 +217,7 @@
     if (!cart.training && !(info && info.till)) { error = "Open the till first (Till, then Open till)."; return; }
     if (quote.needs_approval.length && !cart.approval) { dialog = { kind: "approve", what: quote.needs_approval }; return; }
     payments = []; saleId = newId(); mode = "pay";
+    if (cart.order && cart.order.deposit_cents > 0 && !cart.training) payments = [{ method: "deposit", amount_cents: Math.min(cart.order.deposit_cents, quote.total_cents), reference: cart.order.id }];
     // Exchange (FR-4.13): the returned items pay first; the hub records the return and this sale together.
     if (ex.draft) {
       if (cart.training) { error = "Switch training off for an exchange."; mode = "sell"; return; }
@@ -211,6 +227,12 @@
   }
 
   function approved(a) { cart.approval = a.approval; dialog = null; keep(); note = "Approved by " + a.by + "."; startPay(); }
+
+  async function openAccounts() {
+    const r = await api("GET", "/api/chedam/house-accounts");
+    if (!r.ok) { error = r.message; return; }
+    dialog = { kind: "account", list: r.json.items };
+  }
 
   function pay(p) {
     payments = [...payments, p];
@@ -410,12 +432,15 @@
       {#if can("sales.return")}<button class="btn-ghost min-h-10 text-sm" onclick={() => go("returns")}>Return</button>{/if}
       <button class="btn-ghost min-h-10 text-sm" onclick={showHolds}>Recall</button>
       <button class="btn-ghost min-h-10 text-sm" onclick={() => go("sales")}>Sales</button>
+      <button class="btn-ghost min-h-10 text-sm" onclick={() => go("orders")}>Orders</button>
       <button class="btn-ghost min-h-10 text-sm" onclick={() => go("till")}>Till</button>
       <button class="btn-ghost min-h-10 text-sm" onclick={openWindow} title="Opens what the customer sees in its own window: drag it onto the screen facing the customer">Customer screen</button>
       <button class="btn-ghost min-h-10 text-sm {cart.training ? 'border-warn text-warn' : ''}" onclick={toggleTraining}>{cart.training ? "Training on" : "Training"}</button>
     </div>
   </div>
   {#if cart.training}<p class="rounded-xl bg-warn/15 px-3 py-2 text-center font-semibold text-warn">TRAINING MODE · practice sales never change stock, money or reports</p>{/if}
+  {#if cart.order}<p class="rounded-xl bg-accent/10 px-3 py-2">Order <b>{cart.order.number}</b> for {cart.order.who}{cart.order.deposit_cents ? " · the deposit of " + money(cart.order.deposit_cents) + " is used when paying" : ""}
+    <button class="underline" onclick={() => { cart.order = null; keep(); }}>Not this order</button></p>{/if}
   {#if ex.draft && mode !== "done"}
     <p class="rounded-xl bg-accent/10 px-3 py-2">Exchange: returned items ({ex.draft.label}) are worth <b>{money(ex.draft.credit_cents)}</b>. Ring up the new items and press Pay.
       <button class="underline" onclick={() => { if (confirm("Cancel the exchange? Nothing has been returned yet.")) endExchange(); }}>Cancel exchange</button></p>
@@ -702,9 +727,17 @@
           <div class="flex flex-wrap gap-2">
             {#if (settings.payment_methods || []).includes("card")}<button class="btn" disabled={busy} onclick={() => (dialog = { kind: "card", amount: (st.remaining / 100).toFixed(2), last4: "", reference: "" })}>Card</button>{/if}
             {#if (settings.payment_methods || []).includes("usd_cash")}<button class="btn-ghost" disabled={busy} onclick={() => (dialog = { kind: "usd", value: "" })}>US cash</button>{/if}
-            {#if !isHubDown() && !cart.training}<button class="btn-ghost" disabled={busy} onclick={() => (dialog = { kind: "credit", code: "", error: "" })}>Store credit</button>{/if}
+            {#if !isHubDown() && !cart.training}<button class="btn-ghost" disabled={busy} onclick={() => (dialog = { kind: "credit", code: "", error: "" })}>Store credit</button>
+              <button class="btn-ghost" disabled={busy} onclick={openAccounts}>On account</button>{/if}
           </div>
-          {#if dialog && dialog.kind === "card"}
+          {#if dialog && dialog.kind === "account"}
+            <div class="space-y-1 rounded-xl border border-accent p-3">
+              <p class="text-sm">Charge {money(st.remaining)} to a client's house account (an invoice is made):</p>
+              {#each dialog.list as a (a.id)}<button class="btn-ghost w-full justify-between" disabled={a.owed_cents + st.remaining > a.credit_limit_cents}
+                onclick={() => pay({ method: "house_account", amount_cents: st.remaining, reference: a.id })}><span>{a.name}</span><span class="text-sm">owes {money(a.owed_cents)} of {money(a.credit_limit_cents)}</span></button>
+              {:else}<p class="text-sm text-muted">No client has a house account (a credit limit in Vendors and clients).</p>{/each}
+            </div>
+          {:else if dialog && dialog.kind === "card"}
             <div class="space-y-2 rounded-xl border border-accent p-3">
               <p class="text-sm">Key this amount into the card terminal, then record the result.</p>
               <label class="block"><span class="text-sm text-muted">Amount ($)</span><input class="field" inputmode="decimal" bind:value={dialog.amount} /></label>
