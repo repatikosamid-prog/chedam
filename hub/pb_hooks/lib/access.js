@@ -119,6 +119,9 @@ const TABLES = {
   // P3 recalls and feedback (step 10)
   recalls:              { list: "stock.approve|purchasing.manage", view: "stock.approve|purchasing.manage", create: null, update: null, delete: null },
   feedback:             { list: "sales.view|customers.manage", view: "sales.view|customers.manage", create: null, update: null, delete: null },
+  // P4 employees (step 1): only through /api/chedam/employees (SIN and bank details encrypted, owner only)
+  employees:            { list: null, view: null, create: null, update: null, delete: null },
+  leave_ledger:         { list: null, view: null, create: null, update: null, delete: null },
   vendor_returns:       { list: "purchasing.view|purchasing.manage|finance.manage", view: "purchasing.view|purchasing.manage|finance.manage", create: null, update: null, delete: null },
 };
 

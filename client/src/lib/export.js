@@ -90,7 +90,11 @@ export const GROUPS = [
   ["sales", "Sales", ["sales", "sale_lines", "payments", "tax_exemptions", "holds", "soft_holds"]],
   ["transactions", "Tills, returns and refunds", ["tills", "cash_movements", "returns", "return_lines", "refunds", "store_credits"]],
   ["people", "People and devices", ["users", "roles", "permissions", "permission_overrides", "devices"]],
-  ["customers", "Customers and loyalty", ["customers", "loyalty_cards", "loyalty_ledger"]],
+  ["customers", "Customers and loyalty", ["customers", "loyalty_cards", "loyalty_ledger", "feedback"]],
+  ["team", "Tasks, checklists and messages", ["checklists", "checklist_runs", "handover_notes", "documents", "channels", "messages", "channel_reads", "announcements", "announcement_acks", "pings", "inbox_items", "inbox_subs", "help_videos"]],
+  ["buying", "Vendors and buying", ["parties", "party_contacts", "party_logs", "fx_rates", "vendor_products", "purchase_orders", "po_lines", "po_receipts", "scan_matches", "vendor_returns", "consignment_sales", "recalls"]],
+  ["money", "Bills, expenses and customer orders", ["bills", "bill_payments", "expenses", "petty_cash", "client_orders", "client_order_payments", "delivery_orders", "platform_prices"]],
+  ["staff", "Employees and pay", ["employees", "leave_ledger"]],
   ["store", "Store settings", ["business", "locations", "settings", "modules", "label_layouts", "label_templates"]],
   ["records", "Audit log and records", ["events", "tasks", "import_jobs", "backups", "updates", "label_batch_items", "label_batches"]],
 ];

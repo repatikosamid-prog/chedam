@@ -19,7 +19,9 @@ const IGNORED_IN_DIFF = { updated_at: true, updated: true };
 
 // Personal data (BC PIPA, FR-7.08, P2 step 3): logged as "[personal]" so the log keeps who changed which
 // field and when, but not the person's details, and deleting a customer on request removes them everywhere.
-const PERSONAL = { customers: ["first_name", "phone", "phone_hash", "notes"] };
+const PERSONAL = { customers: ["first_name", "phone", "phone_hash", "notes"],
+  // Employees (P4): SIN and bank details never appear in the log, even encrypted (P4-b)
+  employees: ["sin_enc", "bank_enc", "birth_date", "personal_email", "personal_phone", "street"] };
 function redact(table, row) {
   const f = PERSONAL[table];
   if (!f || !row) return row;
