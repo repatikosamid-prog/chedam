@@ -8,7 +8,7 @@ Started 2026-10-10. Goal: employees, time clock, roster, time sheets, payroll pr
 | --- | --- | --- | --- |
 | 1 | Employees and leave | Claude | Done, deployed (22 tests; DL-186..188) |
 | 2 | Time clock, punch edits, BC break and overtime alerts | Claude | Done, deployed (35 tests; DL-189..191) |
-| 3 | Roster, publish, swaps, labour cost | Claude | Planned |
+| 3 | Roster, publish, swaps, labour cost | Claude | Done, deployed (30 tests; DL-192..194) |
 | 4 | Time sheets and approval | Claude | Planned |
 | 5 | Payroll preparation, pay stubs, ROE and T4 data | Claude | Planned |
 | 6 | Bank import, reconciliation, deposits | Claude | Planned |

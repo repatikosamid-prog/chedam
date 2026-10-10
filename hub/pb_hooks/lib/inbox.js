@@ -11,11 +11,11 @@ const st = () => require(`${__hooks}/lib/stock.js`);
 const I = () => require(`${__hooks}/lib/insights.js`);
 const j = (r, f, d) => { try { return JSON.parse(r.getString(f) || "null") || d; } catch (_) { return d; } };
 const money = (c) => (c < 0 ? "-$" : "$") + (Math.abs(c) / 100).toFixed(2);
-const KINDS = { eod_report: "End-of-day report", alert: "Urgent alerts", report: "Reports" };
+const KINDS = { eod_report: "End-of-day report", alert: "Urgent alerts", report: "Reports", schedule: "My schedule (roster, swaps)" };
 
 function sub(app, uid, kind) {
   const s = app.findRecordsByFilter("inbox_subs", "user = {:u} && kind = {:k}", "", 1, 0, { u: uid, k: kind })[0];
-  return { in_app: s ? s.getBool("in_app") : true, email: s ? s.getBool("email") : kind !== "report" };
+  return { in_app: s ? s.getBool("in_app") : true, email: s ? s.getBool("email") : kind !== "report" && kind !== "schedule" };
 }
 
 // When an item arrived now becomes due for email

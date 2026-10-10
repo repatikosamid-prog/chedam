@@ -309,6 +309,17 @@ P4_TESTS = [
     ("H27", "Shifts", "Laptop (manager)", "Fix Cal's shift (out time) without, then with a reason", "Refused without; saved with 'Fixed' and the original punch shown"),
     ("H28", "Shifts", "Laptop (manager)", "Fix your own shift", "Refused: someone else fixes your own punches"),
     ("H29", "Shifts", "Laptop (manager)", "Add a missed shift for Sam yesterday 9-13", "Added, marked 'Added'; an overlapping one is refused"),
+    # ---- Step 3: roster (DL-192..194)
+    ("H30", "Roster", "Laptop (manager)", "Home → Roster → next week: tap + for Cal Monday, 09:00-17:30, break 30, Till", "A dashed (draft) shift in the grid; Publish (1 new or changed)"),
+    ("H31", "Roster", "Laptop (manager)", "Plan Cal 10 hours on Tuesday; then an overlapping shift on Monday", "Saved with an overtime warning; the overlap is refused"),
+    ("H32", "Roster", "Phone (Cal)", "Home → Roster → next week before publishing", "Cal's drafts are not shown"),
+    ("H33", "Roster", "Laptop (manager)", "Publish", "'Published; n people told'; Cal's inbox: Your schedule for the week …"),
+    ("H34", "Roster", "Laptop (manager)", "Labour against sales table", "Planned hours, labour $ (no per-person pay), sales marked 'last week' for future days, labour %"),
+    ("H35", "Swaps", "Phone (Cal)", "My shifts → Offer to swap → Sam", "Shown as offered; Sam's inbox has the offer"),
+    ("H36", "Swaps", "Phone (Sam)", "Roster → Swaps → Take it", "'Taken; a manager approves it'"),
+    ("H37", "Swaps", "Laptop (manager)", "Approve", "The shift moves to Sam in the grid; both are told"),
+    ("H38", "Roster", "Laptop (manager)", "The week after → Copy last week", "Copied as drafts; copying again skips them"),
+    ("H39", "Roster", "Laptop (manager)", "Remove a published shift", "Gone from the grid; the person is told"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

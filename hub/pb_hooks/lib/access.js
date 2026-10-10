@@ -124,6 +124,9 @@ const TABLES = {
   leave_ledger:         { list: null, view: null, create: null, update: null, delete: null },
   // P4 time clock (step 2): only through /api/chedam/clock and /api/chedam/shifts
   shifts:               { list: null, view: null, create: null, update: null, delete: null },
+  // P4 roster (step 3): only through /api/chedam/roster and /api/chedam/swaps
+  roster_shifts:        { list: null, view: null, create: null, update: null, delete: null },
+  roster_swaps:         { list: null, view: null, create: null, update: null, delete: null },
   vendor_returns:       { list: "purchasing.view|purchasing.manage|finance.manage", view: "purchasing.view|purchasing.manage|finance.manage", create: null, update: null, delete: null },
 };
 

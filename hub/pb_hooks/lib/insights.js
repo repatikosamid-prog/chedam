@@ -247,4 +247,4 @@ function insights(app, q, showCost) {
     categories: byCategory(now, cat, showCost).map((x) => Object.assign(x, { last_year_cents: lyCats[x.category] || 0 })) };
 }
 
-module.exports = { dashboard, insights, shift, load, totals, catalogue, span, inventory };
+module.exports = { dashboard, insights, shift, load, totals, catalogue, span, inventory, perDay };
