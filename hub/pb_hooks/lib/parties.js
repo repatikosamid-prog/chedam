@@ -23,7 +23,7 @@ function check(rec) {
   rec.set("email", email);
   if (!rec.getString("country")) rec.set("country", "CA");
   rec.set("country", rec.getString("country").toUpperCase().substring(0, 2));
-  if (rec.isNew() && rec.get("active") === undefined) rec.set("active", true);
+  if (rec.isNew()) rec.set("active", true);                 // new ones are in use; switch off later
 }
 
 function checkContact(rec) {

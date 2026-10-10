@@ -13,7 +13,7 @@ The store buys and spends inside Chedam: vendors and clients, vendor price lists
 | Step | Delivers | Requirements |
 | --- | --- | --- |
 | 1. Parties ✅ built 2026-10-10 (21 tests) | Vendors and clients (one record can be both): contacts, addresses, payment terms, currency, tax ID, importer/exporter details, documents, notes; a communication log with follow-up reminders | FR-8.01, 8.07, 8.08 |
-| 2. Vendor products and price lists | Vendor SKU, pack size and cost per product and vendor; price list import (CSV/Excel); comparing vendors on cost; preferred vendor | FR-8.02 |
+| 2. Vendor products and price lists ✅ built 2026-10-10 (18 tests) | Vendor SKU, pack size and cost per product and vendor; price list import (CSV/Excel); comparing vendors on cost; preferred vendor | FR-8.02 |
 | 3. Purchase orders and reorder | POs: draft, sent (PDF/print), partly or fully received; differences flagged; incoming stock; min/max reorder rules make draft POs | FR-8.03, 6.13 |
 | 4. Bills, invoices, payments, vendor returns | Payables (vendor bills) and receivables (client invoices) with due dates, payments and statements; vendor returns and credits linked to the PO; vendor performance | FR-8.04, 8.05, 8.06 |
 | 5. Receive from a bill photo; landed cost | Photo or PDF of a bill read into lines (in the browser), matched to the vendor and products (vendor code → barcode → name), review grid, totals and tax checks, PO check, learns matches; freight, duty and brokerage spread over the lines | FR-6.11, 6.12 |
@@ -41,3 +41,11 @@ The store buys and spends inside Chedam: vendors and clients, vendor price lists
 | DL-154 | **Parties (FR-8.01)**, Home → Vendors and clients: one record per business or person the store buys from or sells to on account: vendor, client or both (P3-a); name, legal name, short code (unique, upper case), GST/HST, PST and CRA business numbers, importer / exporter, currency (3 letters, CAD by default), pay-within days and the terms as written, credit limit (clients: house accounts in step 7), email, phone, website, address, notes, documents (PDF or photos, protected), active. Contacts with a role and a main contact. Seen by managers, the accountant and staff (receiving, bills: `parties.view`); changed by managers (`parties.manage`); never by cashiers |
 | DL-155 | **Communication log (FR-8.07):** anyone who sees parties logs a call, email, visit, meeting, note or order, with whom, and who wrote it when; a follow-up date makes a task for the writer, due then, linked to the party (Tasks shows it; the log shows open or done) |
 | DL-156 | **Exchange rates (FR-8.08, P3-b):** managers enter the CAD value of one unit of a currency for a day (Vendors and clients → Exchange rates; source noted, e.g. Bank of Canada); a document in that currency uses the latest rate on or before its date (`/api/chedam/fx`); CAD is always 1 |
+
+## Design decisions (step 2)
+
+| ID | Decision |
+| --- | --- |
+| DL-157 | **Vendor products (FR-8.02)**, Home → Buying → Vendor prices: per vendor and product, the unit it comes in (one of the product's selling units, so its size in base units is known), the vendor's code (unique per vendor) and description, the cost per unit in the vendor's currency, minimum order, lead time, preferred vendor (one per product), in use. A cost change keeps the cost before it and when. Seen by managers, the accountant and staff (`purchasing.view`, all of whom see costs), changed by managers (`purchasing.manage`) |
+| DL-158 | **Price lists:** a vendor's CSV or Excel file is read in the browser; the columns are guessed from their names (code, barcode, description, cost, minimum, lead time) and can be changed; rows are matched by the vendor's code, then by barcode (the catalogue's lookup); new links are made, costs updated; the result lists what went up and down and every row that matched nothing, with why |
+| DL-159 | **Comparing vendors:** a product's vendors with the cost per base unit in CAD (the vendor's currency at the latest rate, step 1), cheapest first and marked; "Better prices" lists products whose preferred vendor is not the cheapest one with a price, with the saving in % |

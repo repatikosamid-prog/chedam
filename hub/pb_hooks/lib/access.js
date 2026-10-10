@@ -96,6 +96,8 @@ const TABLES = {
   party_contacts:       { list: "parties.view|parties.manage", view: "parties.view|parties.manage", create: "parties.manage", update: "parties.manage", delete: null },
   party_logs:           { list: "parties.view|parties.manage", view: "parties.view|parties.manage", create: null, update: null, delete: null },
   fx_rates:             { list: ANY, view: ANY, create: "parties.manage|settings.manage", update: "parties.manage|settings.manage", delete: null },
+  // P3 purchasing (step 2): what each vendor sells us, at what cost; price lists through /api/chedam/vendors.
+  vendor_products:      { list: "purchasing.view|purchasing.manage", view: "purchasing.view|purchasing.manage", create: "purchasing.manage", update: "purchasing.manage", delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".

@@ -48,6 +48,7 @@
   import Pings from "./screens/Pings.svelte";
   import Inbox from "./screens/Inbox.svelte";
   import Help from "./screens/Help.svelte";
+  import Buying from "./screens/Buying.svelte";
   import Parties from "./screens/Parties.svelte";
   import PingOverlay from "./components/PingOverlay.svelte";
   import { live, startLive, stopLive } from "./lib/live.svelte.js";
@@ -196,6 +197,7 @@
   {:else if s.screen === "pings"}<Pings />
   {:else if s.screen === "inbox"}<Inbox />
   {:else if s.screen === "parties"}<Parties />
+  {:else if s.screen === "buying"}<Buying />
   {:else if s.screen === "help"}{#key s.helpFor}<Help />{/key}
   {/if}
 </main>

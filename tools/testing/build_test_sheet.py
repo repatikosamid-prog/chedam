@@ -296,6 +296,13 @@ P3_TESTS = [
     ("Q04", "Parties", "Phone (staff)", "Log a call with a follow-up date tomorrow", "In the log with your name; Tasks → Mine shows 'Follow up with …' due tomorrow"),
     ("Q05", "Parties", "Till (cashier)", "Try to open Vendors and clients", "No tile; the address #parties goes back to Home"),
     ("Q06", "Parties", "Laptop (manager)", "Exchange rates → add EUR for 1 January and 1 June", "Listed; documents dated in March use the January rate"),
+    # ---- Step 2: vendor products and price lists (DL-157..159)
+    ("Q10", "Vendor prices", "Laptop (manager)", "Buying → Vendor prices → Coastal Beverages", "The sample products with unit, code, cost; ★ on preferred ones"),
+    ("Q11", "Vendor prices", "Laptop (manager)", "Add a product: chips, comes as the largest unit, cost, preferred", "Saved; any other vendor's ★ for chips goes"),
+    ("Q12", "Vendor prices", "Laptop (manager)", "Change its cost", "Shows 'was …' in red (up) or green (down)"),
+    ("Q13", "Price list", "Laptop (manager)", "Import price list: an Excel file with Code, Barcode, Description, Price columns (one unknown barcode, one empty price)", "Columns guessed; result: new / changed / same, up and down lists, two rows not matched with the reason"),
+    ("Q14", "Compare", "Phone (staff)", "Compare vendors → chips", "Maple (USD) and Coastal with the cost per base unit in CAD; cheapest marked"),
+    ("Q15", "Compare", "Laptop (manager)", "Better prices", "Products whose ★ vendor is not the cheapest, with −%"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):
