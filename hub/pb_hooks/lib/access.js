@@ -91,6 +91,11 @@ const TABLES = {
   inbox_subs:           { list: ANY, view: ANY, create: null, update: null, delete: null },
   // P2 help (step 11): training videos, added by people who manage settings, watched by everyone.
   help_videos:          { list: ANY, view: ANY, create: "settings.manage", update: "settings.manage", delete: null },
+  // P3 parties (step 1): vendors and clients, kept by managers; the log goes through /api/chedam/parties.
+  parties:              { list: "parties.view|parties.manage", view: "parties.view|parties.manage", create: "parties.manage", update: "parties.manage", delete: null },
+  party_contacts:       { list: "parties.view|parties.manage", view: "parties.view|parties.manage", create: "parties.manage", update: "parties.manage", delete: null },
+  party_logs:           { list: "parties.view|parties.manage", view: "parties.view|parties.manage", create: null, update: null, delete: null },
+  fx_rates:             { list: ANY, view: ANY, create: "parties.manage|settings.manage", update: "parties.manage|settings.manage", delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".

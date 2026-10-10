@@ -181,6 +181,12 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
+      {#if can("parties.view")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("parties")}>
+          <span class="font-semibold">Vendors and clients</span>
+          <span class="text-sm text-muted">Contacts, terms, communication log, exchange rates</span>
+        </button>
+      {/if}
       <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("messages")}>
         <span class="font-semibold">Messages{live.unread ? " (" + live.unread + ")" : ""}</span>
         <span class="text-sm text-muted">Everyone, groups, one-to-one, announcements</span>

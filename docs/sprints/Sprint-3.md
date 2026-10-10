@@ -6,8 +6,8 @@ Started 2026-10-10. Goal: purchasing, vendors, payables and receivables, expense
 
 | # | Item | Owner | Status |
 | --- | --- | --- | --- |
-| 1 | Parties: vendors and clients, contacts, communication log, follow-ups | Claude | Next |
-| 2 | Vendor products and price lists | Claude | Planned |
+| 1 | Parties: vendors and clients, contacts, communication log, follow-ups (DL-154..156) | Claude | Done, deployed (21 tests) |
+| 2 | Vendor products and price lists | Claude | Next |
 | 3 | Purchase orders and min/max reorder | Claude | Planned |
 | 4 | Bills, invoices, payments, statements, vendor returns, vendor performance | Claude | Planned |
 | 5 | Receive from a bill photo; landed cost | Claude | Planned |

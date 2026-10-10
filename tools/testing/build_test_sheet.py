@@ -286,6 +286,18 @@ P2_TESTS = [
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]
 
+# P3 (Sprint 3): one block per build step.
+P3_OUT = Path(__file__).resolve().parents[2] / "docs" / "testing" / "Chedam-Manual-Tests-P3.xlsx"
+P3_TESTS = [
+    # ---- Step 1: parties (DL-154..156)
+    ("Q01", "Parties", "Laptop (manager)", "Home → Vendors and clients", "The sample vendors and Cafe Luna; search by name or code; filter vendors / clients"),
+    ("Q02", "Parties", "Laptop (manager)", "New: a vendor that is also a client, code 'isl bak', currency cad, terms 15 days, GST number, address", "Saved as code ISLBAK, currency CAD; shown with its details"),
+    ("Q03", "Parties", "Laptop (manager)", "Add two contacts (one main), a PDF price list", "Contacts listed with ★ on the main one; the PDF opens"),
+    ("Q04", "Parties", "Phone (staff)", "Log a call with a follow-up date tomorrow", "In the log with your name; Tasks → Mine shows 'Follow up with …' due tomorrow"),
+    ("Q05", "Parties", "Till (cashier)", "Try to open Vendors and clients", "No tile; the address #parties goes back to Home"),
+    ("Q06", "Parties", "Laptop (manager)", "Exchange rates → add EUR for 1 January and 1 June", "Listed; documents dated in March use the January rate"),
+]
+
 def build(OUT=OUT, TESTS=TESTS, intro=None):
     wb = Workbook()
     ws = wb.active
@@ -367,6 +379,14 @@ if __name__ == "__main__":
             "",
             "Test after the update with these changes is on the hub (Claude says when). Laptop and iPhone; Android later.",
             "Sample people: Demo Owner, Mira Manager (manages promotions), Cal Cashier, Sam Staff.",
+            "For each row: do what it says, compare with 'What should happen', choose Pass / Fail / Blocked, and write what happened when it is not a Pass.",
+        ])
+    elif "--p3" in sys.argv:
+        build(P3_OUT, P3_TESTS, [
+            "Chedam manual tests: P3 Buy and spend (grows with each build step; tested in the P2-P4 test week)",
+            "",
+            "Laptop and iPhone; Android later. Sample people: Demo Owner, Mira Manager, Ana Accountant, Cal Cashier, Sam Staff.",
+            "Sample vendors: Fresh Fields Produce, Coastal Beverages Ltd., Maple Snacks Wholesale (USD); client: Cafe Luna.",
             "For each row: do what it says, compare with 'What should happen', choose Pass / Fail / Blocked, and write what happened when it is not a Pass.",
         ])
     elif "--retest" in sys.argv:

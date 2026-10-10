@@ -17,7 +17,7 @@ function me(c) { return c.user ? c.user.id : ""; }
 
 // ---- Tasks (FR-2.03) -----------------------------------------------------------------------------------
 
-const LINKS = { products: "name", customers: "first_name", sales: "number", returns: "number", stock_counts: "name", promotions: "name", documents: "name", tills: "number", checklist_runs: "name" };
+const LINKS = { parties: "name", products: "name", customers: "first_name", sales: "number", returns: "number", stock_counts: "name", promotions: "name", documents: "name", tills: "number", checklist_runs: "name" };
 
 function taskView(app, t) {
   const due = t.getString("due_at");
