@@ -98,6 +98,10 @@ const TABLES = {
   fx_rates:             { list: ANY, view: ANY, create: "parties.manage|settings.manage", update: "parties.manage|settings.manage", delete: null },
   // P3 purchasing (step 2): what each vendor sells us, at what cost; price lists through /api/chedam/vendors.
   vendor_products:      { list: "purchasing.view|purchasing.manage", view: "purchasing.view|purchasing.manage", create: "purchasing.manage", update: "purchasing.manage", delete: null },
+  // P3 purchase orders (step 3): changed only through /api/chedam/purchase-orders.
+  purchase_orders:      { list: "purchasing.view|purchasing.manage|stock.receive", view: "purchasing.view|purchasing.manage|stock.receive", create: null, update: null, delete: null },
+  po_lines:             { list: "purchasing.view|purchasing.manage|stock.receive", view: "purchasing.view|purchasing.manage|stock.receive", create: null, update: null, delete: null },
+  po_receipts:          { list: "purchasing.view|purchasing.manage|stock.receive", view: "purchasing.view|purchasing.manage|stock.receive", create: null, update: null, delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".

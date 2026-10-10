@@ -26,3 +26,52 @@ routerAdd("GET", "/api/chedam/purchasing/better", (e) => {
   require(`${__hooks}/lib/sales_http.js`).ctx(e, "purchasing.view|purchasing.manage");
   return e.json(200, require(`${__hooks}/lib/purchasing.js`).better(e.app));
 });
+
+// ---- Purchase orders (P3 step 3). Logic: lib/po.js -------------------------------------------------------
+// ?status=open|draft|sent|partial|received|closed|cancelled&vendor=<id>
+routerAdd("GET", "/api/chedam/purchase-orders", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "purchasing.view|purchasing.manage|stock.receive");
+  const q = e.request.url.query();
+  return e.json(200, require(`${__hooks}/lib/po.js`).list(e.app, { status: q.get("status"), vendor: q.get("vendor") }, c.showCost));
+});
+routerAdd("GET", "/api/chedam/purchase-orders/needs", (e) => {
+  require(`${__hooks}/lib/sales_http.js`).ctx(e, "purchasing.view|purchasing.manage");
+  return e.json(200, { items: require(`${__hooks}/lib/po.js`).needs(e.app).map((n) => ({ product: n.product.id, name: n.product.getString("name"), on_hand: n.on_hand, incoming: n.incoming, min: n.min, max: n.max, need_base: n.need_base })) });
+});
+routerAdd("GET", "/api/chedam/purchase-orders/{id}", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "purchasing.view|purchasing.manage|stock.receive");
+  return e.json(200, require(`${__hooks}/lib/po.js`).view(e.app, e.app.findRecordById("purchase_orders", e.request.pathValue("id")), c.showCost));
+});
+// New draft: {vendor, expected_date, notes, lines: [{product, vendor_product?, selling_unit?, qty, cost_cents?}]}
+routerAdd("POST", "/api/chedam/purchase-orders", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "purchasing.manage");
+  let out = null;
+  e.app.runInTransaction((t) => { const P = require(`${__hooks}/lib/po.js`); out = P.view(t, P.create(t, c, c.body, "manual"), true); });
+  return e.json(200, out);
+});
+// Draft orders from the min/max rules, one per vendor
+routerAdd("POST", "/api/chedam/purchase-orders/reorder", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "purchasing.manage");
+  let out = null;
+  e.app.runInTransaction((t) => { out = require(`${__hooks}/lib/po.js`).reorder(t, c); });
+  return e.json(200, out);
+});
+// Change a draft: {notes, expected_date, lines}
+routerAdd("POST", "/api/chedam/purchase-orders/{id}", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "purchasing.manage");
+  let out = null;
+  e.app.runInTransaction((t) => { const P = require(`${__hooks}/lib/po.js`); out = P.view(t, P.update(t, c, e.request.pathValue("id"), c.body), true); });
+  return e.json(200, out);
+});
+// send | cancel | close | reopen (purchasing.manage); receive (also stock.receive)
+routerAdd("POST", "/api/chedam/purchase-orders/{id}/{action}", (e) => {
+  const action = e.request.pathValue("action");
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, action === "receive" ? "purchasing.manage|stock.receive" : "purchasing.manage");
+  const P = require(`${__hooks}/lib/po.js`);
+  let out = null;
+  e.app.runInTransaction((t) => {
+    if (action === "receive") { const r = P.receive(t, c, e.request.pathValue("id"), c.body); out = Object.assign(P.view(t, r.po, c.showCost), { duplicate: r.duplicate }); }
+    else out = P.view(t, P.act(t, c, e.request.pathValue("id"), action), c.showCost);
+  });
+  return e.json(200, out);
+});

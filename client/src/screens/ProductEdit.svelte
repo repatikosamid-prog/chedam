@@ -16,7 +16,7 @@
   const fromReceive = s.returnTo === "receive";
 
   let p = $state({ name: "", name_fr: "", category: "", base_unit: "each", tax_class: "", plu: "", pos_button: false,
-    reorder_point: 0, description: "", tare: 0, scale_code: "", scale_ack: false, perishable: false, shelf_life_days: 0,
+    reorder_point: 0, reorder_max: 0, description: "", tare: 0, scale_code: "", scale_ack: false, perishable: false, shelf_life_days: 0,
     expiry_at_receiving: false, storage_area: "", temp_min_c: 0, temp_max_c: 0, age_restricted: false, min_age: 19, deposits_fees: [], imported: false,
     hs_code: "", origin_country: "", non_returnable: false, size_qty: 0, size_unit: "", status: "draft" });
   let costText = $state("");
@@ -116,7 +116,7 @@
     if (!isNew) body.product.id = s.productId;
     if (showCost) body.product.cost_cents = cost ?? 0;
     body.product.min_age = p.age_restricted ? Number(p.min_age) || 0 : 0;
-    ["reorder_point", "tare", "shelf_life_days", "size_qty"].forEach((k) => (body.product[k] = Number(body.product[k]) || 0));
+    ["reorder_point", "reorder_max", "tare", "shelf_life_days", "size_qty"].forEach((k) => (body.product[k] = Number(body.product[k]) || 0));
     if (!body.product.size_qty) body.product.size_unit = "";
     units.forEach((u, i) => body.units.push({ id: u.id, name: u.name, kind: u.kind,
       contains_qty: u.kind === "pack" || u.kind === "case" ? Number(u.contains_qty) || 0 : 0,
@@ -213,6 +213,8 @@
         <input class="field" inputmode="numeric" bind:value={p.plu} maxlength="6" /></label>
       <label class="block"><span class="text-sm text-muted">Reorder when stock falls to</span>
         <input class="field" type="number" min="0" step="any" bind:value={p.reorder_point} /></label>
+      <label class="block"><span class="text-sm text-muted">Order up to (reorder makes a draft order to reach this)</span>
+        <input class="field" type="number" min="0" step="any" bind:value={p.reorder_max} /></label>
       <label class="flex min-h-12 items-center gap-3"><input type="checkbox" class="h-6 w-6 accent-accent" bind:checked={p.pos_button} />
         <span>Button on the till (items without a barcode)</span></label>
       <label class="flex min-h-12 items-center gap-3"><input type="checkbox" class="h-6 w-6 accent-accent" bind:checked={p.non_returnable} />

@@ -303,6 +303,14 @@ P3_TESTS = [
     ("Q13", "Price list", "Laptop (manager)", "Import price list: an Excel file with Code, Barcode, Description, Price columns (one unknown barcode, one empty price)", "Columns guessed; result: new / changed / same, up and down lists, two rows not matched with the reason"),
     ("Q14", "Compare", "Phone (staff)", "Compare vendors → chips", "Maple (USD) and Coastal with the cost per base unit in CAD; cheapest marked"),
     ("Q15", "Compare", "Laptop (manager)", "Better prices", "Products whose ★ vendor is not the cheapest, with −%"),
+    # ---- Step 3: purchase orders and reorder (DL-160..162)
+    ("Q20", "Purchase orders", "Laptop (manager)", "Buying → New order: Coastal, two products from 'Add what this vendor sells', change a quantity", "Draft PO-… with the vendor's costs and the total"),
+    ("Q21", "Purchase orders", "Laptop (manager)", "Send", "Status Sent; a PDF downloads with the store, vendor, lines and total; Stock shows the quantity as incoming"),
+    ("Q22", "Purchase orders", "Phone (staff)", "Open the order → Receive: part of one line", "Partly received; stock goes up; incoming goes down"),
+    ("Q23", "Purchase orders", "Phone (staff)", "Receive the rest with a higher cost on one line and one more than ordered", "Received; differences 'different cost', 'more than ordered'; a task for the managers"),
+    ("Q24", "Purchase orders", "Laptop (manager)", "Another order: receive part, tick 'The rest will not come'", "Closed; 'short' shown; incoming back down"),
+    ("Q25", "Purchase orders", "Laptop (manager)", "Order from Maple Snacks (USD)", "Shows USD, the rate and the CAD total"),
+    ("Q26", "Reorder", "Laptop (manager)", "A product: reorder when stock falls to 50, order up to 100 (above its stock)", "Purchase orders lists it; Make the orders makes a draft for its vendor in whole cases up to 100"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):

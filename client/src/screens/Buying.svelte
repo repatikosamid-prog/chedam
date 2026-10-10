@@ -14,7 +14,7 @@
 
   const manage = can("purchasing.manage");
   const tabs = [["orders", "Purchase orders"], ["bills", "Bills and invoices"], ["prices", "Vendor prices"], ["compare", "Compare vendors"], ["better", "Better prices"]];
-  let tab = $state(location.hash === "#buying-bills" ? "bills" : "prices"), error = $state("");
+  let tab = $state(location.hash === "#buying-bills" ? "bills" : "orders"), error = $state("");
   let vendors = $state([]), vendor = $state(""), items = $state([]), edit = $state(null), units = $state([]);
   let pq = $state(""), hits = $state([]), cmp = $state(null), cmpName = $state("");
   let better = $state([]), imp = $state(null), impResult = $state(null);
