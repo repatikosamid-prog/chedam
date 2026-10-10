@@ -106,3 +106,9 @@ The store runs its people and its books in Chedam: employee records with leave, 
 | DL-211 | **GST/HST return (FR-10.08)**, regular method (setting `tax.gst_return`; the quick method is not worked out): line 101 sales and other revenue, 103 GST/HST collected (sales, invoices, less returns and client credits), 106 input tax credits (bills, vendor credits, expenses), 108, 109 net tax, 110 instalments paid (entered), 113A balance or refund. **BC PST return (FR-4.15):** sales subject to PST (from the sales' tax bases, less returns), PST collected, the collector's commission (setting `tax.pst_return`: 3.3% up to $198 a return), PST due on purchases (entered), the net to remit |
 | DL-212 | **Filed returns** are recorded once per kind and period after the period ends (filing day, confirmation number, paid day, note) with the figures as they were |
 
+## Design decisions (step 10)
+
+| ID | Decision |
+| --- | --- |
+| DL-213 | **Accountant exports (FR-10.12)**, Books → Exports (`books.manage`): CSV files from the books for a period, in the import layout of **QuickBooks Online** (journal entries: Journal No., Journal Date, Account Name, Debits, Credits, Description, Name) or **Xero** (manual journals: Narration, Date, Description, AccountCode, TaxRate "Tax Exempt", Amount with credits negative): the **general journal** (everything), the **sales journal** (sales, returns and stock summarised to one journal a day), the **payroll journal** with a **payroll register** (each pay stub), **expense claims** (with the account and GST/HST) and the **bank reconciliation** (each line with what it matched). Accounts go out by the accountant's own code when set (QuickBooks: else the name; Xero: else Chedam's code). Dates as YYYY-MM-DD, DD/MM/YYYY or MM/DD/YYYY. Every journal balances. Tax on journal lines is already in the GST/HST and PST accounts, so no tax codes are applied by the import |
+

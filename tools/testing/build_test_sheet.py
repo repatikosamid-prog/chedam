@@ -375,6 +375,10 @@ P4_TESTS = [
     ("H94", "Returns", "Laptop (Ana)", "PST return: last month", "PST collected, commission 3.3% (up to $198), net to remit"),
     ("H95", "Returns", "Laptop (Ana)", "Record as filed with a confirmation number; again", "Saved under Filed returns; the second time refused"),
     ("H96", "Statements", "Laptop (owner)", "Print the profit and loss", "A clean printout"),
+    # ---- Step 10: accountant exports (DL-213)
+    ("H97", "Exports", "Laptop (Ana)", "Books → Exports: general journal, QuickBooks Online, last month → Download; import it into a QuickBooks test company (or open in Excel)", "Every journal's debits equal its credits; accounts by your codes"),
+    ("H98", "Exports", "Laptop (Ana)", "Same for Xero with dates DD/MM/YYYY", "Xero's manual journal columns; amounts negative for credits"),
+    ("H99", "Exports", "Laptop (Ana)", "Payroll journal and register; expense claims; bank reconciliation", "Two files for payroll; one row per claim; one row per bank line"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]
