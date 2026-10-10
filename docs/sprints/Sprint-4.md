@@ -16,4 +16,4 @@ Started 2026-10-10. Goal: employees, time clock, roster, time sheets, payroll pr
 | 8 | Books and period close | Claude | Done, deployed (23 tests; DL-207..209) |
 | 9 | Financial statements, GST/HST and PST returns | Claude | Done, deployed (13 tests; DL-210..212) |
 | 10 | Accountant exports | Claude | Done, deployed (12 tests; DL-213) |
-| 11 | Gate and the P2-P4 test week | Claude + Sreya | Planned |
+| 11 | Gate and the P2-P4 test week | Claude + Sreya | Automated gate done (docs/gate/P2-P4-gate.md); test week: Sreya |
