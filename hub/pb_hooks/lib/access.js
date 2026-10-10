@@ -86,6 +86,9 @@ const TABLES = {
   announcement_acks:    { list: "announcements.manage", view: "announcements.manage", create: null, update: null, delete: null },
   // P2 pings (step 9): store-floor messages between devices; sent and confirmed through /api/chedam/pings.
   pings:                { list: ANY, view: ANY, create: null, update: null, delete: null },
+  // P2 inbox (step 10): each person's own items (collection rule), changed through /api/chedam/inbox.
+  inbox_items:          { list: ANY, view: ANY, create: null, update: null, delete: null },
+  inbox_subs:           { list: ANY, view: ANY, create: null, update: null, delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".

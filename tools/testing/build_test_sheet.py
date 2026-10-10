@@ -269,6 +269,14 @@ P2_TESTS = [
     ("P123", "Pings", "Phone → till", "Urgent ping to a till; nobody answers for 5 minutes", "It appears on the manager's device marked 'nobody answered', and an urgent task opens; confirming closes both"),
     ("P124", "Pings", "Phone", "Send a ping, then Take back", "It disappears from the till"),
     ("P125", "Pings", "Laptop", "Write your own ping to Everyone", "Every device except the customer display and the sender gets it"),
+    # ---- Step 10: inbox and end-of-day report (DL-150..152)
+    ("P130", "Inbox", "Laptop (owner)", "📥 → Settings: add Mira to the end-of-day report; time 21:00; email by 07:30", "Saved"),
+    ("P131", "Inbox", "Laptop (owner)", "Today's report now", "📊 End of day …: sales, count, margin, payments, tills, best sellers, what to look at"),
+    ("P132", "Inbox", "Phone (Mira)", "Open the inbox", "The same report (Mira sees margin: managers see costs); the 📥 count goes down when read"),
+    ("P133", "Inbox", "Till (Cal)", "Open the inbox", "No report (not chosen)"),
+    ("P134", "Inbox", "Laptop", "Cause an urgent problem (milk kept in the dry store)", "An alert ⚠ in the owner's and Mira's inbox"),
+    ("P135", "Inbox", "Phone (Mira)", "Settings: switch off Urgent alerts in the app", "No new alerts for Mira; the owner still gets them"),
+    ("P136", "Inbox", "Next morning", "Leave the report unread past the email time", "Shows 'email not connected yet' (sending comes with the Gmail/Outlook set-up)"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

@@ -5,15 +5,15 @@
 // When the connection drops it reconnects; the badge is also refreshed every 2 minutes.
 import { api, load } from "./api.js";
 
-export const live = $state({ unread: 0, mentioned: false, toAck: 0, connected: false });
-const subs = { messages: new Set(), announcements: new Set(), pings: new Set() };
+export const live = $state({ unread: 0, mentioned: false, toAck: 0, inbox: 0, connected: false });
+const subs = { messages: new Set(), announcements: new Set(), pings: new Set(), inbox_items: new Set() };
 let es = null, timer = null, poll = null, wantOn = false;
 
 export function on(topic, fn) { subs[topic].add(fn); return () => subs[topic].delete(fn); }
 
 export async function refreshBadge() {
   const r = await api("GET", "/api/chedam/messages/unread", null, { quiet: true });
-  if (r.ok) { live.unread = r.json.unread; live.mentioned = r.json.mentioned; live.toAck = r.json.to_ack; }
+  if (r.ok) { live.unread = r.json.unread; live.mentioned = r.json.mentioned; live.toAck = r.json.to_ack; live.inbox = r.json.inbox || 0; }
 }
 
 async function subscribe(clientId) {
@@ -52,5 +52,5 @@ export function stopLive() {
   wantOn = false;
   clearTimeout(timer); clearInterval(poll);
   if (es) es.close();
-  es = null; live.connected = false; live.unread = 0; live.toAck = 0;
+  es = null; live.connected = false; live.unread = 0; live.toAck = 0; live.inbox = 0;
 }

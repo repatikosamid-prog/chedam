@@ -13,6 +13,10 @@ function syncRuleTask(app, key, n, title, fields, actor) {
     if (t.isNew()) t.set("created_by", who);
     stamp(t);
     app.save(t);
+    // An urgent problem: an alert in the inbox of the people who manage tasks (FR-2.08), at most hourly per task
+    if ((fields || {}).priority === "urgent") {
+      try { require(`${__hooks}/lib/inbox.js`).alert(app, title, "team", key + ":" + new Date().toISOString().substring(0, 13)); } catch (_) { /* inbox not there yet */ }
+    }
   } else if (n > 0 && open[0].getString("title") !== title) {
     open[0].set("title", title); stamp(open[0]); app.save(open[0]);
   } else if (n === 0) {

@@ -153,6 +153,7 @@ function dashboard(app, c) {
     const M = require(`${__hooks}/lib/messages.js`);
     add("announcements", "Announcements to read and confirm", M.toAck(app, c), "messages");
     add("messages", "Unread messages", M.unread(app, c).unread, "messages");
+    add("inbox", "Unread in your inbox (end-of-day report, alerts)", app.countRecords("inbox_items", $dbx.exp("user = {:u} AND read_at = '' AND deleted_at = ''", { u: c.user.id })), "inbox");
   }
   if (can("stock.approve")) add("approvals", "Stock changes waiting for approval", app.countRecords("stock_movements", $dbx.exp("status = 'pending'")), "approvals");
   if (can("till.manage")) add("tills", "Closed tills not reconciled", app.countRecords("tills", $dbx.exp("status = 'closed' AND reconciled_at = ''")), "reports");
@@ -243,4 +244,4 @@ function insights(app, q, showCost) {
     categories: byCategory(now, cat, showCost).map((x) => Object.assign(x, { last_year_cents: lyCats[x.category] || 0 })) };
 }
 
-module.exports = { dashboard, insights, shift };
+module.exports = { dashboard, insights, shift, load, totals, catalogue, span, inventory };

@@ -46,6 +46,7 @@
   import Team from "./screens/Team.svelte";
   import Messages from "./screens/Messages.svelte";
   import Pings from "./screens/Pings.svelte";
+  import Inbox from "./screens/Inbox.svelte";
   import PingOverlay from "./components/PingOverlay.svelte";
   import { live, startLive, stopLive } from "./lib/live.svelte.js";
 
@@ -121,6 +122,8 @@
       {/if}
     </div>
     {#if signedIn}
+      <button class="relative flex min-h-12 shrink-0 items-center gap-1 rounded-xl px-2" onclick={() => go("inbox")} aria-label={"Inbox" + (live.inbox ? ", " + live.inbox + " unread" : "")} title="Inbox">
+        <span aria-hidden="true" class="text-xl">📥</span>{#if live.inbox}<span class="rounded-full bg-accent px-1.5 text-xs font-bold text-accent-ink">{live.inbox}</span>{/if}</button>
       <button class="flex min-h-12 shrink-0 items-center rounded-xl px-2 text-xl" onclick={() => go("pings")} aria-label="Ping another device" title="Ping"><span aria-hidden="true">📣</span></button>
       <button class="relative flex min-h-12 shrink-0 items-center gap-1 rounded-xl px-2 {live.toAck ? 'text-warn' : ''}" onclick={() => go("messages")}
         aria-label={"Messages" + (live.unread ? ", " + live.unread + " unread" : "") + (live.toAck ? ", announcements to confirm" : "")} title="Messages">
@@ -188,6 +191,7 @@
   {:else if s.screen === "team"}<Team />
   {:else if s.screen === "messages"}<Messages />
   {:else if s.screen === "pings"}<Pings />
+  {:else if s.screen === "inbox"}<Inbox />
   {/if}
 </main>
 {/if}

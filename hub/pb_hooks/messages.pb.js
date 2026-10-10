@@ -32,7 +32,8 @@ routerAdd("POST", "/api/chedam/messages/channels/{id}/read", (e) => {
 routerAdd("GET", "/api/chedam/messages/unread", (e) => {
   const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "");
   const M = require(`${__hooks}/lib/messages.js`);
-  return e.json(200, Object.assign(M.unread(e.app, c), { to_ack: M.toAck(e.app, c) }));
+  const inbox = c.user ? e.app.countRecords("inbox_items", $dbx.exp("user = {:u} AND read_at = '' AND deleted_at = ''", { u: c.user.id })) : 0;
+  return e.json(200, Object.assign(M.unread(e.app, c), { to_ack: M.toAck(e.app, c), inbox: inbox }));
 });
 // Send: JSON or a form with one file "attachment": {channel, text, mentions, link_collection, link_id}
 routerAdd("POST", "/api/chedam/messages", (e) => {
