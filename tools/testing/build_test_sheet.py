@@ -358,6 +358,15 @@ P4_TESTS = [
     ("H74", "Payouts", "Laptop (Ana)", "Enter one with the orders pasted (one wrong amount, one unknown number)", "Saved; the differences listed; commission %"),
     ("H75", "Payouts", "Laptop (Ana)", "Import a bank line with the payout amount", "The payout shows 'In the bank'"),
     ("H76", "Vendor statements", "Laptop (Ana)", "Check a vendor statement: paste its invoices, enter its balance", "Agreed, different, missing in Chedam, not on the statement; the balance difference"),
+    # ---- Step 8: books and period close (DL-207..209)
+    ("H80", "Books", "Laptop (Ana)", "Home → Books → Trial balance for this month", "'Balanced'; accounts by type with debits, credits, balances"),
+    ("H81", "Books", "Laptop (Ana)", "Make a sale, a bill and an expense; Show again", "Sales, GST/PST collected, cost of goods sold, payables, the expense category change"),
+    ("H82", "Books", "Laptop (Ana)", "Tap an account: its journal entries", "Each entry with its lines (debits, credits in brackets)"),
+    ("H83", "Books", "Laptop (Ana)", "Chart of accounts: rename Sales and give it your code 4000-QB", "Saved; shown in the trial balance and exports"),
+    ("H84", "Books", "Laptop (Ana)", "Months → Close last month", "First the list of what is still open; 'Close it anyway' closes it"),
+    ("H85", "Books", "Laptop (Ana)", "Record a bill dated in the closed month", "Refused: the month is closed"),
+    ("H86", "Books", "Laptop (owner)", "Months → Reopen with a reason", "Open again; the bill can be recorded"),
+    ("H87", "Books", "Laptop (manager)", "#books", "No access"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

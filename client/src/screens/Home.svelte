@@ -181,6 +181,12 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
+      {#if can("books.manage")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("books")}>
+          <span class="font-semibold">Books</span>
+          <span class="text-sm text-muted">Trial balance, journal, closing months</span>
+        </button>
+      {/if}
       {#if can("finance.manage")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("statements")}>
           <span class="font-semibold">Fees and statements</span>

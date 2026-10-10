@@ -140,6 +140,9 @@ const TABLES = {
   // P4 step 7: only through /api/chedam/payouts and /api/chedam/vendor-statements
   platform_payouts:     { list: null, view: null, create: null, update: null, delete: null },
   vendor_statements:    { list: null, view: null, create: null, update: null, delete: null },
+  // P4 books (step 8): only through /api/chedam/books
+  accounts:             { list: null, view: null, create: null, update: null, delete: null },
+  periods:              { list: null, view: null, create: null, update: null, delete: null },
   vendor_returns:       { list: "purchasing.view|purchasing.manage|finance.manage", view: "purchasing.view|purchasing.manage|finance.manage", create: null, update: null, delete: null },
 };
 

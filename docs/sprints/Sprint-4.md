@@ -13,7 +13,7 @@ Started 2026-10-10. Goal: employees, time clock, roster, time sheets, payroll pr
 | 5 | Payroll preparation, pay stubs, ROE and T4 data | Claude | Done, deployed (24 tests; DL-198..200) |
 | 6 | Bank import, reconciliation, deposits | Claude | Done, deployed (24 tests; DL-201..203) |
 | 7 | Card fees, platform payouts, vendor statements | Claude | Done, deployed (13 tests; DL-204..206) |
-| 8 | Books and period close | Claude | Planned |
+| 8 | Books and period close | Claude | Done, deployed (23 tests; DL-207..209) |
 | 9 | Financial statements, GST/HST and PST returns | Claude | Planned |
 | 10 | Accountant exports | Claude | Planned |
 | 11 | Gate and the P2-P4 test week | Claude + Sreya | Planned |

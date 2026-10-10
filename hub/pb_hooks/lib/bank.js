@@ -228,10 +228,12 @@ function importFile(app, c, b) {
   const imp = new Record(app.findCollectionByNameOrId("bank_imports"));
   imp.load({ account: acc.id, filename: String(b.filename || "").substring(0, 200), format: p.format, by_name: who(c) });
   stamp(imp, c); app.save(imp);
-  let added = 0, dup = 0;
+  let added = 0, dup = 0, closed = 0;
   const ids = [];
+  const B = require(`${__hooks}/lib/books.js`);
   p.rows.forEach((x) => {
     if (app.findRecordsByFilter("bank_lines", "account = {:a} && fitid = {:f}", "", 1, 0, { a: acc.id, f: x.fitid }).length) { dup++; return; }
+    if (B.isClosed(app, x.day)) { closed++; return; }                           // a month closed in the books (step 8)
     const r = new Record(app.findCollectionByNameOrId("bank_lines"));
     r.load({ account: acc.id, import: imp.id, day: x.day, description: x.description.substring(0, 300), amount_cents: x.amount_cents, balance_cents: x.balance_cents || 0, has_balance: x.balance_cents !== null && x.balance_cents !== undefined,
       fitid: x.fitid, status: "unmatched", match_refs: [] });
@@ -240,7 +242,7 @@ function importFile(app, c, b) {
   const ds = p.rows.map((x) => x.day).sort();
   imp.set("added", added); imp.set("duplicates", dup); imp.set("first_day", ds[0]); imp.set("last_day", ds[ds.length - 1]); app.save(imp);
   const m = auto(app, c, ids);
-  return { format: p.format, added: added, duplicates: dup, matched: m.matched, first_day: ds[0], last_day: ds[ds.length - 1] };
+  return { format: p.format, added: added, duplicates: dup, in_closed_months: closed, matched: m.matched, first_day: ds[0], last_day: ds[ds.length - 1] };
 }
 
 function lines(app, q) {
