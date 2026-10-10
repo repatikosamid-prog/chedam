@@ -232,6 +232,14 @@ P2_TESTS = [
     ("P84", "Display", "Till + display", "Wait 15 s (or New sale)", "The display goes back to the logo and 'Welcome'"),
     ("P85", "Display", "Laptop till", "Sell → 'Customer screen'; drag the window to a second monitor; sell", "The window follows the sale; still works with the Pi switched off"),
     ("P86", "Display", "Display", "Remove a deal line, change quantities, clear the sale", "The display follows every change; nothing is left behind"),
+    # ---- Step 6: dashboard and sales insights (DL-139, 140)
+    ("P90", "Dashboard", "Laptop (manager)", "Home → Dashboard", "Needs attention first; sales today vs last week; this month vs last month; a 30-day chart; margin by category; this month's P&L; stock health"),
+    ("P91", "Dashboard", "Laptop (manager)", "Tap an attention line (e.g. Products out of stock)", "Opens the screen that deals with it"),
+    ("P92", "Dashboard", "Phone (staff)", "Home → Dashboard as Sam Staff", "Attention and stock health only; no sales figures or P&L"),
+    ("P93", "Dashboard", "Laptop (owner)", "Make a sale, wait a minute", "Today's figures go up by themselves"),
+    ("P94", "Insights", "Laptop (manager)", "Reports → Insights; dates: last 30 days", "Totals vs last year; busy-times heatmap (switch Sales $ / Number of sales); best and slowest sellers; categories"),
+    ("P95", "Insights", "Laptop (manager)", "Export best sellers to Excel", "Units, sales, margin, on hand and sell-through columns"),
+    ("P96", "Insights", "Phone, dark mode", "Open the dashboard and insights in dark mode", "Charts readable in dark colours"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

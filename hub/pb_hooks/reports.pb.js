@@ -62,3 +62,16 @@ routerAdd("GET", "/api/chedam/reports/loyalty", (e) => {
   const q = e.request.url.query();
   return e.json(200, require(`${__hooks}/lib/engage_reports.js`).loyalty(e.app, { from: q.get("from"), to: q.get("to"), top: q.get("top") }, c.can("customers.manage")));
 });
+
+// Dashboard (FR-2.01): what this person needs, by permission (attention list, today, month, P&L, stock).
+routerAdd("GET", "/api/chedam/dashboard", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "");
+  return e.json(200, require(`${__hooks}/lib/insights.js`).dashboard(e.app, c));
+});
+
+// Sales insights (FR-10.10): ?from&to: weekday × hour, best/worst sellers, sell-through, year over year.
+routerAdd("GET", "/api/chedam/reports/insights", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "sales.view");
+  const q = e.request.url.query();
+  return e.json(200, require(`${__hooks}/lib/insights.js`).insights(e.app, { from: q.get("from"), to: q.get("to") }, c.showCost));
+});

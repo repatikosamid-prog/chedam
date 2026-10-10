@@ -9,9 +9,10 @@
   import { go, can, handleRefusal } from "../lib/session.svelte.js";
   import { money, toCents } from "../lib/catalogue.js";
   import ExportMenu from "../components/ExportMenu.svelte";
+  import Chart from "../components/Chart.svelte";
 
   const day = (off = 0) => { const d = new Date(Date.now() + off * 86400000), p = (n) => String(n).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); };
-  const tabs = [["tills", "Tills", can("sales.view") || can("till.manage")], ["loss", "Loss prevention", can("sales.view") || can("till.manage")],
+  const tabs = [["insights", "Insights", can("sales.view")], ["tills", "Tills", can("sales.view") || can("till.manage")], ["loss", "Loss prevention", can("sales.view") || can("till.manage")],
     ["promos", "Promotions", can("sales.view") || can("promotions.manage")], ["loyalty", "Loyalty", can("sales.view") || can("customers.manage")],
     ["audit", "Audit log", can("events.view")], ["retention", "Retention", can("events.view") || can("settings.manage")]].filter((x) => x[2]);
   let tab = $state(tabs.length ? tabs[0][0] : "");
@@ -19,6 +20,7 @@
   let error = $state(""), ok = $state(""), busy = $state(false);
   let rec = $state(null), recon = $state(null), loss = $state(null), detail = $state(null);
   let audit = $state(null), opts = $state(null), f = $state({ actor: "", device: "", table: "", action: "", record: "", page: 1 }), open = $state({});
+  let ins = $state(null), heatBy = $state("sales");
   let ret = $state(null), promos = $state(null), loy = $state(null), openPromo = $state("");
 
   const when = (t) => (t ? new Date(String(t).replace(" ", "T")).toLocaleString() : "");
@@ -33,6 +35,7 @@
       const qs = new URLSearchParams({ from, to, ...Object.fromEntries(Object.entries(f).filter(([, v]) => v !== "" && v !== null)) });
       const r = await api("GET", "/api/chedam/audit?" + qs); if (r.ok) audit = r.json; else await fail(r);
     }
+    if (tab === "insights") { const r = await api("GET", `/api/chedam/reports/insights?from=${from}&to=${to}`); if (r.ok) ins = r.json; else await fail(r); }
     if (tab === "promos") { const r = await api("GET", `/api/chedam/reports/promotions?from=${from}&to=${to}`); if (r.ok) promos = r.json; else await fail(r); }
     if (tab === "loyalty") { const r = await api("GET", `/api/chedam/reports/loyalty?from=${from}&to=${to}`); if (r.ok) loy = r.json; else await fail(r); }
     if (tab === "retention") { const r = await api("GET", "/api/chedam/retention"); if (r.ok) ret = r.json; else await fail(r); }
@@ -53,6 +56,27 @@
     if (!r.ok) return fail(r);
     ok = "Till " + r.json.number + " (Z " + r.json.shift + ") reconciled as batch " + r.json.batch_no + "."; recon = null; load();
   }
+
+  // Weekday × hour heatmap (store time), busiest hours only (6:00-23:00)
+  const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
+  const heat = (t) => {
+    const data = [], val = (c) => (heatBy === "sales" ? c.sales_cents / 100 : c.transactions);
+    let max = 0;
+    ins.heatmap.forEach((row, d) => HOURS.forEach((h, x) => { const v = val(row[h]); max = Math.max(max, v); data.push([x, d, v]); }));
+    return {
+      grid: { left: 40, right: 8, top: 8, bottom: 56 },
+      tooltip: { formatter: (p) => DAYS[p.value[1]] + " " + HOURS[p.value[0]] + ":00 · " + (heatBy === "sales" ? "$" + p.value[2].toFixed(2) : p.value[2] + " sales") },
+      xAxis: { type: "category", data: HOURS.map((h) => h + ":00"), axisLabel: { color: t.muted }, splitArea: { show: false } },
+      yAxis: { type: "category", data: DAYS, axisLabel: { color: t.muted } },
+      visualMap: { min: 0, max: max || 1, calculable: false, orient: "horizontal", left: "center", bottom: 0, itemHeight: 120, textStyle: { color: t.muted }, inRange: { color: [t.soft, t.accent] } },
+      series: [{ type: "heatmap", data, itemStyle: { borderColor: t.card, borderWidth: 1 } }],
+    };
+  };
+  const yoy = (now, then) => (!then ? (now ? "new" : "—") : (now >= then ? "+" : "−") + Math.abs(Math.round((100 * (now - then)) / then)) + "%");
+  const prodCols = () => [{ key: "name", label: "Product" }, { key: "category", label: "Category" }, { key: "units", label: "Units" }, { key: "transactions", label: "Sales" },
+    { key: "s", label: "Sales $", value: (x) => x.sales_cents / 100 }, ...(ins.show_cost ? [{ key: "margin_pct", label: "Margin %" }] : []),
+    { key: "on_hand", label: "On hand" }, { key: "sell_through_pct", label: "Sell-through %" }];
 
   // Change against the period before: "+12%", "new", "" (nothing either time)
   const delta = (now, then) => (!then ? (now ? "new" : "") : (now >= then ? "+" : "−") + Math.round(Math.abs(100 * (now - then) / then)) + "%");
@@ -155,6 +179,40 @@
         {#each detail.events as x, i (i)}<p class="text-sm">{when(x.at)} · <b>{x.kind}</b>{x.ref ? " · " + x.ref : ""}{x.amount_cents ? " · " + money(x.amount_cents) : ""}{x.note ? " · " + x.note : ""}</p>{/each}
       </div>
     {/if}
+  {/if}
+
+  {#if tab === "insights" && ins}
+    {@const T = ins.totals}
+    {@const Y = ins.last_year_totals}
+    <div class="grid gap-2 sm:grid-cols-4">
+      {#each [["Sales", money(T.sales_cents), yoy(T.sales_cents, Y.sales_cents)], ["Transactions", T.transactions, yoy(T.transactions, Y.transactions)],
+        ["Average sale", money(T.avg_basket_cents), yoy(T.avg_basket_cents, Y.avg_basket_cents)], ...(ins.show_cost ? [["Margin", T.margin_pct + "%", Y.sales_cents ? Y.margin_pct + "% last year" : ""]] : [])] as [l, v, c] (l)}
+        <div class="card"><p class="text-sm text-muted">{l}</p><p class="text-2xl font-bold tabular-nums">{v}</p><p class="text-sm text-muted">{c} vs {ins.last_year.from} – {ins.last_year.to}</p></div>
+      {/each}
+    </div>
+    <div class="card">
+      <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="font-semibold">Busy times (weekday × hour)</h2>
+        <div class="flex gap-1 text-sm">{#each [["sales", "Sales $"], ["count", "Number of sales"]] as [k, l] (k)}<button class="min-h-8 rounded-lg px-2 {heatBy === k ? 'bg-accent text-accent-ink' : 'border border-line'}" onclick={() => (heatBy = k)}>{l}</button>{/each}</div></div>
+      <Chart option={heat} label="Sales by weekday and hour" height="18rem" />
+    </div>
+    <div class="card space-y-1">
+      <div class="flex flex-wrap justify-between gap-2"><h2 class="font-semibold">Best sellers</h2><ExportMenu title="Best sellers" rows={ins.best} columns={prodCols()} /></div>
+      <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left">{#each ["Product", "Units", "Sales", ...(ins.show_cost ? ["Margin"] : []), "On hand", "Sell-through"] as h (h)}<th class="border-b border-line px-2 py-1">{h}</th>{/each}</tr></thead>
+        <tbody>{#each ins.best as x (x.id)}<tr><td class="px-2 py-1">{x.name} <span class="text-muted">{x.category}</span></td><td class="px-2">{x.units}</td><td class="px-2">{money(x.sales_cents)}</td>
+          {#if ins.show_cost}<td class="px-2 {x.margin_pct < 0 ? 'text-bad' : ''}">{x.margin_pct}%</td>{/if}<td class="px-2">{x.on_hand ?? "—"}</td><td class="px-2">{x.sell_through_pct === null ? "—" : x.sell_through_pct + "%"}</td></tr>{/each}</tbody></table></div>
+      {#if !ins.best.length}<p class="text-muted">No sales in these dates.</p>{/if}
+      <p class="text-xs text-muted">Sell-through: what sold out of what was available (sold ÷ (sold + on hand now)).</p>
+    </div>
+    <div class="card space-y-1">
+      <div class="flex flex-wrap justify-between gap-2"><h2 class="font-semibold">Slowest sellers (in stock)</h2><ExportMenu title="Slowest sellers" rows={ins.worst} columns={prodCols()} /></div>
+      <ul class="text-sm">{#each ins.worst as x (x.id)}<li>{x.name} <span class="text-muted">· {x.units} sold · {x.on_hand} on hand</span></li>{/each}</ul>
+    </div>
+    <div class="card space-y-1">
+      <div class="flex flex-wrap justify-between gap-2"><h2 class="font-semibold">Categories</h2>
+        <ExportMenu title="Categories" rows={ins.categories} columns={[{ key: "name", label: "Category" }, { key: "items", label: "Items" }, { key: "s", label: "Sales $", value: (x) => x.sales_cents / 100 },
+          ...(ins.show_cost ? [{ key: "m", label: "Margin $", value: (x) => x.margin_cents / 100 }, { key: "margin_pct", label: "Margin %" }] : []), { key: "ly", label: "Sales $ last year", value: (x) => x.last_year_cents / 100 }]} /></div>
+      {#each ins.categories as x (x.category)}<p class="flex justify-between text-sm"><span>{x.name}</span><span>{money(x.sales_cents)}{ins.show_cost ? " · margin " + x.margin_pct + "%" : ""} <span class="text-muted">· last year {yoy(x.sales_cents, x.last_year_cents)}</span></span></p>{/each}
+    </div>
   {/if}
 
   {#if tab === "promos" && promos}

@@ -177,10 +177,14 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
+      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("dashboard")}>
+        <span class="font-semibold">Dashboard</span>
+        <span class="text-sm text-muted">{can("sales.view") ? "What needs attention, today, this month, stock" : "What needs attention, stock"}</span>
+      </button>
       {#if can("sales.view") || can("till.manage") || can("events.view") || can("promotions.manage") || can("customers.manage")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("reports")}>
           <span class="font-semibold">Reports</span>
-          <span class="text-sm text-muted">Tills, loss prevention, promotions, loyalty, audit log</span>
+          <span class="text-sm text-muted">Tills, insights, loss prevention, promotions, loyalty, audit log</span>
         </button>
       {/if}
       {#if can("catalogue.edit") || can("data.export")}

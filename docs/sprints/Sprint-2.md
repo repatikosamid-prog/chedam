@@ -11,8 +11,8 @@
 | 3 | Customers and loyalty (DL-128..134; the owner sets the points) | Claude | Done, deployed `dev-00775f6`; all suites pass on the Pi; manual tests P50-P62 |
 | 4 | Promotion and loyalty reports (DL-135, 136) | Claude | Done, deployed `dev-a119768`; passes on the Pi (23 tests) |
 | 5 | Customer-facing display (DL-137, 138) | Claude | Done, deployed `dev-a119768`; passes on the Pi (19 tests) |
-| 6 | Dashboard and sales insights | Claude | Next |
-| 7 | Tasks, checklists, reminders | Claude | Planned |
+| 6 | Dashboard and sales insights (DL-139, 140) | Claude | Done, deployed (19 tests) |
+| 7 | Tasks, checklists, reminders | Claude | Next |
 | 8 | Messages and announcements | Claude | Planned |
 | 9 | Pings and the till overlay | Claude | Planned |
 | 10 | Inbox, end-of-day report, email fallback (needs Google/Microsoft client IDs) | Claude | Planned |
