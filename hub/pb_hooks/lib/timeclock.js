@@ -265,11 +265,18 @@ function guard(app, c, userId) {
   return reason;
 }
 
+// Punches inside an approved time sheet (step 4) stay as approved until it is reopened
+function lockCheck(app, user, days) {
+  const TS = require(`${__hooks}/lib/timesheets.js`);
+  if (days.some((d) => TS.locked(app, user, d))) bad("That pay period's time sheet is approved: reopen it first.");
+}
+
 // Fix a shift's times (FR-9.06): the original punches are kept, and every change with who and why
 function edit(app, c, id, b) {
   const r = app.findRecordById("shifts", id);
   const reason = guard(app, c, r.getString("user"));
   const t = cleanTimes(b, r.getString("status") === "closed" || !!b.clock_out);
+  lockCheck(app, r.getString("user"), [r.getString("day"), localDay(t.tin)]);
   const before = { clock_in: r.getString("clock_in"), clock_out: r.getString("clock_out"), breaks: j(r, "breaks", []) };
   if (!j(r, "original", null)) r.set("original", before);
   const after = { clock_in: db(t.tin), clock_out: t.tout ? db(t.tout) : "", breaks: t.breaks };
@@ -289,6 +296,7 @@ function add(app, c, b) {
   if (!u) bad("Choose the person.");
   const reason = guard(app, c, u.id);
   const t = cleanTimes(b, true);
+  lockCheck(app, u.id, [localDay(t.tin)]);
   const clash = app.findRecordsByFilter("shifts", "user = {:u} && deleted_at = '' && clock_in < {:o} && (clock_out = '' || clock_out > {:i})", "", 1, 0, { u: u.id, i: db(t.tin), o: db(t.tout) });
   if (clash.length) bad("It overlaps another shift of " + u.getString("name") + ".");
   const r = new Record(app.findCollectionByNameOrId("shifts"));

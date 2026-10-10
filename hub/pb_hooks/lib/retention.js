@@ -18,7 +18,7 @@ const RETAINED = {
 delivery_orders: "Delivery-app orders", consignment_sales: "Consignment owed", client_orders: "Layaways, special orders, quotes", client_order_payments: "Deposits", expenses: "Expense claims", petty_cash: "Petty cash", bills: "Bills, invoices and credits", bill_payments: "Payments of bills and invoices", vendor_returns: "Returns to vendors",
   purchase_orders: "Purchase orders", po_lines: "Purchase order lines", po_receipts: "Receipts against orders",
     loyalty_ledger: "Loyalty points (a liability)", customers: "Customers (deleted on request: details removed, record kept)",
-  employees: "Employee records (payroll)", leave_ledger: "Leave", shifts: "Shifts and punches (payroll)",
+  employees: "Employee records (payroll)", leave_ledger: "Leave", shifts: "Shifts and punches (payroll)", timesheets: "Approved time sheets (payroll)",
   events: "Audit log (never deleted)",
 };
 

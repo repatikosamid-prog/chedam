@@ -58,3 +58,11 @@ The store runs its people and its books in Chedam: employee records with leave, 
 | DL-193 | **Swaps:** a person offers their own published, future shift to a colleague or to anyone (they are told); a colleague takes it (not if it would overlap their own shifts); a manager approves (the shift moves to them; both are told) or declines. The offer can be withdrawn until decided |
 | DL-194 | **Labour against sales** (managers): per day and week, planned paid hours, hours actually clocked, labour cost (planned hours × the employee's hourly rate; salary: a year / 52 / 5 per planned day; people without a rate counted separately), sales (net of tax; days not yet over show the same day of the week before, marked "last week") and labour %. **Totals only**, so pay rates stay owner-only (P4-b) |
 
+## Design decisions (step 4)
+
+| ID | Decision |
+| --- | --- |
+| DL-195 | **Pay periods**, setting `payroll.period`: weekly or biweekly counted from an anchor day (default biweekly from Sunday 2026-01-04), semimonthly (1-15, 16-end) or monthly. A time sheet is one person × one period |
+| DL-196 | **Time sheets (FR-9.08)**, Home → Time sheets: the period's paid hours from the punches split into regular, overtime and double time (BC daily 8/12 and weekly 40, worked out on whole weeks so a week across two periods splits right; none for people with no overtime), leave taken in it, and **flags**: no punch-out, no meal break, less than 8 hours off, overtime, punches fixed or added, not on the roster, started more than 10 minutes late, on the roster with no punches (no-show). Everyone sees their own time sheet; managers (`timeclock.manage`) everyone's |
+| DL-197 | **Approval:** after the period ends (its last day counts); never with a shift still open; a note is needed when anything is flagged ("what you checked"); nobody approves their own except the owner. The approved sheet keeps its totals, the flags and a snapshot of the shifts, and **locks** those punches (fixes and added shifts refused). Reopening needs a reason; once payroll (step 5) has paid it, it cannot be reopened (corrections go in the next pay) |
+

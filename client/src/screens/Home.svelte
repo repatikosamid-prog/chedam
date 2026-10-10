@@ -181,6 +181,10 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
+      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("timesheets")}>
+        <span class="font-semibold">Time sheets</span>
+        <span class="text-sm text-muted">Hours by pay period, approval</span>
+      </button>
       <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("roster")}>
         <span class="font-semibold">Roster</span>
         <span class="text-sm text-muted">The week's shifts, swaps</span>

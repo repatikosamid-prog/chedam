@@ -320,6 +320,15 @@ P4_TESTS = [
     ("H37", "Swaps", "Laptop (manager)", "Approve", "The shift moves to Sam in the grid; both are told"),
     ("H38", "Roster", "Laptop (manager)", "The week after → Copy last week", "Copied as drafts; copying again skips them"),
     ("H39", "Roster", "Laptop (manager)", "Remove a published shift", "Gone from the grid; the person is told"),
+    # ---- Step 4: time sheets (DL-195..197)
+    ("H40", "Time sheets", "Laptop (manager)", "Home → Time sheets: the last pay period (←)", "Each person with paid hours, overtime, status 'To approve' and how many things are flagged"),
+    ("H41", "Time sheets", "Laptop (manager)", "Open Cal's: shifts with flags (late, no meal break, not on the roster, no-show)", "Flags shown on the shifts and days"),
+    ("H42", "Time sheets", "Laptop (manager)", "Approve with a shift still clocked in", "Refused: fix it first"),
+    ("H43", "Time sheets", "Laptop (manager)", "Approve a flagged sheet without a note, then with one", "Refused without; 'Approved' with your name"),
+    ("H44", "Time sheets", "Laptop (manager)", "Time clock → Shifts → fix a shift in that approved period", "Refused: reopen it first"),
+    ("H45", "Time sheets", "Laptop (manager)", "Reopen it with a reason; fix; approve again", "Reopened; the fix is saved; approved with the new hours"),
+    ("H46", "Time sheets", "Phone (Cal)", "Home → Time sheets", "Only Cal's own sheet for the period, with status"),
+    ("H47", "Time sheets", "Laptop (manager)", "Approve your own time sheet", "Refused: someone else approves it"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

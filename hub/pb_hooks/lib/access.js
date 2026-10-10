@@ -127,6 +127,8 @@ const TABLES = {
   // P4 roster (step 3): only through /api/chedam/roster and /api/chedam/swaps
   roster_shifts:        { list: null, view: null, create: null, update: null, delete: null },
   roster_swaps:         { list: null, view: null, create: null, update: null, delete: null },
+  // P4 time sheets (step 4): only through /api/chedam/timesheets
+  timesheets:           { list: null, view: null, create: null, update: null, delete: null },
   vendor_returns:       { list: "purchasing.view|purchasing.manage|finance.manage", view: "purchasing.view|purchasing.manage|finance.manage", create: null, update: null, delete: null },
 };
 
