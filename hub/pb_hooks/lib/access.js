@@ -116,6 +116,9 @@ const TABLES = {
   delivery_orders:      { list: "sales.sell|sales.view", view: "sales.sell|sales.view", create: null, update: null, delete: null },
   platform_prices:      { list: ANY, view: ANY, create: null, update: null, delete: null },
   consignment_sales:    { list: "purchasing.view|finance.manage", view: "purchasing.view|finance.manage", create: null, update: null, delete: null },
+  // P3 recalls and feedback (step 10)
+  recalls:              { list: "stock.approve|purchasing.manage", view: "stock.approve|purchasing.manage", create: null, update: null, delete: null },
+  feedback:             { list: "sales.view|customers.manage", view: "sales.view|customers.manage", create: null, update: null, delete: null },
   vendor_returns:       { list: "purchasing.view|purchasing.manage|finance.manage", view: "purchasing.view|purchasing.manage|finance.manage", create: null, update: null, delete: null },
 };
 

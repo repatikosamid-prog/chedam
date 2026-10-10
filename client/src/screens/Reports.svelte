@@ -14,13 +14,13 @@
   const day = (off = 0) => { const d = new Date(Date.now() + off * 86400000), p = (n) => String(n).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); };
   const tabs = [["insights", "Insights", can("sales.view")], ["tills", "Tills", can("sales.view") || can("till.manage")], ["loss", "Loss prevention", can("sales.view") || can("till.manage")],
     ["promos", "Promotions", can("sales.view") || can("promotions.manage")], ["loyalty", "Loyalty", can("sales.view") || can("customers.manage")],
-    ["audit", "Audit log", can("events.view")], ["retention", "Retention", can("events.view") || can("settings.manage")]].filter((x) => x[2]);
+    ["feedback", "Feedback", can("sales.view") || can("customers.manage")], ["audit", "Audit log", can("events.view")], ["retention", "Retention", can("events.view") || can("settings.manage")]].filter((x) => x[2]);
   let tab = $state(tabs.length ? tabs[0][0] : "");
   let from = $state(day(-6)), to = $state(day());
   let error = $state(""), ok = $state(""), busy = $state(false);
   let rec = $state(null), recon = $state(null), loss = $state(null), detail = $state(null);
   let audit = $state(null), opts = $state(null), f = $state({ actor: "", device: "", table: "", action: "", record: "", page: 1 }), open = $state({});
-  let ins = $state(null), heatBy = $state("sales");
+  let ins = $state(null), heatBy = $state("sales"), fb = $state(null), fbSet = $state(null);
   let ret = $state(null), promos = $state(null), loy = $state(null), openPromo = $state("");
 
   const when = (t) => (t ? new Date(String(t).replace(" ", "T")).toLocaleString() : "");
@@ -34,6 +34,10 @@
       if (!opts) { const o = await api("GET", "/api/chedam/audit/options"); if (o.ok) opts = o.json; }
       const qs = new URLSearchParams({ from, to, ...Object.fromEntries(Object.entries(f).filter(([, v]) => v !== "" && v !== null)) });
       const r = await api("GET", "/api/chedam/audit?" + qs); if (r.ok) audit = r.json; else await fail(r);
+    }
+    if (tab === "feedback") {
+      const r = await api("GET", `/api/chedam/feedback/report?from=${from}&to=${to}`); if (r.ok) fb = r.json; else await fail(r);
+      if (can("settings.manage") && !fbSet) { const sr = await api("GET", "/api/collections/settings/records?perPage=1&filter=" + encodeURIComponent("key='feedback'")); if (sr.ok && sr.json.items[0]) fbSet = { id: sr.json.items[0].id, ...sr.json.items[0].value }; }
     }
     if (tab === "insights") { const r = await api("GET", `/api/chedam/reports/insights?from=${from}&to=${to}`); if (r.ok) ins = r.json; else await fail(r); }
     if (tab === "promos") { const r = await api("GET", `/api/chedam/reports/promotions?from=${from}&to=${to}`); if (r.ok) promos = r.json; else await fail(r); }
@@ -178,6 +182,28 @@
           <ExportMenu title={"Loss prevention " + detail.name} rows={detail.events} columns={[{ key: "at", label: "When" }, { key: "kind", label: "What" }, { key: "ref", label: "Receipt" }, { key: "amt", label: "Amount", value: (x) => x.amount_cents / 100 }, { key: "note", label: "Note" }]} /></div>
         {#each detail.events as x, i (i)}<p class="text-sm">{when(x.at)} · <b>{x.kind}</b>{x.ref ? " · " + x.ref : ""}{x.amount_cents ? " · " + money(x.amount_cents) : ""}{x.note ? " · " + x.note : ""}</p>{/each}
       </div>
+    {/if}
+  {/if}
+
+  {#if tab === "feedback" && fb}
+    <div class="card flex flex-wrap items-center justify-between gap-2">
+      <p><b class="text-2xl">{fb.average ?? "—"}</b> ★ average from {fb.count} · {fb.unread} new</p>
+      <p class="text-sm text-muted">{[5, 4, 3, 2, 1].map((n) => n + "★ " + fb.by_rating[n - 1]).join(" · ")}</p>
+    </div>
+    {#each fb.items as x (x.id)}
+      <div class="card flex flex-wrap items-start justify-between gap-2 {x.read ? '' : 'border-accent'}">
+        <div><p class="text-warn">{"★".repeat(x.rating)}<span class="text-line">{"★".repeat(5 - x.rating)}</span> <span class="text-sm text-muted">{when(x.at)} · {x.source === "kiosk" ? "kiosk" : "receipt link"}</span></p>
+          {#if x.comment}<p>{x.comment}</p>{/if}</div>
+        {#if !x.read}<button class="btn-ghost min-h-10 text-sm" onclick={async () => { await api("POST", `/api/chedam/feedback/${x.id}/read`, {}, { quiet: true }); load(); }}>Read</button>{/if}
+      </div>
+    {:else}<p class="text-muted">No feedback in these dates. Pair a tablet as a kiosk, or switch on the receipt link.</p>{/each}
+    {#if fbSet}
+      <form class="card grid gap-2 sm:grid-cols-3" onsubmit={async (e) => { e.preventDefault(); const r = await api("PATCH", "/api/collections/settings/records/" + fbSet.id, { value: { receipt_link: fbSet.receipt_link, question: fbSet.question, base_url: fbSet.base_url || "http://chedam.local" } }); if (!r.ok) fail(r); }}>
+        <label class="flex min-h-12 items-center gap-3"><input type="checkbox" class="h-6 w-6 accent-accent" bind:checked={fbSet.receipt_link} /> Feedback link on receipts</label>
+        <label class="block"><span class="text-sm text-muted">The hub's address on the store Wi-Fi</span><input class="field" bind:value={fbSet.base_url} placeholder="http://chedam.local" /></label>
+        <label class="block"><span class="text-sm text-muted">Question</span><input class="field" bind:value={fbSet.question} maxlength="120" /></label>
+        <button class="btn" type="submit">Save</button>
+      </form>
     {/if}
   {/if}
 

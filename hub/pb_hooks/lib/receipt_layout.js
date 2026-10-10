@@ -125,6 +125,8 @@ function receipt(sale, opts) {
     add({ t: "text", s: "Terms: paid in full" });
   }
   if (b.footer) { add({ t: "feed", n: 1 }); add({ t: "text", s: b.footer, align: "center" }); }
+  // Customer feedback link (P3 step 10, FR-7.09): on the store's Wi-Fi
+  if (sale.feedback_link && !sale.training) { add({ t: "feed", n: 1 }); add({ t: "text", s: "Tell us how we did:", align: "center" }); add({ t: "text", s: sale.feedback_link, align: "center" }); }
   if (sale.number && !sale.training) { add({ t: "feed", n: 1 }); add({ t: "barcode", s: sale.number }); }
   add({ t: "feed", n: 3 });
   add({ t: "cut" });

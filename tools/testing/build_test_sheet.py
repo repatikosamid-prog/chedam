@@ -358,6 +358,13 @@ P3_TESTS = [
     ("Q83", "Delivery", "Till", "Another order → Cancel", "Cancelled; reservation released"),
     ("Q84", "Consignment", "Laptop (manager)", "A product → Variety → Consignment: Fresh Fields, $6.00 owed per unit; receive 10", "Dashboard stock value does not change"),
     ("Q85", "Consignment", "Till + laptop", "Sell 3, return 1; Buying → Consignment", "Fresh Fields: 2 sold, $12.00; Make their bill → a vendor bill, the list is empty"),
+    # ---- Step 10: recalls and feedback (DL-183..185)
+    ("Q90", "Recall", "Laptop (manager)", "Receive chocolate with lot code LOT-X; sell 2 to a member; Recalls → chocolate, LOT-X → Trace", "The lot: received, 2 sold on S-…, to the member (first name, last 4 digits)"),
+    ("Q91", "Recall", "Laptop (manager)", "Recall these lots with a reason", "RC-…; what was left written off (Stock: loss 'Recall'); later sales never take that lot"),
+    ("Q92", "Feedback", "Tablet", "Pair a tablet as a kiosk", "Shows the store's question and stars, no sign-in; Send → Thank you, then ready again"),
+    ("Q93", "Feedback", "Laptop (owner)", "Reports → Feedback: switch on the receipt link (hub address)", "New receipts end with 'Tell us how we did:' and a link"),
+    ("Q94", "Feedback", "Phone on the store Wi-Fi", "Open the receipt's link; send 2 stars", "Thank you; opening it again: 'we already have your feedback'"),
+    ("Q95", "Feedback", "Laptop (manager)", "Reports → Feedback", "Average, counts by stars, comments; Read clears the new mark"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):

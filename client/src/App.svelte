@@ -42,12 +42,14 @@
   import Promotions from "./screens/Promotions.svelte";
   import Customers from "./screens/Customers.svelte";
   import Display from "./screens/Display.svelte";
+  import Feedback from "./screens/Feedback.svelte";
   import Dashboard from "./screens/Dashboard.svelte";
   import Team from "./screens/Team.svelte";
   import Messages from "./screens/Messages.svelte";
   import Pings from "./screens/Pings.svelte";
   import Inbox from "./screens/Inbox.svelte";
   import Help from "./screens/Help.svelte";
+  import Recalls from "./screens/Recalls.svelte";
   import Delivery from "./screens/Delivery.svelte";
   import Orders from "./screens/Orders.svelte";
   import Expenses from "./screens/Expenses.svelte";
@@ -58,9 +60,11 @@
 
   // A customer display window opened from Sell on this till (a second monitor): no sign-in, fed by the till.
   const localDisplay = location.hash === "#customer-display";
+  // The receipt's feedback link (P3 step 10): a page anyone on the store's Wi-Fi can open, no sign-in
+  const feedbackLink = location.hash.startsWith("#feedback/") ? location.hash.substring(10) : "";
 
   onMount(() => {
-    if (localDisplay) return;
+    if (localDisplay || feedbackLink) return;
     startMonitor();
     refresh();
     // Offline sales upload by themselves whenever the hub answers (FR-3.16).
@@ -97,7 +101,7 @@
   let logoOk = $state(true);
 
   // Live messages and announcements while someone is signed in (P2-e)
-  $effect(() => { if (s.me && s.me.user && !localDisplay) startLive(); else stopLive(); });
+  $effect(() => { if (s.me && s.me.user && !localDisplay && !feedbackLink) startLive(); else stopLive(); });
 
   // While waiting for approval or unlock, check more often.
   $effect(() => {
@@ -107,7 +111,11 @@
   });
 </script>
 
-{#if localDisplay || s.screen === "display"}
+{#if feedbackLink}
+<Feedback link={feedbackLink} />
+{:else if s.screen === "kiosk"}
+<Feedback />
+{:else if localDisplay || s.screen === "display"}
 <Display local={localDisplay} />
 {:else}
 <div class="app-top sticky top-0 z-40 bg-bg print:hidden" use:trackHeight>
@@ -204,6 +212,7 @@
   {:else if s.screen === "expenses"}<Expenses />
   {:else if s.screen === "orders"}<Orders />
   {:else if s.screen === "delivery"}<Delivery />
+  {:else if s.screen === "recalls"}<Recalls />
   {:else if s.screen === "help"}{#key s.helpFor}<Help />{/key}
   {/if}
 </main>

@@ -181,6 +181,12 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
+      {#if can("stock.approve") || can("purchasing.manage")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("recalls")}>
+          <span class="font-semibold">Recalls</span>
+          <span class="text-sm text-muted">Trace lots, who bought them, block and write off</span>
+        </button>
+      {/if}
       {#if can("sales.sell")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("delivery")}>
           <span class="font-semibold">Delivery orders</span>

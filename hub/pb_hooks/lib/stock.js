@@ -126,6 +126,7 @@ function lotsOf(app, productId) {
 function fefoLots(app, productId, opts) {
   const now = today();
   return app.findRecordsByFilter("stock_lots", "product = {:p} && qty > 0 && deleted_at = ''", "received_at", 0, 0, { p: productId })
+    .filter((l) => !l.getBool("recalled"))                                     // a recalled lot is never taken again (FR-6.15)
     .filter((l) => opts.allowExpired || !l.getString("expiry_date") || ymd(l.getString("expiry_date")) >= now)
     .sort((a, b) => {
       if (opts.lot) { if (a.id === opts.lot) return -1; if (b.id === opts.lot) return 1; }

@@ -413,6 +413,13 @@ function business(app) {
   } catch (_) { return {}; }
 }
 
+// The receipt's feedback link (P3 step 10), when switched on: the hub's address on the store's Wi-Fi
+function feedbackLink(app, s) {
+  const f = setting(app, "feedback", {}) || {};
+  if (!f.receipt_link) return "";
+  return String(f.base_url || "http://chedam.local").replace(/\/$/, "") + "/#feedback/" + s.id + "-" + require(`${__hooks}/lib/recall.js`).saleCode(app, s.id);
+}
+
 function saleView(app, id, showCost) {
   const s = app.findRecordById("sales", id);
   const j = (r, f, d) => { try { return JSON.parse(r.getString(f) || "null") || d; } catch (_) { return d; } };
@@ -446,7 +453,7 @@ function saleView(app, id, showCost) {
     approvals: j(s, "approvals", []), note: s.getString("note"), void_reason: s.getString("void_reason"),
     offline: s.getBool("offline"), offline_ref: s.getString("offline_ref"), sync_note: s.getString("sync_note"),
     reprints: s.getInt("reprints"),
-    lines: lines, payments: payments, business: business(app),
+    lines: lines, payments: payments, business: business(app), feedback_link: feedbackLink(app, s),
     savings_cents: lines.filter((l) => !l.voided).reduce((a, l) => a + Math.max(0, Math.round(l.regular_price_cents * l.qty) - l.gross_cents) + l.line_discount_cents + l.cart_discount_cents, 0),
   };
 }
