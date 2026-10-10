@@ -17,6 +17,7 @@ export const s = $state({
   stockProductId: "",   // product open on the stock screen
   receiveProduct: "",   // product to add to the "Add stock" list when it opens
   newBarcode: "",       // unknown barcode scanned while adding stock: the new product form starts with it
+  helpFor: "",          // the screen the Help button was pressed on
   returnTo: "",         // screen to go back to from the product form (e.g. "receive")
   brand: load("brand"), // {name, logo}: the store's logo in the top bar and on Home, when the owner chose it (DL-115)
 });
@@ -36,7 +37,7 @@ export function notify(text, kind = "") { s.notice = { text, kind }; }
 const HASH = { devices: "#devices", wizard: "#setup", backups: "#backups", health: "#health", updates: "#updates",
   products: "#products", product: "#products", categories: "#categories", tax: "#tax",
   stock: "#stock", stockitem: "#stock", receive: "#receive", counts: "#counts", approvals: "#approvals", shrink: "#shrink",
-  sell: "#sell", till: "#till", sales: "#sales", printers: "#printers", returns: "#returns", labels: "#labels", data: "#data", reports: "#reports", promotions: "#promotions", customers: "#customers", dashboard: "#dashboard", team: "#team", messages: "#messages", pings: "#pings", inbox: "#inbox" };
+  sell: "#sell", till: "#till", sales: "#sales", printers: "#printers", returns: "#returns", labels: "#labels", data: "#data", reports: "#reports", promotions: "#promotions", customers: "#customers", dashboard: "#dashboard", team: "#team", messages: "#messages", pings: "#pings", inbox: "#inbox", help: "#help" };
 
 export function go(screen) {
   s.screen = screen;
@@ -121,12 +122,12 @@ async function loadMe() {
   const FROM_HASH = { "#devices": "devices", "#setup": "wizard", "#backups": "backups", "#health": "health", "#updates": "updates",
     "#products": "products", "#categories": "categories", "#tax": "tax",
     "#stock": "stock", "#receive": "receive", "#counts": "counts", "#approvals": "approvals", "#shrink": "shrink",
-    "#sell": "sell", "#till": "till", "#sales": "sales", "#printers": "printers", "#returns": "returns", "#labels": "labels", "#data": "data", "#reports": "reports", "#promotions": "promotions", "#customers": "customers", "#dashboard": "dashboard", "#team": "team", "#team-checklists": "team", "#messages": "messages", "#pings": "pings", "#inbox": "inbox" };
+    "#sell": "sell", "#till": "till", "#sales": "sales", "#printers": "printers", "#returns": "returns", "#labels": "labels", "#data": "data", "#reports": "reports", "#promotions": "promotions", "#customers": "customers", "#dashboard": "dashboard", "#team": "team", "#team-checklists": "team", "#messages": "messages", "#pings": "pings", "#inbox": "inbox", "#help": "help" };
   // "" = any signed-in person may open it (the hub still decides what they can change)
   const NEEDS = { devices: "devices.view", wizard: "setup.run", backups: "backups.view", health: "health.view", updates: "updates.view",
     products: "", product: "", categories: "catalogue.edit", tax: "",
     stock: "", stockitem: "", receive: "stock.receive", counts: "stock.count", approvals: "stock.approve", shrink: "costs.view",
-    sell: "sales.sell", till: "sales.sell", sales: "sales.sell", printers: "settings.manage", returns: "sales.return", labels: "labels.manage", data: "catalogue.edit", reports: "", promotions: "", customers: "customers.view", dashboard: "", team: "tasks.view", messages: "", pings: "", inbox: "" };
+    sell: "sales.sell", till: "sales.sell", sales: "sales.sell", printers: "settings.manage", returns: "sales.return", labels: "labels.manage", data: "catalogue.edit", reports: "", promotions: "", customers: "customers.view", dashboard: "", team: "tasks.view", messages: "", pings: "", inbox: "", help: "" };
   // An address typed or linked (#tax) wins over the screen already open.
   const fromHash = FROM_HASH[location.hash];
   const want = fromHash && HASH[s.screen] !== location.hash ? fromHash : s.screen in NEEDS ? s.screen : fromHash;

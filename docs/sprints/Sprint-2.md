@@ -16,8 +16,8 @@
 | 8 | Messages and announcements (DL-144..146) | Claude | Done, deployed (31 tests) |
 | 9 | Pings and the till overlay (DL-147..149) | Claude | Done, deployed (19 tests) |
 | 10 | Inbox, end-of-day report, email fallback (DL-150..152; sending waits for the client IDs) | Claude | Done, deployed (19 tests) |
-| 11 | Help | Claude | Next |
-| 12 | Gate | Claude + Sreya | Planned |
+| 11 | Help (DL-153) | Claude | Done, deployed (7 tests) |
+| 12 | Gate (with the P2-P4 test week) | Claude + Sreya | Planned |
 | T1 | Manual tests: `docs/testing/Chedam-Manual-Tests-P2.xlsx` (grows with each step) | Sreya | Step 1 ready |
 
 ## Carried from Sprint 1 (to the end, DL-116)

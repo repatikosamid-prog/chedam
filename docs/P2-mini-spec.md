@@ -26,7 +26,7 @@ Each step: schema migration and sample data first, then hub rules with tests, th
 | 8. Messages and announcements ✅ built 2026-10-10 (31 tests, live delivery checked per member) | 1:1, groups and an Everyone channel; attachments, mentions, reactions, read receipts, links to records; follows the person across devices; pinned announcements that need acknowledging, the owner sees who did | FR-2.04, 2.05 |
 | 9. Pings and the till overlay ✅ built 2026-10-10 (19 tests) | Device to device, to groups (all tills, all phones), to everyone; templates; normal banner or urgent full screen; reply in place; urgent repeats until acknowledged, escalates to managers after 5 min; shown over the Sell screen without losing the sale; never emailed | FR-2.06, 2.07, BR-42 |
 | 10. Inbox, end-of-day report, email fallback ✅ built 2026-10-10 (19 tests; sending email waits for the client IDs, P2-f) | In-app inbox for reports and alerts with per-type deadlines and subscriptions; end-of-day report to the owner and chosen managers; email only if unread at the deadline and the hub is online, at most one per item, through the owner's connected Gmail/Outlook | FR-2.08-2.10, 12.07, BR-40, 41 |
-| 11. Help | Built-in help pages and short training videos stored on the hub | FR-12.11 |
+| 11. Help ✅ built 2026-10-10 (7 tests) | Built-in help pages and short training videos stored on the hub | FR-12.11 |
 | 12. Gate | 3 devices, power pull mid-sale ×10 with promotions and loyalty, offline promotions/loyalty parity with the hub, realtime load on the Pi (messages and pings for 10 devices), backup + restore, pilot week | Section 13 |
 
 ## First design choices (to confirm as each step starts)
@@ -121,6 +121,12 @@ Each step: schema migration and sample data first, then hub rules with tests, th
 | DL-150 | **Inbox (FR-2.08, 2.10)**, the 📥 in the top bar (unread count, live): each person's own items (nobody reads another's): the **end-of-day report**, **urgent alerts** (every urgent task Chedam opens, at most hourly per problem, for the owner and people who manage tasks) and reports. Each person chooses per kind: in the app (off = not delivered) and email if unread. Mark read, mark all read |
 | DL-151 | **End-of-day report (FR-2.09, Q5):** made at `reports.eod.time` (23:30) by a 10-minute job, once a day, for the owner and the people the owner chooses (Inbox → Settings); "Today's report now" makes it on demand (`sales.view`). It has sales before and with tax, number of sales and average, margin (only for people who see costs), payments by method, discounts and deal savings, returns and refunds, voided sales, each till (balanced / short / over / still open), loyalty, the 5 best sellers, and what to look at (open tasks, out of stock, low, expiring lots) |
 | DL-152 | **Email fallback (BR-40, 41, FR-12.07):** each kind has a deadline (`inbox.deadlines`: the report by `email_by` the next morning, 08:00 by default; alerts after 60 minutes; reports after a day). An item still unread then is emailed **once**, only while the hub is online, through the owner's connected Gmail or Outlook. Until the Google/Microsoft client IDs exist (P2-f) nothing is sent: the item is marked "email not connected yet" (shown in the app), once. Pings are never emailed |
+
+## Design decisions (step 11)
+
+| ID | Decision |
+| --- | --- |
+| DL-153 | **Help (FR-12.11):** the **?** in the top bar opens the help page of the screen you are on; Help has 19 short pages in plain words (getting started, selling, payments and receipts, returns, the till, offline, products, stock, labels, promotions, customers and loyalty, customer display, dashboard and reports, tasks and checklists, messages and pings, inbox, devices and people, backups and updates) with numbered steps, tips and warnings, and a search. The pages are part of the app, so they work with the hub off. **Training videos** (MP4/WebM up to 150 MB) are kept on the hub, added by people who manage settings to a help page, watched by everyone signed in; removing one archives it |
 
 ## Open questions
 

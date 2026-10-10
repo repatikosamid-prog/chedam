@@ -89,6 +89,8 @@ const TABLES = {
   // P2 inbox (step 10): each person's own items (collection rule), changed through /api/chedam/inbox.
   inbox_items:          { list: ANY, view: ANY, create: null, update: null, delete: null },
   inbox_subs:           { list: ANY, view: ANY, create: null, update: null, delete: null },
+  // P2 help (step 11): training videos, added by people who manage settings, watched by everyone.
+  help_videos:          { list: ANY, view: ANY, create: "settings.manage", update: "settings.manage", delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".

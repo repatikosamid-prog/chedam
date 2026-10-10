@@ -277,6 +277,11 @@ P2_TESTS = [
     ("P134", "Inbox", "Laptop", "Cause an urgent problem (milk kept in the dry store)", "An alert ⚠ in the owner's and Mira's inbox"),
     ("P135", "Inbox", "Phone (Mira)", "Settings: switch off Urgent alerts in the app", "No new alerts for Mira; the owner still gets them"),
     ("P136", "Inbox", "Next morning", "Leave the report unread past the email time", "Shows 'email not connected yet' (sending comes with the Gmail/Outlook set-up)"),
+    # ---- Step 11: help (DL-153)
+    ("P140", "Help", "Till", "On the Sell screen press ?", "Help opens at 'Selling'; Back returns to Sell"),
+    ("P141", "Help", "Phone", "Search 'refund'", "Returns and exchanges is found"),
+    ("P142", "Help", "Till (hub off)", "Switch the Pi off; press ?", "Help pages still open"),
+    ("P143", "Help", "Laptop (manager)", "Add a training video (a short MP4 from a phone) to 'Opening and closing the till'", "It plays from the Help page on a till"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]
