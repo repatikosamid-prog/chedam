@@ -329,6 +329,17 @@ P4_TESTS = [
     ("H45", "Time sheets", "Laptop (manager)", "Reopen it with a reason; fix; approve again", "Reopened; the fix is saved; approved with the new hours"),
     ("H46", "Time sheets", "Phone (Cal)", "Home → Time sheets", "Only Cal's own sheet for the period, with status"),
     ("H47", "Time sheets", "Laptop (manager)", "Approve your own time sheet", "Refused: someone else approves it"),
+    # ---- Step 5: payroll (DL-198..200)
+    ("H50", "Payroll", "Laptop (Ana, accountant)", "Home → Payroll → New payroll for the last ended period, pay date", "A PR- run: hourly people from approved time sheets, salaried people; anyone not approved listed as waiting"),
+    ("H51", "Payroll", "Laptop (Ana)", "Check a line: hours × rate, overtime, sick pay, vacation pay 4%", "The sums are right; an expense paid back 'with the next pay' is added"),
+    ("H52", "Payroll", "Laptop (Ana)", "Finalise before entering deductions", "Refused: enter the deductions for …"),
+    ("H53", "Payroll", "Laptop (Ana)", "Enter CPP, EI and tax from the CRA calculator (PDOC) for each line; then Finalise", "Net worked out; finalised; each person gets 'Your pay stub' in the inbox"),
+    ("H54", "Payroll", "Laptop (Ana)", "Record the payment: direct deposit, reference", "Status Paid"),
+    ("H55", "Payroll", "Phone (Cal)", "People → Me → Pay stubs → open one", "Earnings, deductions, net, year to date; Print works"),
+    ("H56", "Payroll", "Laptop (manager)", "Open Payroll (no tile) or #payroll", "No access"),
+    ("H57", "Payroll", "Laptop (Ana)", "T4 tab: this year; export CSV", "Boxes 14-26 per employee, SIN masked"),
+    ("H58", "Payroll", "Laptop (owner)", "People: set someone ended with an end date; Payroll → ROE → choose them", "Blocks 10-17A filled from their pay"),
+    ("H59", "Time sheets", "Laptop (manager)", "Reopen a time sheet that payroll has paid", "Refused: corrections go in the next pay"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

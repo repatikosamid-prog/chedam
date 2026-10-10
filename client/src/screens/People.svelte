@@ -15,14 +15,20 @@
   const STATUS = { active: "Working", on_leave: "On leave", ended: "Left" };
   const FREQ = { weekly: "Weekly", biweekly: "Every 2 weeks", semimonthly: "Twice a month", monthly: "Monthly" };
   let tab = $state(staff ? "staff" : "me"), data = $state(null), me = $state(undefined), error = $state(""), ok = $state("");
-  let open = $state(null), hist = $state([]), form = $state(null), lv = $state(null), sin = $state("");
+  let open = $state(null), hist = $state([]), form = $state(null), lv = $state(null), sin = $state(""), stubs = $state([]), stub = $state(null);
   const fail = async (r) => { if (!(await handleRefusal(r))) error = r.message; };
   const today = () => new Date().toISOString().substring(0, 10);
   const hrs = (h) => (Math.round(h * 100) / 100) + " h";
 
   async function load() {
     error = "";
-    if (tab === "me") { const r = await api("GET", "/api/chedam/me/employee"); if (r.ok) { me = r.json.employee; if (me) loadHist(me.id); } else await fail(r); return; }
+    if (tab === "me") {
+      const r = await api("GET", "/api/chedam/me/employee");
+      if (r.ok) { me = r.json.employee; if (me) loadHist(me.id); } else await fail(r);
+      const p = await api("GET", "/api/chedam/me/paystubs", null, { quiet: true });
+      stubs = p.ok ? p.json.items : [];
+      return;
+    }
     const r = await api("GET", "/api/chedam/employees");
     if (r.ok) data = r.json; else await fail(r);
   }
@@ -148,6 +154,26 @@
         <p class="text-sm text-muted">SIN on file: {me.sin_last3 || "none"}. Something wrong? Tell the owner.</p>
       </div>
       <div class="card space-y-1"><h2 class="font-semibold">My leave</h2>{@render history()}</div>
+      <div class="card space-y-1">
+        <h2 class="font-semibold">Pay stubs</h2>
+        {#each stubs as p (p.id)}
+          <button class="flex w-full justify-between border-b border-line text-left text-sm" onclick={() => (stub = stub && stub.id === p.id ? null : p)}><span>{p.pay_date} · {p.period_start} to {p.period_end}</span><span>net <b>{money(p.net_cents)}</b></span></button>
+          {#if stub && stub.id === p.id}
+            <div class="space-y-1 rounded-xl border border-line p-2 text-sm">
+              <p>{p.number} · {p.legal_name}</p>
+              {#if p.pay_type === "salary"}<p>Salary {money(p.salary_cents)}{p.unpaid_cents ? " · unpaid leave −" + money(p.unpaid_cents) : ""}</p>
+              {:else}<p>{Math.round(p.regular_min / 6) / 10} h × {money(p.rate_cents)} = {money(p.regular_cents)}{p.sick_cents ? " · sick pay " + money(p.sick_cents) : ""} · vacation pay {money(p.vacation_pay_cents)}</p>{/if}
+              {#if p.overtime_cents + p.double_cents}<p>Overtime {money(p.overtime_cents + p.double_cents)}</p>{/if}
+              {#if p.stat_cents + p.other_earnings_cents}<p>Stat holiday {money(p.stat_cents)} · other {money(p.other_earnings_cents)}</p>{/if}
+              <p><b>Gross {money(p.gross_cents)}</b> · CPP {money(p.cpp_cents + p.cpp2_cents)} · EI {money(p.ei_cents)} · income tax {money(p.tax_cents)}{p.other_deductions_cents ? " · other " + money(p.other_deductions_cents) : ""}</p>
+              {#if p.reimbursements_cents}<p>Expenses paid back {money(p.reimbursements_cents)} ({p.reimbursed.join(", ")})</p>{/if}
+              <p><b>Net {money(p.net_cents)}</b></p>
+              <p class="text-muted">Year to date: gross {money(p.ytd.gross_cents)} · CPP {money(p.ytd.cpp_cents + p.ytd.cpp2_cents)} · EI {money(p.ytd.ei_cents)} · tax {money(p.ytd.tax_cents)} · net {money(p.ytd.net_cents)}</p>
+              <button class="btn-ghost min-h-10 text-sm" onclick={() => window.print()}>Print</button>
+            </div>
+          {/if}
+        {:else}<p class="text-sm text-muted">No pay stubs yet.</p>{/each}
+      </div>
     {/if}
   {:else if data}
     <div class="card flex flex-wrap justify-between gap-2 text-sm"><span>{data.employees.filter((x) => x.status !== "ended").length} working · {data.without_record.length} without a record</span>

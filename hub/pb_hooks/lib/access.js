@@ -129,6 +129,9 @@ const TABLES = {
   roster_swaps:         { list: null, view: null, create: null, update: null, delete: null },
   // P4 time sheets (step 4): only through /api/chedam/timesheets
   timesheets:           { list: null, view: null, create: null, update: null, delete: null },
+  // P4 payroll (step 5): only through /api/chedam/payroll (pay is private)
+  payroll_runs:         { list: null, view: null, create: null, update: null, delete: null },
+  payroll_lines:        { list: null, view: null, create: null, update: null, delete: null },
   vendor_returns:       { list: "purchasing.view|purchasing.manage|finance.manage", view: "purchasing.view|purchasing.manage|finance.manage", create: null, update: null, delete: null },
 };
 
