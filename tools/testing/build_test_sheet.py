@@ -367,6 +367,14 @@ P4_TESTS = [
     ("H85", "Books", "Laptop (Ana)", "Record a bill dated in the closed month", "Refused: the month is closed"),
     ("H86", "Books", "Laptop (owner)", "Months → Reopen with a reason", "Open again; the bill can be recorded"),
     ("H87", "Books", "Laptop (manager)", "#books", "No access"),
+    # ---- Step 9: statements and returns (DL-210..212)
+    ("H90", "Statements", "Laptop (Ana)", "Home → Statements and returns → Profit and loss: last month", "Revenue, cost of sales, gross profit %, expenses, net income; the month before below"),
+    ("H91", "Statements", "Laptop (Ana)", "Balance sheet: today", "Assets = liabilities + equity + earnings ('Balanced')"),
+    ("H92", "Statements", "Laptop (Ana)", "Cash flow: last month", "Cash at the start + operating + financing = cash at the end"),
+    ("H93", "Returns", "Laptop (Ana)", "GST/HST return: last quarter; compare lines 103 and 106 with the accountant's figures", "Lines 101-113A filled; refund when negative"),
+    ("H94", "Returns", "Laptop (Ana)", "PST return: last month", "PST collected, commission 3.3% (up to $198), net to remit"),
+    ("H95", "Returns", "Laptop (Ana)", "Record as filed with a confirmation number; again", "Saved under Filed returns; the second time refused"),
+    ("H96", "Statements", "Laptop (owner)", "Print the profit and loss", "A clean printout"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

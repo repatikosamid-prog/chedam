@@ -143,6 +143,8 @@ const TABLES = {
   // P4 books (step 8): only through /api/chedam/books
   accounts:             { list: null, view: null, create: null, update: null, delete: null },
   periods:              { list: null, view: null, create: null, update: null, delete: null },
+  // P4 tax returns (step 9): only through /api/chedam/tax-returns
+  tax_returns:          { list: null, view: null, create: null, update: null, delete: null },
   vendor_returns:       { list: "purchasing.view|purchasing.manage|finance.manage", view: "purchasing.view|purchasing.manage|finance.manage", create: null, update: null, delete: null },
 };
 

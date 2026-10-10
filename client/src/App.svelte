@@ -49,6 +49,7 @@
   import Pings from "./screens/Pings.svelte";
   import Inbox from "./screens/Inbox.svelte";
   import Help from "./screens/Help.svelte";
+  import Finance from "./screens/Finance.svelte";
   import Books from "./screens/Books.svelte";
   import Statements from "./screens/Statements.svelte";
   import Bank from "./screens/Bank.svelte";
@@ -229,6 +230,7 @@
   {:else if s.screen === "bank"}<Bank />
   {:else if s.screen === "statements"}<Statements />
   {:else if s.screen === "books"}<Books />
+  {:else if s.screen === "finance"}<Finance />
   {:else if s.screen === "help"}{#key s.helpFor}<Help />{/key}
   {/if}
 </main>

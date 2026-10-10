@@ -182,6 +182,12 @@
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
       {#if can("books.manage")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("finance")}>
+          <span class="font-semibold">Statements and returns</span>
+          <span class="text-sm text-muted">P&L, balance sheet, cash flow, GST/HST, PST</span>
+        </button>
+      {/if}
+      {#if can("books.manage")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("books")}>
           <span class="font-semibold">Books</span>
           <span class="text-sm text-muted">Trial balance, journal, closing months</span>

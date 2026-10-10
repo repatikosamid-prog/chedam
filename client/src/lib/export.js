@@ -95,7 +95,7 @@ export const GROUPS = [
   ["buying", "Vendors and buying", ["parties", "party_contacts", "party_logs", "fx_rates", "vendor_products", "purchase_orders", "po_lines", "po_receipts", "scan_matches", "vendor_returns", "consignment_sales", "recalls"]],
   ["money", "Bills, expenses and customer orders", ["bills", "bill_payments", "expenses", "petty_cash", "client_orders", "client_order_payments", "delivery_orders", "platform_prices"]],
   ["staff", "Employees and pay", ["employees", "leave_ledger", "shifts", "roster_shifts", "roster_swaps", "timesheets", "payroll_runs", "payroll_lines"]],
-  ["bank", "Bank", ["bank_accounts", "bank_imports", "bank_lines", "bank_deposits", "platform_payouts", "vendor_statements", "accounts", "periods"]],
+  ["bank", "Bank", ["bank_accounts", "bank_imports", "bank_lines", "bank_deposits", "platform_payouts", "vendor_statements", "accounts", "periods", "tax_returns"]],
   ["store", "Store settings", ["business", "locations", "settings", "modules", "label_layouts", "label_templates"]],
   ["records", "Audit log and records", ["events", "tasks", "import_jobs", "backups", "updates", "label_batch_items", "label_batches"]],
 ];
