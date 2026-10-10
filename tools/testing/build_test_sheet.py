@@ -340,6 +340,16 @@ P4_TESTS = [
     ("H57", "Payroll", "Laptop (Ana)", "T4 tab: this year; export CSV", "Boxes 14-26 per employee, SIN masked"),
     ("H58", "Payroll", "Laptop (owner)", "People: set someone ended with an end date; Payroll → ROE → choose them", "Blocks 10-17A filled from their pay"),
     ("H59", "Time sheets", "Laptop (manager)", "Reopen a time sheet that payroll has paid", "Refused: corrections go in the next pay"),
+    # ---- Step 6: bank (DL-201..203)
+    ("H60", "Bank", "Laptop (Ana)", "Home → Bank → Add an account: chequing, opening balance", "The account card with the balance"),
+    ("H61", "Bank", "Laptop (Ana)", "Import a real CSV statement from the store's bank (RBC, TD, BMO, Scotia or CIBC)", "Lines added with the right signs and dates; 'n matched' for payments Chedam knows"),
+    ("H62", "Bank", "Laptop (Ana)", "Import the same file again; then an OFX/QFX file if the bank offers it", "All duplicates; the OFX lines added"),
+    ("H63", "Bank", "Laptop (Ana)", "Open an unmatched line: the possible matches; tick one and Match", "Matched; shows what it matched and who"),
+    ("H64", "Bank", "Laptop (Ana)", "A card deposit line: match it to the card sales of the day", "Matched with the processor fee shown"),
+    ("H65", "Bank", "Laptop (Ana)", "A bank fee line: category Bank fees", "Matched as Bank fees"),
+    ("H66", "Bank", "Laptop (Ana)", "Cash deposit: tick closed tills, Use the amount, Record", "DP- in transit; matched after importing the statement with it"),
+    ("H67", "Bank", "Laptop (Ana)", "Reconcile with the statement's closing balance: wrong, then right", "The difference shown; then 'Reconciled to …'"),
+    ("H68", "Bank", "Laptop (manager)", "Home: no Bank tile; #bank", "No access"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

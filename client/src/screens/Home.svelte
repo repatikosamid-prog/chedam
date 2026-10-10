@@ -181,6 +181,12 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
+      {#if can("bank.manage")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("bank")}>
+          <span class="font-semibold">Bank</span>
+          <span class="text-sm text-muted">Statements, matching, deposits</span>
+        </button>
+      {/if}
       {#if can("payroll.manage")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("payroll")}>
           <span class="font-semibold">Payroll</span>

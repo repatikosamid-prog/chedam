@@ -132,6 +132,11 @@ const TABLES = {
   // P4 payroll (step 5): only through /api/chedam/payroll (pay is private)
   payroll_runs:         { list: null, view: null, create: null, update: null, delete: null },
   payroll_lines:        { list: null, view: null, create: null, update: null, delete: null },
+  // P4 bank (step 6): only through /api/chedam/bank
+  bank_accounts:        { list: null, view: null, create: null, update: null, delete: null },
+  bank_imports:         { list: null, view: null, create: null, update: null, delete: null },
+  bank_lines:           { list: null, view: null, create: null, update: null, delete: null },
+  bank_deposits:        { list: null, view: null, create: null, update: null, delete: null },
   vendor_returns:       { list: "purchasing.view|purchasing.manage|finance.manage", view: "purchasing.view|purchasing.manage|finance.manage", create: null, update: null, delete: null },
 };
 
