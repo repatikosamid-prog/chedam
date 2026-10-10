@@ -189,7 +189,8 @@ try {
   check("manager's backups.run is gone (deny override)", mgr.status === 200 && !mgr.json.permissions["backups.run"]);
 
   console.log("Audit trail");
-  const evs = (await t.list("events")).items;
+  // Only the tables this suite touched: the migrations alone now write more than one page (500) of events
+  const evs = (await t.list("events", "table_name='users' || table_name='permission_overrides' || table_name='modules' || table_name='roles' || table_name='settings'")).items;
   const dump = JSON.stringify(evs);
   check("no bcrypt hashes anywhere in the log", !dump.includes("$2a$") && !dump.includes("$2b$"));
   check("lockouts are in the log (pin_locked_until changes)", evs.some((e) => e.table_name === "users" && (e.changed || []).includes("pin_locked_until")));
