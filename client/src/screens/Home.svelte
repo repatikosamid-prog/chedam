@@ -1,4 +1,5 @@
 <script>
+  import { live } from "../lib/live.svelte.js";
   // Signed-in shell. Modules switched on for this store appear as tiles; their screens arrive in later
   // phases. P0 has the device manager; P1 adds products, categories and tax. My settings: large text, high contrast (NFR-16/17), change PIN.
   import { onMount } from "svelte";
@@ -106,6 +107,9 @@
     </div>
   {/if}
 
+  {#if live.toAck}
+    <button class="w-full rounded-xl border border-warn bg-warn/10 px-3 py-2 text-left" onclick={() => go("messages")}>📌 <b>{live.toAck} announcement{live.toAck === 1 ? "" : "s"}</b> to read and confirm</button>
+  {/if}
   {#if tasks.length}
     <div class="card">
       <h2 class="mb-2 font-semibold">Tasks</h2>
@@ -177,6 +181,10 @@
         </button>
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
+      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("messages")}>
+        <span class="font-semibold">Messages{live.unread ? " (" + live.unread + ")" : ""}</span>
+        <span class="text-sm text-muted">Everyone, groups, one-to-one, announcements</span>
+      </button>
       {#if can("tasks.view")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("team")}>
           <span class="font-semibold">Tasks and checklists</span>

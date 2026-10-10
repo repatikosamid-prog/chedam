@@ -149,6 +149,11 @@ function dashboard(app, c) {
     const doneToday = app.findRecordsByFilter("checklist_runs", "day = {:d} && status = 'done'", "", 0, 0, { d: today }).map((r) => r.getString("checklist"));
     add("checklists", "Checklists not finished today", lists.filter((k) => doneToday.indexOf(k.id) < 0).length, "team");
   }
+  if (c.user) {
+    const M = require(`${__hooks}/lib/messages.js`);
+    add("announcements", "Announcements to read and confirm", M.toAck(app, c), "messages");
+    add("messages", "Unread messages", M.unread(app, c).unread, "messages");
+  }
   if (can("stock.approve")) add("approvals", "Stock changes waiting for approval", app.countRecords("stock_movements", $dbx.exp("status = 'pending'")), "approvals");
   if (can("till.manage")) add("tills", "Closed tills not reconciled", app.countRecords("tills", $dbx.exp("status = 'closed' AND reconciled_at = ''")), "reports");
 

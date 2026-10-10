@@ -44,6 +44,8 @@
   import Display from "./screens/Display.svelte";
   import Dashboard from "./screens/Dashboard.svelte";
   import Team from "./screens/Team.svelte";
+  import Messages from "./screens/Messages.svelte";
+  import { live, startLive, stopLive } from "./lib/live.svelte.js";
 
   // A customer display window opened from Sell on this till (a second monitor): no sign-in, fed by the till.
   const localDisplay = location.hash === "#customer-display";
@@ -85,6 +87,9 @@
   const signedIn = $derived(!!s.me && !["boot", "pair", "wait", "names", "pin", "newpin", "owner", "setup", "recovery"].includes(s.screen));
   let logoOk = $state(true);
 
+  // Live messages and announcements while someone is signed in (P2-e)
+  $effect(() => { if (s.me && s.me.user && !localDisplay) startLive(); else stopLive(); });
+
   // While waiting for approval or unlock, check more often.
   $effect(() => {
     if (s.screen !== "wait") return;
@@ -113,6 +118,13 @@
         <img src={s.brand.logo} alt={s.brand.name} class="h-8 max-w-28 object-contain" onerror={() => (logoOk = false)} />
       {/if}
     </div>
+    {#if signedIn}
+      <button class="relative flex min-h-12 shrink-0 items-center gap-1 rounded-xl px-2 {live.toAck ? 'text-warn' : ''}" onclick={() => go("messages")}
+        aria-label={"Messages" + (live.unread ? ", " + live.unread + " unread" : "") + (live.toAck ? ", announcements to confirm" : "")} title="Messages">
+        <span aria-hidden="true" class="text-xl">💬</span>
+        {#if live.unread || live.toAck}<span class="rounded-full px-1.5 text-xs font-bold {live.mentioned || live.toAck ? 'bg-warn text-white' : 'bg-accent text-accent-ink'}">{live.toAck ? "📌" : ""}{live.unread || ""}</span>{/if}
+      </button>
+    {/if}
     {#if s.device}
       <span class="truncate text-sm text-muted">{s.device.name}</span>
     {:else if s.me && !load("device")}
@@ -170,6 +182,7 @@
   {:else if s.screen === "customers"}<Customers />
   {:else if s.screen === "dashboard"}<Dashboard />
   {:else if s.screen === "team"}<Team />
+  {:else if s.screen === "messages"}<Messages />
   {/if}
 </main>
 {/if}

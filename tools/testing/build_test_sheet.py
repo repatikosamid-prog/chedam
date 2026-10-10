@@ -251,6 +251,17 @@ P2_TESTS = [
     ("P107", "Documents", "Laptop (manager)", "Licences and insurance → add insurance expiring in 5 days with a PDF", "An urgent task 'expires on … (in 5 days)'; Open copy shows the PDF"),
     ("P108", "Documents", "Laptop", "Change the expiry to next year", "The task closes"),
     ("P109", "Storage", "Laptop", "Product form: milk keep 0 to 4 °C; storage area Dry store", "Within 10 minutes an urgent task 'needs 0–4 °C but is kept in Dry store'; back to Cooler closes it"),
+    # ---- Step 8: messages and announcements (DL-144..146)
+    ("P110", "Messages", "Till + phone", "Messages → Everyone: write 'Truck at 2 pm' on the phone", "The till's 💬 shows 1 within seconds; opening it shows the message"),
+    ("P111", "Messages", "Phone", "New conversation → With one person (Cal); type @ and pick Cal; send", "Cal's badge turns orange (mentioned); the message is highlighted for Cal"),
+    ("P112", "Messages", "Phone", "Attach a photo of a shelf and link a product (🔗)", "Photo thumbnail and the product link in the message; tapping the link opens the product"),
+    ("P113", "Messages", "Till", "Cal opens the conversation; back on the phone", "Your message shows 'Read by Cal'"),
+    ("P114", "Messages", "Till", "React 👍; tap 👍 again", "The reaction appears, then goes"),
+    ("P115", "Messages", "Laptop (manager)", "New conversation → A group 'Morning shift' with two people", "Only those people see the group; others cannot open it"),
+    ("P116", "Messages", "Phone", "Remove your own message", "Shows 'Message removed' for everyone"),
+    ("P117", "Messages", "Two devices, same person", "Sign in as the same person on a phone and the laptop", "The same conversations and unread counts on both"),
+    ("P118", "Announcements", "Laptop (manager)", "New announcement, 'Everyone must confirm'", "Each person: banner on Home and 📌 in the top bar; 'I have read this' clears it"),
+    ("P119", "Announcements", "Laptop (manager)", "Look at the announcement after two people confirmed", "'Read: …' and 'Not yet: …' lists; End removes it for everyone"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

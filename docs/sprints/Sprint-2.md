@@ -13,8 +13,8 @@
 | 5 | Customer-facing display (DL-137, 138) | Claude | Done, deployed `dev-a119768`; passes on the Pi (19 tests) |
 | 6 | Dashboard and sales insights (DL-139, 140) | Claude | Done, deployed (19 tests) |
 | 7 | Tasks, checklists, reminders (DL-141..143) | Claude | Done, deployed (30 tests) |
-| 8 | Messages and announcements | Claude | Next |
-| 9 | Pings and the till overlay | Claude | Planned |
+| 8 | Messages and announcements (DL-144..146) | Claude | Done, deployed (31 tests) |
+| 9 | Pings and the till overlay | Claude | Next |
 | 10 | Inbox, end-of-day report, email fallback (needs Google/Microsoft client IDs) | Claude | Planned |
 | 11 | Help | Claude | Planned |
 | 12 | Gate | Claude + Sreya | Planned |

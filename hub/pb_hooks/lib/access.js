@@ -77,6 +77,13 @@ const TABLES = {
   checklist_runs:       { list: "tasks.view", view: "tasks.view", create: null, update: null, delete: null },
   handover_notes:       { list: "tasks.view", view: "tasks.view", create: null, update: null, delete: null },
   documents:            { list: "documents.manage", view: "documents.manage", create: "documents.manage", update: "documents.manage", delete: null },
+  // P2 messages (step 8): reads through the API and realtime are limited by the collection rules (members
+  // only, migration 1791400006); every change goes through /api/chedam/messages and /announcements.
+  channels:             { list: ANY, view: ANY, create: null, update: null, delete: null },
+  messages:             { list: ANY, view: ANY, create: null, update: null, delete: null },
+  channel_reads:        { list: ANY, view: ANY, create: null, update: null, delete: null },
+  announcements:        { list: ANY, view: ANY, create: null, update: null, delete: null },
+  announcement_acks:    { list: "announcements.manage", view: "announcements.manage", create: null, update: null, delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".
