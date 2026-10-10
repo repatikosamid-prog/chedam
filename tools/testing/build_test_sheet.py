@@ -284,6 +284,22 @@ P2_TESTS = [
     ("P143", "Help", "Laptop (manager)", "Add a training video (a short MP4 from a phone) to 'Opening and closing the till'", "It plays from the Help page on a till"),
 ]
 
+# P4 (Sprint 4): one block per build step.
+P4_OUT = Path(__file__).resolve().parents[2] / "docs" / "testing" / "Chedam-Manual-Tests-P4.xlsx"
+P4_TESTS = [
+    # ---- Step 1: employees and leave (DL-186..188)
+    ("H01", "People", "Laptop (owner)", "Home → People → Add a record: Cal Cashier, legal name, hourly $17.85, SIN 046 454 286, bank 001-12345-1234567", "Saved; SIN shown as •••-•••-286, account as ••••567"),
+    ("H02", "People", "Laptop (owner)", "Try a SIN 123 456 789", "Refused: the SIN is not valid"),
+    ("H03", "People", "Laptop (owner)", "Open Cal → SIN → Show", "Asks first; shows 046-454-286"),
+    ("H04", "People", "Laptop (manager)", "Home → People → open Cal", "Record and emergency contact; no pay, bank, SIN digits or personal phone"),
+    ("H05", "People", "Phone (Cal)", "Home → People → Me", "Own record, address and phone, leave balances; no pay or bank; no Staff tab"),
+    ("H06", "Leave", "Laptop (manager)", "Open a salaried person → Record leave taken: sick 8 h", "Sick balance down 8 h; in the history with your name"),
+    ("H07", "Leave", "Laptop (manager)", "Record more vacation than is left", "Refused: only … hours left"),
+    ("H08", "Leave", "Laptop (owner)", "Adjust a balance: vacation +16 h without a reason, then with one", "Refused without; added with the reason in the history"),
+    ("H09", "People", "Laptop (owner)", "Change the record: add a PDF contract", "The document is listed and opens"),
+    ("H10", "People", "Laptop (owner)", "Export the staff list (CSV); open Settings → Export data", "The list has no pay, SIN or bank columns; the data export has no SIN or bank fields"),
+]
+
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]
 
 # P3 (Sprint 3): one block per build step.
@@ -456,6 +472,13 @@ if __name__ == "__main__":
             "",
             "Laptop and iPhone; Android later. Sample people: Demo Owner, Mira Manager, Ana Accountant, Cal Cashier, Sam Staff.",
             "Sample vendors: Fresh Fields Produce, Coastal Beverages Ltd., Maple Snacks Wholesale (USD); client: Cafe Luna.",
+            "For each row: do what it says, compare with 'What should happen', choose Pass / Fail / Blocked, and write what happened when it is not a Pass.",
+        ])
+    elif "--p4" in sys.argv:
+        build(P4_OUT, P4_TESTS, [
+            "Chedam manual tests: P4 People and money (grows with each build step; tested in the P2-P4 test week)",
+            "",
+            "Laptop and iPhone; Android later. Sample people: Demo Owner, Mira Manager, Ana Accountant, Cal Cashier, Sam Staff.",
             "For each row: do what it says, compare with 'What should happen', choose Pass / Fail / Blocked, and write what happened when it is not a Pass.",
         ])
     elif "--retest" in sys.argv:

@@ -6,7 +6,7 @@ Started 2026-10-10. Goal: employees, time clock, roster, time sheets, payroll pr
 
 | # | Item | Owner | Status |
 | --- | --- | --- | --- |
-| 1 | Employees and leave | Claude | Hub done and deployed (22 tests); screens next |
+| 1 | Employees and leave | Claude | Done, deployed (22 tests; DL-186..188) |
 | 2 | Time clock, punch edits, BC break and overtime alerts | Claude | Planned |
 | 3 | Roster, publish, swaps, labour cost | Claude | Planned |
 | 4 | Time sheets and approval | Claude | Planned |

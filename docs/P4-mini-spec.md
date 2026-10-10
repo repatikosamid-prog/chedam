@@ -33,3 +33,12 @@ The store runs its people and its books in Chedam: employee records with leave, 
 | P4-c | **Deductions are entered, not calculated** (Master Specification R4): CPP, EI and income tax come from the CRA payroll calculator (PDOC) or the accountant, per employee per pay; Chedam adds hours, overtime, vacation pay and reimbursements, checks the totals and keeps the records. A payroll service connection is later (FR-9.14) |
 | P4-d | **The books are derived, not keyed:** each money record (sale, return, bill, payment, expense, payroll, bank line) produces its journal lines by fixed rules into a small chart of accounts the accountant can rename and map; a closed period refuses changes (BR-34 kept) |
 | P4-e | **BC first** (A2): BC employment standards for breaks and overtime (BR-31), BC PST; other provinces through the tax tables later |
+
+## Design decisions (step 1)
+
+| ID | Decision |
+| --- | --- |
+| DL-186 | **Employee records (FR-9.09)**, Home → People: one record per person who signs in (P4-a): legal name, job, start and end dates, status (working, on leave, left), address, personal phone and email, emergency contact, pay type (hourly or salary) and rate, pay frequency, hours a week, overtime paid, vacation pay %, vacation and sick days a year, TD1 amounts, notes, documents (protected files). **Who sees what:** the owner (`hr.manage`, owner only) everything and makes all changes; managers (`hr.view`) the record without pay, SIN, bank or personal contact details; each person their own record and leave on the **Me** tab (not pay or bank) |
+| DL-187 | **SIN and bank details (P4-b):** the SIN is checked (9 digits, the Luhn rule); SIN and bank details (institution 3, transit 5, account 5-12 digits) are encrypted with the hub's own key (`pb_data/chedam-hr.key`, made on first use, in the backups) and shown masked (•••-•••-286, ••••567). Only the owner can **show** the full SIN (asked first; who and when is recorded). They are never in the event log (logged as "[personal]"), exports or the data export |
+| DL-188 | **Leave (FR-9.10):** hours in a ledger per kind (vacation, sick, unpaid). Each night a job adds, once a month, salaried vacation (days a year / 12 × hours a day; hourly staff get vacation pay as a % of each pay in step 5) and, once a year after 90 days of work, the BC paid sick days (setting `hr.leave`: 5 days); unused sick days expire at the new grant. Managers record leave taken (not more than is left, except unpaid); the owner adjusts a balance with a reason. Every line is in the history with who and why |
+
