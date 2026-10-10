@@ -109,7 +109,8 @@
   <div class="screen-head">
     <button class="mb-1 min-h-10 text-sm underline" onclick={() => go("stock")}>← Stock</button>
     <h1 class="text-xl font-bold">Add stock</h1>
-    <p class="text-muted">Scan each item. Scanning the same item again adds one more.</p>
+    <p class="text-muted">Scan each item. Scanning the same item again adds one more.
+      {#if can("purchasing.view")}Or <button class="underline" onclick={() => { s.buyingTab = "scan"; go("buying"); }}>read the vendor's bill</button> / <button class="underline" onclick={() => { s.buyingTab = "orders"; go("buying"); }}>receive against an order</button>.{/if}</p>
   </div>
   {#if error}<p role="alert" class="rounded-xl bg-bad/10 px-3 py-2 text-bad">{error}</p>{/if}
   {#if ok}<p role="status" class="rounded-xl bg-ok/10 px-3 py-2 text-ok">{ok}</p>{/if}

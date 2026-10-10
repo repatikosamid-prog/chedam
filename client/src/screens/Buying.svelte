@@ -5,18 +5,19 @@
   // preferred vendor is not the cheapest. Purchase orders and bills arrive as their own tabs (steps 3-4).
   import { onMount } from "svelte";
   import { api } from "../lib/api.js";
-  import { go, can, handleRefusal } from "../lib/session.svelte.js";
+  import { s, go, can, handleRefusal } from "../lib/session.svelte.js";
   import { money } from "../lib/catalogue.js";
   import { readBytes, headerRow } from "../lib/import/read.js";
   import ExportMenu from "../components/ExportMenu.svelte";
   import Orders from "../components/buying/Orders.svelte";
   import Bills from "../components/buying/Bills.svelte";
   import VendorReturns from "../components/buying/VendorReturns.svelte";
+  import BillScan from "../components/buying/BillScan.svelte";
 
   const manage = can("purchasing.manage");
-  const tabs = [["orders", "Purchase orders", true], ["bills", "Bills and invoices", can("finance.manage") || can("purchasing.manage")], ["returns", "Returns to vendors", true],
+  const tabs = [["scan", "Receive a bill", can("stock.receive") || can("purchasing.manage")], ["orders", "Purchase orders", true], ["bills", "Bills and invoices", can("finance.manage") || can("purchasing.manage")], ["returns", "Returns to vendors", true],
     ["prices", "Vendor prices", true], ["compare", "Compare vendors", true], ["better", "Better prices", true]].filter((x) => x[2]);
-  let tab = $state(location.hash === "#buying-bills" ? "bills" : "orders"), error = $state("");
+  let tab = $state(s.buyingTab || (location.hash === "#buying-bills" ? "bills" : location.hash === "#buying-scan" ? "scan" : "orders")), error = $state("");
   let vendors = $state([]), vendor = $state(""), items = $state([]), edit = $state(null), units = $state([]);
   let pq = $state(""), hits = $state([]), cmp = $state(null), cmpName = $state("");
   let better = $state([]), imp = $state(null), impResult = $state(null);
@@ -33,7 +34,7 @@
     if (tab === "prices" && vendor) { const r = await api("GET", `/api/chedam/vendors/${vendor}/products`); if (r.ok) items = r.json.items; else await fail(r); }
     if (tab === "better") { const r = await api("GET", "/api/chedam/purchasing/better"); if (r.ok) better = r.json.items; else await fail(r); }
   }
-  onMount(load);
+  onMount(() => { s.buyingTab = ""; load(); });
 
   async function findProducts() {
     const q = pq.trim().replace(/'/g, "");
@@ -100,6 +101,7 @@
   {#if tab === "orders"}<Orders {vendors} />{/if}
   {#if tab === "bills"}<Bills />{/if}
   {#if tab === "returns"}<VendorReturns {vendors} />{/if}
+  {#if tab === "scan"}{#if vendors.length}<BillScan {vendors} />{:else}<p class="text-muted">Loading vendors…</p>{/if}{/if}
 
   {#if tab === "prices"}
     <div class="flex flex-wrap items-end gap-2">

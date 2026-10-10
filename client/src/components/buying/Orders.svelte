@@ -91,12 +91,13 @@
 
   // ---- Receiving
   function startReceive() {
-    recv = { op: newId(), close: false, note: "", lines: open.lines.map((l) => ({ po_line: l.id, name: l.product_name + " · " + l.unit_name, left: Math.max(0, l.qty - l.received_qty),
+    recv = { op: newId(), close: false, note: "", freight: "", duty: "", brokerage: "", lines: open.lines.map((l) => ({ po_line: l.id, name: l.product_name + " · " + l.unit_name, left: Math.max(0, l.qty - l.received_qty),
       qty: Math.max(0, l.qty - l.received_qty), cost: l.cost_cents !== undefined ? (l.cost_cents / 100).toFixed(2) : "", expiry: "", product: l.product })) };
   }
   async function sendReceive(e) {
     e.preventDefault();
     const body = { op_id: recv.op, close: recv.close, note: recv.note,
+      landed: { freight_cents: Math.round(Number(recv.freight || 0) * 100), duty_cents: Math.round(Number(recv.duty || 0) * 100), brokerage_cents: Math.round(Number(recv.brokerage || 0) * 100) },
       lines: recv.lines.filter((l) => Number(l.qty) > 0).map((l) => ({ po_line: l.po_line, qty: Number(l.qty), expiry_date: l.expiry || undefined, cost_cents: l.cost === "" ? undefined : Math.round(Number(l.cost) * 100) })) };
     const r = await api("POST", `/api/chedam/purchase-orders/${open.id}/receive`, body, { timeout: 30000 });
     if (!r.ok) return fail(r);
@@ -157,6 +158,11 @@
             <input class="field min-h-10 py-1" inputmode="decimal" bind:value={l.cost} aria-label="Cost on the bill" title="Cost on the bill (per unit)" />
             <input class="field min-h-10 py-1" type="date" bind:value={l.expiry} aria-label="Expiry date" title="Expiry (perishables)" /></div>
         {/each}
+        <div class="grid gap-2 sm:grid-cols-3">
+          <label class="block"><span class="text-sm text-muted">Freight (CAD)</span><input class="field" inputmode="decimal" bind:value={recv.freight} /></label>
+          <label class="block"><span class="text-sm text-muted">Duty (CAD)</span><input class="field" inputmode="decimal" bind:value={recv.duty} /></label>
+          <label class="block"><span class="text-sm text-muted">Brokerage (CAD)</span><input class="field" inputmode="decimal" bind:value={recv.brokerage} /></label>
+        </div>
         <label class="flex min-h-10 items-center gap-2"><input type="checkbox" class="h-5 w-5 accent-accent" bind:checked={recv.close} /> The rest will not come: close the order</label>
         <input class="field" bind:value={recv.note} maxlength="1000" placeholder="Note (optional)" aria-label="Note" />
         <div class="flex gap-2"><button class="btn" type="submit">Receive into stock</button><button class="btn-ghost" type="button" onclick={() => (recv = null)}>Cancel</button></div>

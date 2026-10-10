@@ -321,6 +321,13 @@ P3_TESTS = [
     ("Q36", "Vendor returns", "Laptop (manager)", "Returns to vendors → Send goods back: 2 damaged chips, RMA", "VR-…; stock down by 2 at once; Record their credit makes a vendor credit"),
     ("Q37", "Vendor returns", "Laptop (manager)", "Vendor performance", "On time, short and damaged % for vendors with received orders"),
     ("Q38", "Bills", "Phone (staff)", "Buying as Sam Staff", "No Bills and invoices tab"),
+    # ---- Step 5: receive from a bill photo, landed cost (DL-167..169)
+    ("Q40", "Bill photo", "iPhone (staff)", "Add stock → read the vendor's bill → Coastal → 📷 a printed bill", "'Reading the photo…', then the lines with products matched (their code / barcode / by name) and the totals"),
+    ("Q41", "Bill photo", "iPhone", "A line not matched: type to search, pick the product", "Matched; Receive into stock adds the stock"),
+    ("Q42", "Bill photo", "iPhone", "Another bill from Coastal with the same item", "That line is matched by itself ('remembered')"),
+    ("Q43", "Bill photo", "Laptop (manager)", "A PDF bill for an open order; freight on the bill; tick 'Also record the bill'", "Order suggested, lines 'as ordered'; freight filled in; order received; bill B-… with freight as a line"),
+    ("Q44", "Landed cost", "Laptop (manager)", "Receive an order by hand with Freight 10.00", "Each item's cost (Stock → the product → lots) includes its share of the $10 by value"),
+    ("Q45", "Bill photo", "Laptop", "A bill whose lines do not add up", "A warning saying by how much"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):

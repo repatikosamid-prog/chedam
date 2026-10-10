@@ -15,7 +15,8 @@ function serviceWorker() {
     name: "chedam-sw",
     apply: "build",
     generateBundle(_, bundle) {
-      const files = Object.keys(bundle).filter((f) => !f.endsWith(".map"));
+      // Bill reading (OCR, PDF) loads only when used: not cached on every device
+      const files = Object.keys(bundle).filter((f) => !f.endsWith(".map") && !f.startsWith("ocr/") && !/pdf\.worker/.test(f));
       const statics = ["manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png"];
       const list = ["./", ...files.map((f) => "./" + f), ...statics.map((f) => "./" + f)];
       const build = createHash("sha256").update(JSON.stringify(list) + Object.values(bundle)
@@ -26,6 +27,20 @@ function serviceWorker() {
         fileName: "sw.js",
         source: template.replace("__BUILD__", pkg.version + "-" + build).replace("__FILES__", JSON.stringify(list)),
       });
+    },
+  };
+}
+
+// Reading bill photos in the browser (P3 step 5, P3-d): Tesseract's worker, its LSTM engine (with and without
+// SIMD) and the English model, copied from node_modules into ocr/ (served by the hub, so it works offline).
+function ocrAssets() {
+  const files = { "ocr/worker.min.js": "tesseract.js/dist/worker.min.js", "ocr/tesseract-core-lstm.wasm.js": "tesseract.js-core/tesseract-core-lstm.wasm.js",
+    "ocr/tesseract-core-simd-lstm.wasm.js": "tesseract.js-core/tesseract-core-simd-lstm.wasm.js", "ocr/eng.traineddata.gz": "@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz" };
+  return {
+    name: "chedam-ocr-assets",
+    apply: "build",
+    generateBundle() {
+      Object.keys(files).forEach((name) => this.emitFile({ type: "asset", fileName: name, source: readFileSync(fileURLToPath(new URL("./node_modules/" + files[name], import.meta.url))) }));
     },
   };
 }
@@ -51,7 +66,7 @@ function pricingCore() {
 export default defineConfig({
   base: "./",
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
-  plugins: [pricingCore(), svelte(), tailwindcss(), serviceWorker()],
+  plugins: [pricingCore(), svelte(), tailwindcss(), ocrAssets(), serviceWorker()],
   build: {
     outDir: "../hub/pb_public",
     emptyOutDir: true,

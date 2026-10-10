@@ -18,6 +18,7 @@ export const s = $state({
   receiveProduct: "",   // product to add to the "Add stock" list when it opens
   newBarcode: "",       // unknown barcode scanned while adding stock: the new product form starts with it
   helpFor: "",          // the screen the Help button was pressed on
+  buyingTab: "",        // a tab of Buying to open (e.g. "scan" from Add stock)
   returnTo: "",         // screen to go back to from the product form (e.g. "receive")
   brand: load("brand"), // {name, logo}: the store's logo in the top bar and on Home, when the owner chose it (DL-115)
 });
@@ -122,7 +123,7 @@ async function loadMe() {
   const FROM_HASH = { "#devices": "devices", "#setup": "wizard", "#backups": "backups", "#health": "health", "#updates": "updates",
     "#products": "products", "#categories": "categories", "#tax": "tax",
     "#stock": "stock", "#receive": "receive", "#counts": "counts", "#approvals": "approvals", "#shrink": "shrink",
-    "#sell": "sell", "#till": "till", "#sales": "sales", "#printers": "printers", "#returns": "returns", "#labels": "labels", "#data": "data", "#reports": "reports", "#promotions": "promotions", "#customers": "customers", "#dashboard": "dashboard", "#team": "team", "#team-checklists": "team", "#messages": "messages", "#pings": "pings", "#inbox": "inbox", "#help": "help", "#buying": "buying", "#parties": "parties" };
+    "#sell": "sell", "#till": "till", "#sales": "sales", "#printers": "printers", "#returns": "returns", "#labels": "labels", "#data": "data", "#reports": "reports", "#promotions": "promotions", "#customers": "customers", "#dashboard": "dashboard", "#team": "team", "#team-checklists": "team", "#messages": "messages", "#pings": "pings", "#inbox": "inbox", "#help": "help", "#buying": "buying", "#buying-scan": "buying", "#buying-bills": "buying", "#parties": "parties" };
   // "" = any signed-in person may open it (the hub still decides what they can change)
   const NEEDS = { devices: "devices.view", wizard: "setup.run", backups: "backups.view", health: "health.view", updates: "updates.view",
     products: "", product: "", categories: "catalogue.edit", tax: "",

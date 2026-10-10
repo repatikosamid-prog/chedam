@@ -105,6 +105,7 @@ const TABLES = {
   // P3 bills and invoices (step 4): money documents, through /api/chedam/bills and /vendor-returns.
   bills:                { list: "finance.manage|purchasing.manage", view: "finance.manage|purchasing.manage", create: null, update: null, delete: null },
   bill_payments:        { list: "finance.manage", view: "finance.manage", create: null, update: null, delete: null },
+  scan_matches:         { list: "purchasing.view|purchasing.manage|stock.receive", view: "purchasing.view|purchasing.manage|stock.receive", create: null, update: null, delete: null },
   vendor_returns:       { list: "purchasing.view|purchasing.manage|finance.manage", view: "purchasing.view|purchasing.manage|finance.manage", create: null, update: null, delete: null },
 };
 

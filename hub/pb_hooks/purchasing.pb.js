@@ -75,3 +75,18 @@ routerAdd("POST", "/api/chedam/purchase-orders/{id}/{action}", (e) => {
   });
   return e.json(200, out);
 });
+
+// ---- Receiving from a bill photo (P3 step 5). Logic: lib/billscan.js --------------------------------------
+// {vendor, lines: [{raw, code, description, qty, unit_cents, total_cents}]} (read in the browser)
+routerAdd("POST", "/api/chedam/bill-scan/match", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "stock.receive|purchasing.manage");
+  return e.json(200, require(`${__hooks}/lib/billscan.js`).match(e.app, c.body.vendor, c.body.lines));
+});
+// {vendor, po, op_id, close, lines: [{product, selling_unit, qty, cost_cents, expiry_date, raw_code, raw_description}], landed, bill: {make, party_ref, doc_date, taxes}}
+routerAdd("POST", "/api/chedam/bill-scan/confirm", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "stock.receive|purchasing.manage");
+  if (c.body.bill && c.body.bill.make && !c.can("finance.manage") && !c.can("purchasing.manage")) throw new ForbiddenError("Only purchasing managers or the accountant record the bill.");
+  let out = null;
+  e.app.runInTransaction((t) => { out = require(`${__hooks}/lib/billscan.js`).confirm(t, c, c.body); });
+  return e.json(200, out);
+});

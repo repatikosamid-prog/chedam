@@ -150,7 +150,8 @@ function act(app, c, id, action) {
   return po;
 }
 
-// body: {op_id, lines: [{po_line, qty, cost_cents?, expiry_date?, lot_code?, storage_area?} | {product, selling_unit, qty, ...} (not on the PO)], note, close}
+// body: {op_id, lines: [{po_line, qty, cost_cents?, expiry_date?, lot_code?, storage_area?} | {product, selling_unit, qty, ...} (not on the PO)], note, close,
+//        landed: {freight_cents, duty_cents, brokerage_cents} (CAD, spread over the lines by value)}
 function receive(app, c, id, b) {
   const po = app.findRecordById("purchase_orders", id);
   if (OPEN.indexOf(po.getString("status")) < 0) bad(po.getString("status") === "draft" ? "Send the order first (or receive without an order)." : "This order is " + po.getString("status") + ".");
@@ -180,6 +181,9 @@ function receive(app, c, id, b) {
     addIncoming(app, c, product, -Math.min(qty, Math.max(0, ordered - before)) * (l.getFloat("pack_qty") || 1));
     if (cost !== null && cost !== l.getInt("cost_cents")) diffs.push({ kind: "cost", po_line: l.id, product: product, ordered_cost_cents: l.getInt("cost_cents"), received_cost_cents: cost });
   });
+  // Landed cost (FR-6.12): freight, duty and brokerage (CAD) spread over the lines by value
+  const add = require(`${__hooks}/lib/billscan.js`).spread(recv.map((x) => ({ qty: x.qty, value: x.qty * (x.cost_cents || 0) })), b.landed);
+  recv.forEach((x, i) => { if (add[i] && x.cost_cents !== null) x.cost_cents = Math.round(x.cost_cents + add[i]); });
   st().receive(app, { lines: recv }, { actor: c.actor, device: c.device, op: op });
   // Short and over against the whole order so far
   const all = linesOf(app, po.id);
@@ -198,7 +202,9 @@ function receive(app, c, id, b) {
   if (diffs.length) po.set("differences", true);
   stamp(po, c); app.save(po);
   const r = new Record(app.findCollectionByNameOrId("po_receipts"));
-  r.load({ po: po.id, op_id: op, by_name: c.user ? c.user.getString("name") : "", lines: out, differences: diffs, note: String(b.note || "").substring(0, 1000) });
+  const landed = {};
+  ["freight_cents", "duty_cents", "brokerage_cents"].forEach((k) => { if (Number((b.landed || {})[k]) > 0) landed[k] = Math.round(Number(b.landed[k])); });
+  r.load({ po: po.id, op_id: op, by_name: c.user ? c.user.getString("name") : "", lines: out, differences: diffs, note: String(b.note || "").substring(0, 1000), landed: landed, source: b.source || "manual" });
   stamp(r, c); app.save(r);
   if (diffs.length) {
     const t = new Record(app.findCollectionByNameOrId("tasks"));
