@@ -350,6 +350,14 @@ P4_TESTS = [
     ("H66", "Bank", "Laptop (Ana)", "Cash deposit: tick closed tills, Use the amount, Record", "DP- in transit; matched after importing the statement with it"),
     ("H67", "Bank", "Laptop (Ana)", "Reconcile with the statement's closing balance: wrong, then right", "The difference shown; then 'Reconciled to …'"),
     ("H68", "Bank", "Laptop (manager)", "Home: no Bank tile; #bank", "No access"),
+    # ---- Step 7: card fees, platform payouts, vendor statements (DL-204..206)
+    ("H70", "Card fees", "Till (cashier)", "Sell → Card: choose Visa, Approved; another sale by card without choosing the type", "Both sales complete; the type is optional"),
+    ("H71", "Card fees", "Laptop (Ana)", "Home → Fees and statements → Card fees: today", "Visa at 1.6%, 'Type not given' at the other rate; estimated fees"),
+    ("H72", "Card fees", "Laptop (Ana)", "Bank: match tomorrow's card deposit; back to Card fees", "Actual fee and rate shown; the period's fee uses it"),
+    ("H73", "Payouts", "Laptop (Ana)", "Platform payouts → Enter a payout statement that does not add up", "Refused with the right payout"),
+    ("H74", "Payouts", "Laptop (Ana)", "Enter one with the orders pasted (one wrong amount, one unknown number)", "Saved; the differences listed; commission %"),
+    ("H75", "Payouts", "Laptop (Ana)", "Import a bank line with the payout amount", "The payout shows 'In the bank'"),
+    ("H76", "Vendor statements", "Laptop (Ana)", "Check a vendor statement: paste its invoices, enter its balance", "Agreed, different, missing in Chedam, not on the statement; the balance difference"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

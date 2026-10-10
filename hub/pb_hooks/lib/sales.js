@@ -330,7 +330,8 @@ function settlePayments(app, total, payments, opts) {
     } else if (methods.indexOf(method) < 0) bad("Payment " + (i + 1) + ": '" + method + "' is not accepted here.");
     const status = pm.status === "declined" ? "declined" : "approved";
     const rec = { method, status, amount_cents: 0, tendered_cents: 0, currency: method === "usd_cash" ? "USD" : "CAD", fx_rate: method === "usd_cash" ? rate : 1,
-      change_cents: 0, reference: String(pm.reference || "").substring(0, 60), last4: String(pm.last4 || "").substring(0, 4), processor: String(pm.processor || "").substring(0, 40) };
+      change_cents: 0, reference: String(pm.reference || "").substring(0, 60), last4: String(pm.last4 || "").substring(0, 4), processor: String(pm.processor || "").substring(0, 40),
+      card_type: method === "card" && ["visa", "mastercard", "amex", "interac", "discover", "other"].indexOf(pm.card_type) >= 0 ? pm.card_type : "" };   // P4 step 7: for the fee by card type
     if (rec.last4 && !/^[0-9]{4}$/.test(rec.last4)) bad("Card: the last 4 digits are 4 numbers.");
     const amt = Number(pm.amount_cents);
     if (!(amt > 0) || amt !== Math.floor(amt)) bad("Payment " + (i + 1) + ": the amount is not valid.");
@@ -434,7 +435,7 @@ function saleView(app, id, showCost) {
   });
   const payments = app.findRecordsByFilter("payments", "sale = {:s}", "created_at", 0, 0, { s: id }).map((p) => ({
     method: p.getString("method"), status: p.getString("status"), amount_cents: p.getInt("amount_cents"), tendered_cents: p.getInt("tendered_cents"),
-    currency: p.getString("currency"), fx_rate: p.getFloat("fx_rate"), change_cents: p.getInt("change_cents"), last4: p.getString("last4"), reference: p.getString("reference") }));
+    currency: p.getString("currency"), fx_rate: p.getFloat("fx_rate"), change_cents: p.getInt("change_cents"), last4: p.getString("last4"), card_type: p.getString("card_type"), reference: p.getString("reference") }));
   let cashier = "";
   try { cashier = app.findRecordById("users", s.getString("cashier")).getString("name"); } catch (_) { cashier = ""; }
   return {

@@ -5,7 +5,7 @@
 // in the file). Each new line is matched when exactly one Chedam record has the same amount near that day:
 //   money out: payments of vendor bills (cheque, e-transfer, bank transfer), expenses paid back by cheque or
 //   e-transfer, payroll runs paid (the run's net) or one person's pay (cheque, e-transfer);
-//   money in: cash deposits from the tills (DP-…, within 7 days), clients paying invoices.
+//   money in: cash deposits from the tills (DP-…, within 7 days), clients paying invoices, delivery-platform payouts.
 // Card batches (the day's card sales less the processor's fee, 1-5 days later, up to 5% less) are offered for
 // a manual match, which records the fee (step 7 uses it). Lines that are not a Chedam record get a category
 // (bank fees, owner draw, transfer...) or are ignored with a note. Reconcile: the statement's balance on a day
@@ -187,6 +187,8 @@ function candidates(app, line, used) {
       .forEach((x) => { if (x.getInt("amount_cents") === amt && near(x.getString("day"), 0, 7) && days(x.getString("day"), day) >= 0) add("deposit", x.id, "Cash deposit " + x.getString("number"), amt, x.getString("day")); });
     app.findRecordsByFilter("bill_payments", "voided = false && deleted_at = '' && day >= {:f} && day <= {:t} && (method = 'cheque' || method = 'e_transfer' || method = 'bank_transfer') && bill.kind = 'invoice'", "", 0, 0, { f: from, t: to })
       .forEach((p) => { if (p.getInt("cad_cents") === amt && near(p.getString("day"), 3, 10)) { const b = app.findRecordById("bills", p.getString("bill")); add("invoice_payment", p.id, "Client paid " + b.getString("number") + " " + pn(app, b), amt, p.getString("day")); } });
+    app.findRecordsByFilter("platform_payouts", "status = 'expected' && payout_cents = {:a} && deleted_at = ''", "", 0, 0, { a: amt })
+      .forEach((x) => { if (near(x.getString("day"), 7, 7)) add("platform_payout", x.id, x.getString("platform") + " payout " + x.getString("period_from") + " to " + x.getString("period_to"), amt, x.getString("day")); });
     for (let k = 1; k <= 5; k++) {
       const d = T().addDays(day, -k);
       const tot = cardTotal(app, d);
@@ -200,8 +202,9 @@ function setMatch(app, c, line, kind, refs, auto) {
   line.set("status", "matched"); line.set("match_kind", kind); line.set("match_refs", refs.map((x) => ({ kind: x.kind, id: x.id, label: x.label, amount_cents: x.amount_cents })));
   line.set("fee_cents", kind === "card_batch" ? refs.reduce((a, x) => a + (x.fee_cents || 0), 0) : 0);
   line.set("auto", !!auto); line.set("matched_by", auto ? "Chedam" : who(c));
-  refs.filter((x) => x.kind === "deposit").forEach((x) => { const d = app.findRecordById("bank_deposits", x.id); d.set("status", "matched"); d.set("bank_line", line.id); stamp(d, c); app.save(d); });
   stamp(line, c); app.save(line);
+  refs.filter((x) => x.kind === "deposit").forEach((x) => { const d = app.findRecordById("bank_deposits", x.id); d.set("status", "matched"); d.set("bank_line", line.id); stamp(d, c); app.save(d); });
+  refs.filter((x) => x.kind === "platform_payout").forEach((x) => { const d = app.findRecordById("platform_payouts", x.id); d.set("status", "matched"); d.set("bank_line", line.id); stamp(d, c); app.save(d); });
 }
 function auto(app, c, ids) {
   let n = 0;
@@ -285,6 +288,7 @@ function unmatch(app, c, id) {
   const acc = app.findRecordById("bank_accounts", l.getString("account"));
   if (acc.getString("reconciled_to") && l.getString("day") <= acc.getString("reconciled_to")) bad("This line is in a reconciled period (to " + acc.getString("reconciled_to") + ").");
   j(l, "match_refs", []).filter((x) => x.kind === "deposit").forEach((x) => { try { const d = app.findRecordById("bank_deposits", x.id); d.set("status", "in_transit"); d.set("bank_line", ""); stamp(d, c); app.save(d); } catch (_) { /* gone */ } });
+  j(l, "match_refs", []).filter((x) => x.kind === "platform_payout").forEach((x) => { try { const d = app.findRecordById("platform_payouts", x.id); d.set("status", "expected"); d.set("bank_line", ""); stamp(d, c); app.save(d); } catch (_) { /* gone */ } });
   l.set("status", "unmatched"); l.set("match_kind", ""); l.set("match_refs", []); l.set("category", ""); l.set("fee_cents", 0); l.set("auto", false); l.set("matched_by", ""); l.set("note", "");
   stamp(l, c); app.save(l);
   return lineView(l);

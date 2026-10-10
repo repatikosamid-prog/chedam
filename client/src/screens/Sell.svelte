@@ -761,8 +761,12 @@
                 <label class="block"><span class="text-sm text-muted">Card last 4</span><input class="field" inputmode="numeric" maxlength="4" bind:value={dialog.last4} /></label>
                 <label class="block"><span class="text-sm text-muted">Approval / reference</span><input class="field" bind:value={dialog.reference} maxlength="60" /></label>
               </div>
+              <div class="flex flex-wrap gap-1" role="group" aria-label="Card type">
+                {#each [["visa", "Visa"], ["mastercard", "Mastercard"], ["interac", "Debit"], ["amex", "Amex"], ["other", "Other"]] as [k, l] (k)}
+                  <button class="min-h-10 rounded-xl px-3 text-sm {dialog.card_type === k ? 'bg-accent text-accent-ink' : 'border border-line'}" onclick={() => (dialog.card_type = dialog.card_type === k ? "" : k)}>{l}</button>{/each}
+              </div>
               <div class="flex flex-wrap gap-2">
-                <button class="btn" onclick={() => pay({ method: "card", amount_cents: toCents(dialog.amount), last4: dialog.last4, reference: dialog.reference })}>Approved</button>
+                <button class="btn" onclick={() => pay({ method: "card", amount_cents: toCents(dialog.amount), last4: dialog.last4, reference: dialog.reference, card_type: dialog.card_type || "" })}>Approved</button>
                 <button class="btn-ghost text-bad" onclick={() => pay({ method: "card", status: "declined", amount_cents: toCents(dialog.amount), last4: dialog.last4 })}>Declined</button>
               </div>
             </div>
