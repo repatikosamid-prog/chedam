@@ -17,6 +17,16 @@ function plain(record) {
 
 const IGNORED_IN_DIFF = { updated_at: true, updated: true };
 
+// Personal data (BC PIPA, FR-7.08, P2 step 3): logged as "[personal]" so the log keeps who changed which
+// field and when, but not the person's details, and deleting a customer on request removes them everywhere.
+const PERSONAL = { customers: ["first_name", "phone", "phone_hash", "notes"] };
+function redact(table, row) {
+  const f = PERSONAL[table];
+  if (!f || !row) return row;
+  f.forEach((k) => { if (row[k] !== undefined && row[k] !== "") row[k] = "[personal]"; });
+  return row;
+}
+
 function changedFields(before, after) {
   const out = [];
   const keys = {};
@@ -44,8 +54,13 @@ function hiddenChanged(oldRec, record) {
 }
 
 function write(txApp, record, action, stored, oldRec) {
-  const before = action === "create" ? null : (stored || plain(record.original()));
-  const after = action === "delete" ? null : plain(record);
+  const table = record.collection().name;
+  let before = action === "create" ? null : (stored || plain(record.original()));
+  let after = action === "delete" ? null : plain(record);
+  // What changed is worked out before personal values are hidden
+  const changed = action === "update" ? changedFields(before, after).concat(hiddenChanged(oldRec, record)).sort() : null;
+  before = redact(table, before ? JSON.parse(JSON.stringify(before)) : before);
+  after = redact(table, after ? JSON.parse(JSON.stringify(after)) : after);
 
   const ev = new Record(txApp.findCollectionByNameOrId("events"));
   ev.set("table_name", record.collection().name);
@@ -55,7 +70,7 @@ function write(txApp, record, action, stored, oldRec) {
   ev.set("device_id", record.get("@device") || "");
   ev.set("before", before);
   ev.set("after", after);
-  ev.set("changed", action === "update" ? changedFields(before, after).concat(hiddenChanged(oldRec, record)).sort() : null);
+  ev.set("changed", changed);
 
   // Test hook for the atomicity test only (hub/tests): simulate a failed event write.
   if ($os.getenv("CHEDAM_TEST_FAIL_EVENTS") === "1") {

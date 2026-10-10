@@ -201,7 +201,13 @@
           <span class="text-sm text-muted">Deals, coupons, scheduled prices</span>
         </button>
       {/if}
-      {#each modules.filter((m) => m.module !== "sell" && m.module !== "stock" && m.module !== "labels" && m.module !== "promotions") as m (m.id)}
+      {#if can("customers.view") && modules.some((m) => m.module === "customers_loyalty")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("customers")}>
+          <span class="font-semibold">Customers</span>
+          <span class="text-sm text-muted">Loyalty points, cards, programme</span>
+        </button>
+      {/if}
+      {#each modules.filter((m) => !["sell", "stock", "labels", "promotions", "customers_loyalty"].includes(m.module)) as m (m.id)}
         <div class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-dashed border-line p-3" aria-disabled="true">
           <span class="font-semibold">{m.label}</span>
           <span class="text-sm text-muted">Coming in a later phase</span>

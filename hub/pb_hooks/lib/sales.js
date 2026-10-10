@@ -236,18 +236,32 @@ function build(app, input, actor) {
     if (!can(app, actor, "sales.discount")) throw new ForbiddenError("You cannot give discounts.");
     if (core().discountPct(input.cart_discount, cartDisc, after) > discLimit + 1e-9) need("Sale discount above " + discLimit + "%");
   }
+  // Loyalty (P2 step 3, BR-24, FR-7.04): points redeemed come off before tax like a sale discount (BR-21)
+  const loyalty = require(`${__hooks}/lib/customers.js`).prepare(app, input, Math.max(0, after - cartDisc), training);
+  if (loyalty) loyalty.problems.forEach((x) => problems.push(x));
+  const redeemCents = loyalty ? loyalty.redeem.cents : 0;
   const priced = core().compute(live.map((l) => ({ key: l.key, gross_cents: l.gross, line_discount_cents: l.ld, rates: l.rates,
-    deposit_cents: l.deposit, deposit_rates: l.depositRates })), { mode: mode, cart_discount_cents: cartDisc });
+    deposit_cents: l.deposit, deposit_rates: l.depositRates })), { mode: mode, cart_discount_cents: cartDisc + redeemCents });
   let exemptCents = 0;
   if (exempt) {
     const full = core().compute(live.map((l) => ({ key: l.key, gross_cents: l.gross, line_discount_cents: l.ld, rates: l.fullRates,
-      deposit_cents: l.deposit, deposit_rates: l.depositFull })), { mode: mode, cart_discount_cents: cartDisc });
+      deposit_cents: l.deposit, deposit_rates: l.depositFull })), { mode: mode, cart_discount_cents: cartDisc + redeemCents });
     exemptCents = full.tax_cents - priced.tax_cents;
   }
   if (!live.length) problems.push({ type: "empty", message: "The cart is empty." });
 
   if (!training) stockCheck(app, live, input.cart_id, problems, need);
-  return { lines: out, live, priced, mode, exempt, exemptCents, problems, needs, training, cartDisc,
+  // Points earned on what is paid for the items: after every discount and the redemption, before tax
+  let loyaltyView = null;
+  if (loyalty) {
+    const plk = {};
+    priced.lines.forEach((x) => { plk[x.key] = x; });
+    const earn = loyalty.prog && !training ? require(`${__hooks}/lib/customers.js`).earned(loyalty.prog, live.map((l) => ({ category: l.p.getString("category"),
+      promo_cents: l.pc, net_cents: plk[l.key].net_cents, taxes: plk[l.key].taxes })), mode) : 0;
+    loyaltyView = { c: loyalty.c, enabled: !!loyalty.prog, earn: earn, redeem: loyalty.redeem,
+      balance_after: loyalty.c.getInt("points") - loyalty.redeem.points + earn };
+  }
+  return { loyalty: loyaltyView, lines: out, live, priced, mode, exempt, exemptCents, problems, needs, training, cartDisc,
     cartDiscLabel: cartDisc ? core().discountLabel(input.cart_discount) : "", promotions: promo.applied, coupons, couponsUnused, staff };
 }
 
@@ -373,7 +387,10 @@ function quoteView(b, approval) {
       age_restricted: l.p.getBool("age_restricted"), min_age: l.p.getInt("min_age") }),
     tax_mode: b.mode, subtotal_cents: b.priced.subtotal_cents, discount_cents: b.priced.discount_cents, cart_discount_cents: b.cartDisc,
     cart_discount_label: b.cartDiscLabel, promotions: b.promotions, coupons: b.coupons, coupons_unused: b.couponsUnused,
-    staff: b.staff ? { name: b.staff.name, pct: b.staff.pct, cents: b.staff.cents, left_cents: b.staff.left_cents } : null, taxes: b.priced.taxes, tax_cents: b.priced.tax_cents, deposit_cents: b.priced.deposit_cents, total_cents: b.priced.total_cents,
+    staff: b.staff ? { name: b.staff.name, pct: b.staff.pct, cents: b.staff.cents, left_cents: b.staff.left_cents } : null,
+    loyalty: b.loyalty ? { customer: { id: b.loyalty.c.id, first_name: b.loyalty.c.getString("first_name"), points: b.loyalty.c.getInt("points"), card: b.loyalty.c.getString("card") },
+      enabled: b.loyalty.enabled, earn: b.loyalty.earn, redeem_points: b.loyalty.redeem.points, redeem_cents: b.loyalty.redeem.cents, balance_after: b.loyalty.balance_after } : null,
+    taxes: b.priced.taxes, tax_cents: b.priced.tax_cents, deposit_cents: b.priced.deposit_cents, total_cents: b.priced.total_cents,
     cash_total_cents: core().cashRound(b.priced.total_cents), exempt: b.exempt, exempt_cents: b.exemptCents,
     problems: b.problems, needs_approval: approval ? [] : b.needs, training: b.training,
   };
@@ -415,6 +432,9 @@ function saleView(app, id, showCost) {
     cart_discount_cents: s.getInt("cart_discount_cents"), cart_discount_label: s.getString("cart_discount_label"),
     promotions: j(s, "promotions", []), coupons: j(s, "coupons", []),
     staff_name: s.getString("staff_name"), staff_discount_cents: s.getInt("staff_discount_cents"),
+    customer: s.getString("customer"), customer_name: (() => { if (!s.getString("customer")) return ""; try { return app.findRecordById("customers", s.getString("customer")).getString("first_name"); } catch (_) { return ""; } })(),
+    loyalty_earned: s.getInt("loyalty_earned"), loyalty_redeemed: s.getInt("loyalty_redeemed"), loyalty_redeem_cents: s.getInt("loyalty_redeem_cents"),
+    loyalty_balance: s.getInt("loyalty_balance"),
     deposit_cents: s.getInt("deposit_cents"), total_cents: s.getInt("total_cents"), rounding_cents: s.getInt("rounding_cents"),
     paid_cents: s.getInt("paid_cents"), change_cents: s.getInt("change_cents"), taxes: j(s, "taxes", []), exempt: j(s, "exempt", null),
     approvals: j(s, "approvals", []), note: s.getString("note"), void_reason: s.getString("void_reason"),
@@ -500,6 +520,8 @@ function complete(app, input, ctx, internal) {
     tax_mode: b.mode, subtotal_cents: b.priced.subtotal_cents, discount_cents: b.priced.discount_cents, tax_cents: b.priced.tax_cents,
     cart_discount_cents: b.cartDisc, cart_discount_label: b.cartDiscLabel, promotions: b.promotions, coupons: b.coupons.filter((c) => b.couponsUnused.indexOf(c) < 0),
     staff_user: b.staff ? b.staff.user : "", staff_name: b.staff ? b.staff.name : "", staff_discount_cents: b.staff ? b.staff.cents : 0,
+    customer: b.loyalty ? b.loyalty.c.id : "", loyalty_earned: b.loyalty ? b.loyalty.earn : 0, loyalty_redeemed: b.loyalty ? b.loyalty.redeem.points : 0,
+    loyalty_redeem_cents: b.loyalty ? b.loyalty.redeem.cents : 0,
     deposit_cents: b.priced.deposit_cents, total_cents: b.priced.total_cents, rounding_cents: pay.rounding_cents, paid_cents: pay.paid_cents,
     change_cents: pay.change_cents, taxes: b.priced.taxes, exempt: b.exempt, approvals: appr, note: String(input.note || "").substring(0, 500),
     items: b.live.reduce((a, l) => a + (st().isLooseUnit(l.u) && l.u.getString("kind") === "weight" ? 1 : l.qty), 0),
@@ -540,6 +562,8 @@ function complete(app, input, ctx, internal) {
     app.save(line);
   });
   s.set("cost_cents", costTotal);
+  // Loyalty ledger and the customer's visits and spend (training sales: none)
+  if (b.loyalty && !b.training) s.set("loyalty_balance", require(`${__hooks}/lib/customers.js`).settle(app, b.loyalty.c, s, b.loyalty.earn, b.loyalty.redeem, ctx, false));
   st().stamp(s, ctx);
   app.save(s);
 

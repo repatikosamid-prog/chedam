@@ -43,11 +43,12 @@ function pack(app) {
     business: sales().business(app),
     tax_mode: mode,
     province: require(`${__hooks}/lib/tax.js`).province(app),
-    modules: { weighed_goods: !!mods.weighed_goods, regulated_items: !!mods.regulated_items, promotions: !!mods.promotions },
+    modules: { weighed_goods: !!mods.weighed_goods, regulated_items: !!mods.regulated_items, promotions: !!mods.promotions, customers: !!mods.customers_loyalty },
     // P2: deals and scheduled prices the till applies itself (its clock decides days and hours, P2-b)
     promotions: mods.promotions ? require(`${__hooks}/lib/promotions.js`).current(app) : [],
     scheduled_prices: mods.promotions ? require(`${__hooks}/lib/promotions.js`).currentScheduled(app) : [],
     markdowns: require(`${__hooks}/lib/promotions.js`).markdownSegments(app, null),   // FR-5.11, refreshed with the pack
+    loyalty: (() => { const c = require(`${__hooks}/lib/customers.js`); const prog = c.program(app); return prog ? Object.assign({ program: prog }, c.offlineList(app)) : null; })(),
     settings: {
       payment_methods: setting(app, "sales.payment_methods", ["cash", "card"]), cash_rounding: setting(app, "sales.cash_rounding", true),
       usd_rate: setting(app, "sales.usd_rate", 1.35), discount_limit_pct: setting(app, "sales.discount_limit_pct", 10),
@@ -134,13 +135,23 @@ function complete(app, input, ctx) {
   }
   if (!till && !training) note = (note ? note + " " : "") + "No open till recorded for this sale.";
 
+  // Loyalty as the till counted it (FR-7.06): never re-priced; a redemption the balance no longer covers is kept and a task raised
+  let loyal = null;
+  if (input.customer) {
+    try {
+      const c = app.findRecordById("customers", String(input.customer));
+      if (c.getString("status") === "active") loyal = { c: c, earn: Math.max(0, Math.floor(Number(input.loyalty_earned) || 0)),
+        redeem: { points: Math.max(0, Math.floor(Number(input.loyalty_redeemed) || 0)), cents: Math.max(0, Math.floor(Number(input.loyalty_redeem_cents) || 0)) } };
+    } catch (_) { loyal = null; }
+  }
   const number = (training ? "T-" : "S-") + ("000000" + sales().nextNumber(app, training ? "training" : "sale", ctx)).slice(-6);
   const s = new Record(app.findCollectionByNameOrId("sales"));
   s.set("id", id);
   s.load({ number, till: till ? till.id : "", cashier: cashier ? cashier.id : "", status: "completed", training, offline: true, tax_mode: mode,
     subtotal_cents: priced.subtotal_cents, discount_cents: priced.discount_cents, tax_cents: priced.tax_cents, deposit_cents: priced.deposit_cents,
-    cart_discount_cents: priced.cart_discount_cents, cart_discount_label: String(input.cart_discount_label || "").substring(0, 40),
+    cart_discount_cents: priced.cart_discount_cents - (loyal ? loyal.redeem.cents : 0), cart_discount_label: String(input.cart_discount_label || "").substring(0, 40),
     promotions: promosOf(input), coupons: Array.isArray(input.coupons) ? input.coupons.map(String).slice(0, 10) : [],
+    customer: loyal ? loyal.c.id : "", loyalty_earned: loyal ? loyal.earn : 0, loyalty_redeemed: loyal ? loyal.redeem.points : 0, loyalty_redeem_cents: loyal ? loyal.redeem.cents : 0,
     total_cents: priced.total_cents, rounding_cents: pay.rounding_cents, paid_cents: pay.paid_cents, change_cents: pay.change_cents, taxes: priced.taxes,
     exempt: input.exempt || null, approvals: [], note: String(input.note || "").substring(0, 500),
     items: live.reduce((a, l) => a + (l.u.getString("kind") === "weight" ? 1 : l.qty), 0),
@@ -192,6 +203,7 @@ function complete(app, input, ctx) {
     app.save(r);
   }
   if (!training && promosOf(input).length) require(`${__hooks}/lib/promotions.js`).usage(app, promosOf(input), ctx);
+  if (loyal && !training) { s.set("loyalty_balance", require(`${__hooks}/lib/customers.js`).settle(app, loyal.c, s, loyal.earn, loyal.redeem, ctx, true)); st().stamp(s, ctx); app.save(s); }
   // A sale that reached a closed till needs a look from the manager.
   if (note && !training) {
     const t = new Record(app.findCollectionByNameOrId("tasks"));

@@ -15,7 +15,7 @@ const NOTES = {
   refunds: "Refunds", store_credits: "Store credit codes and balances", label_batch_items: "Labels to print", label_batches: "Printed label batches",
   label_layouts: "Label sheet layouts", label_templates: "Label templates", import_jobs: "Import job log", backups: "Backup runs",
 };
-const NEVER = ["password", "tokenKey", "pin", "pin_hash", "key_hash", "pairing_code_hash", "recovery_hash", "temp_pin_hash"];
+const NEVER = ["password", "tokenKey", "pin", "pin_hash", "key_hash", "pairing_code_hash", "recovery_hash", "temp_pin_hash", "phone_hash"];
 
 function exportable(app) {
   return app.findAllCollections().filter((c) => !c.system && c.name.indexOf("_") !== 0 && (c.type === "base" || c.type === "auth"));

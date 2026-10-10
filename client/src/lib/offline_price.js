@@ -144,16 +144,38 @@ export function quoteOffline(cart, ix, perms) {
   }
   const toCore = (full) => live.map((l) => ({ key: l.key, gross_cents: l.gross_cents, line_discount_cents: l.line_discount_cents,
     rates: full ? l._full : l._rates, deposit_cents: l.deposit_cents, deposit_rates: full ? l._depFull : l._dep }));
-  const priced = core.compute(toCore(false), { mode: ix.tax_mode, cart_discount_cents: cartDisc });
-  const exemptCents = exempt ? core.compute(toCore(true), { mode: ix.tax_mode, cart_discount_cents: cartDisc }).tax_cents - priced.tax_cents : 0;
+  // Loyalty (FR-7.06): the member's cached balance; points used come off before tax, points earned on what
+  // is paid for the items, before tax (the hub's own arithmetic, BR-24).
+  const lp = ix.loyalty ? ix.loyalty.program : null;
+  const member = cart.customer && ix.loyalty ? (ix.loyalty.customers || []).find((c) => c.id === cart.customer.id) : null;
+  let redeem = { points: 0, cents: 0 };
+  if (cart.customer && cart.redeem_points && lp && !cart.training) {
+    const r = core.loyaltyRedeem(cart.redeem_points, member ? member.points : 0, Math.max(0, after - cartDisc), lp);
+    if (r.error) problems.push({ type: "loyalty", message: r.error }); else redeem = r;
+  }
+  const priced = core.compute(toCore(false), { mode: ix.tax_mode, cart_discount_cents: cartDisc + redeem.cents });
+  const exemptCents = exempt ? core.compute(toCore(true), { mode: ix.tax_mode, cart_discount_cents: cartDisc + redeem.cents }).tax_cents - priced.tax_cents : 0;
   const pl = Object.fromEntries(priced.lines.map((l) => [l.key, l]));
+  let loyalty = null;
+  if (cart.customer) {
+    const base = lp && !cart.training ? live.reduce((a, l) => {
+      if ((lp.exclude_categories || []).includes(l._cat)) return a;
+      if (!lp.earn_on_promotions && l.promo_cents > 0) return a;
+      const tax = ix.tax_mode === "tax_included" ? (pl[l.key].taxes || []).reduce((x, t) => x + (t.tax_cents || 0), 0) : 0;
+      return a + Math.max(0, pl[l.key].net_cents - tax);
+    }, 0) : 0;
+    const earn = lp && !cart.training ? core.loyaltyEarn(base, lp) : 0;
+    const points = member ? member.points : (cart.customer.points || 0);
+    loyalty = { customer: { id: cart.customer.id, first_name: cart.customer.first_name, points, card: cart.customer.card || "" }, enabled: !!lp, earn,
+      redeem_points: redeem.points, redeem_cents: redeem.cents, balance_after: points - redeem.points + earn };
+  }
   if (!live.length) problems.push({ type: "empty", message: "The cart is empty." });
   return {
     offline: true,
     lines: lines.map((l) => l.voided ? l : { ...l, _rates: undefined, _full: undefined, _dep: undefined, _depFull: undefined, _disc: undefined, _cat: undefined, _kind: undefined, _hand: undefined, _bq: undefined,
       cart_discount_cents: pl[l.key].cart_discount_cents, net_cents: pl[l.key].net_cents, taxes: pl[l.key].taxes }),
     tax_mode: ix.tax_mode, subtotal_cents: priced.subtotal_cents, discount_cents: priced.discount_cents, cart_discount_cents: cartDisc,
-    cart_discount_label: cartDisc ? core.discountLabel(cart.cart_discount) : "", promotions: promo.applied, coupons,
+    cart_discount_label: cartDisc ? core.discountLabel(cart.cart_discount) : "", promotions: promo.applied, coupons, loyalty,
     coupons_unused: coupons.filter((c) => !promo.applied.some((a) => ((ix.promotions || []).find((x) => x.id === a.id) || {}).coupon_code === c)),
     taxes: priced.taxes, tax_cents: priced.tax_cents, deposit_cents: priced.deposit_cents, total_cents: priced.total_cents,
     cash_total_cents: core.cashRound(priced.total_cents), exempt, exempt_cents: exemptCents, problems, needs_approval: [], training: !!cart.training,
@@ -162,3 +184,21 @@ export function quoteOffline(cart, ix, perms) {
 }
 
 export const cashRound = core.cashRound;
+
+// Finds a loyalty member in the offline pack (FR-7.06): by card number, or by phone through the same
+// salted hash the hub keeps (the till holds no phone numbers). Same normalising as lib/customers.js.
+export function normPhone(v) {
+  let d = String(v || "").replace(/\D/g, "");
+  if (d.length === 11 && d.charAt(0) === "1") d = d.substring(1);
+  return d;
+}
+export async function findMemberOffline(ix, q, sha256) {
+  if (!ix || !ix.loyalty) return [];
+  const t = String(q || "").trim().replace(/\s/g, "");
+  const byCard = ix.loyalty.customers.filter((c) => c.card && c.card === t);
+  if (byCard.length) return byCard;
+  const ph = normPhone(q);
+  if (ph.length < 7) return [];
+  const h = await sha256(ix.loyalty.salt + ":" + ph);
+  return ix.loyalty.customers.filter((c) => c.phone_hash === h);
+}

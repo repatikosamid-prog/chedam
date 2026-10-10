@@ -14,6 +14,7 @@ export function toInput(cart) {
       price_cents: l.price_cents, override_reason: l.override_reason, discount: l.discount, age_checked: l.age_checked,
       break_pack: l.break_pack, voided: l.voided })),
     cart_discount: cart.cart_discount, exempt: cart.exempt, approval: cart.approval || undefined, coupons: cart.coupons || [], staff_approval: (cart.staff && cart.staff.approval) || undefined,
+    customer: cart.customer ? cart.customer.id : undefined, redeem_points: cart.customer ? cart.redeem_points || 0 : 0,
   };
 }
 

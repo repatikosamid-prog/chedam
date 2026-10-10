@@ -65,6 +65,11 @@ const TABLES = {
   // and /api/chedam/scheduled-prices (checks and labels in one transaction).
   promotions:           { list: ANY, view: ANY, create: null, update: null, delete: null },
   scheduled_prices:     { list: ANY, view: ANY, create: null, update: null, delete: null },
+  // P2 customers and loyalty (step 3): personal data, read by people who serve customers; changed only
+  // through /api/chedam/customers (and sales/returns for points).
+  customers:            { list: "customers.view", view: "customers.view", create: null, update: null, delete: null },
+  loyalty_cards:        { list: "customers.manage", view: "customers.manage", create: null, update: null, delete: null },
+  loyalty_ledger:       { list: "customers.view", view: "customers.view", create: null, update: null, delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".

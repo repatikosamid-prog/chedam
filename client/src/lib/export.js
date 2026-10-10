@@ -90,6 +90,7 @@ export const GROUPS = [
   ["sales", "Sales", ["sales", "sale_lines", "payments", "tax_exemptions", "holds", "soft_holds"]],
   ["transactions", "Tills, returns and refunds", ["tills", "cash_movements", "returns", "return_lines", "refunds", "store_credits"]],
   ["people", "People and devices", ["users", "roles", "permissions", "permission_overrides", "devices"]],
+  ["customers", "Customers and loyalty", ["customers", "loyalty_cards", "loyalty_ledger"]],
   ["store", "Store settings", ["business", "locations", "settings", "modules", "label_layouts", "label_templates"]],
   ["records", "Audit log and records", ["events", "tasks", "import_jobs", "backups", "updates", "label_batch_items", "label_batches"]],
 ];

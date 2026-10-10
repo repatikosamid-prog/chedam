@@ -19,6 +19,7 @@
   import Scanner from "../components/Scanner.svelte";
   import Approve from "../components/Approve.svelte";
   import StaffPin from "../components/StaffPin.svelte";
+  import CustomerPanel from "../components/CustomerPanel.svelte";
   import Receipt from "../components/Receipt.svelte";
   import PrintButtons from "../components/PrintButtons.svelte";
   import RefundChooser from "../components/RefundChooser.svelte";
@@ -38,7 +39,7 @@
   let headH = $state(0);                         // the fixed header row: the cart stays just under it
   let codeInput;
   let qTimer;
-  let ix = null;                                 // offline pack (indexed)
+  let ix = $state.raw(null);                               // offline pack (indexed)
   const perms = () => ({ discount: can("sales.discount"), approve: can("sales.approve"), exempt: can("sales.tax_exempt") });
 
   const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(cart)); } catch { /* private mode */ } };
@@ -76,9 +77,11 @@
   }
 
   let promoOn = $state(false);                   // Promotions module on: the Coupon button
+  let custOn = $state(false);                    // Customers and Loyalty module on: the Customer button
   function usePack(p) {
     ix = p;
     promoOn = !!(p.modules && p.modules.promotions);
+    custOn = !!(p.modules && p.modules.customers);
     products = [...p.products].sort((a, b) => a.name.localeCompare(b.name));
     units = p.unitsOf;
     cats = [...p.categories].sort((a, b) => (a.sort || 0) - (b.sort || 0) || a.name.localeCompare(b.name));
@@ -285,13 +288,16 @@
     const now = new Date();
     const payload = { id: saleId, offline: true, offline_ref: ref, device_time: now.toISOString(), cashier: s.me.user.id,
       till: info && info.till ? info.till.id : "", training: cart.training, tax_mode: q.tax_mode, lines: q.upload_lines,
-      cart_discount_cents: q.cart_discount_cents, cart_discount_label: q.cart_discount_label, promotions: q.promotions || [], coupons: q.coupons || [], exempt: q.exempt, exempt_cents: q.exempt_cents,
+      cart_discount_cents: q.cart_discount_cents + (q.loyalty ? q.loyalty.redeem_cents : 0), cart_discount_label: q.cart_discount_label, promotions: q.promotions || [], coupons: q.coupons || [], exempt: q.exempt, exempt_cents: q.exempt_cents,
+      customer: q.loyalty ? q.loyalty.customer.id : "", loyalty_earned: q.loyalty ? q.loyalty.earn : 0, loyalty_redeemed: q.loyalty ? q.loyalty.redeem_points : 0, loyalty_redeem_cents: q.loyalty ? q.loyalty.redeem_cents : 0,
       totals: { total_cents: q.total_cents, tax_cents: q.tax_cents, subtotal_cents: q.subtotal_cents, discount_cents: q.discount_cents, deposit_cents: q.deposit_cents },
       payments: $state.snapshot(payments) };
     const live2 = q.lines.filter((l) => !l.voided);
     const receipt = { id: saleId, number: ref, offline: true, offline_ref: ref, status: "completed", training: cart.training, tax_mode: q.tax_mode,
       completed_at: now.toISOString(), cashier: s.me.user.name, subtotal_cents: q.subtotal_cents, discount_cents: q.discount_cents, tax_cents: q.tax_cents,
       cart_discount_cents: q.cart_discount_cents, cart_discount_label: q.cart_discount_label,
+      customer: q.loyalty ? q.loyalty.customer.id : "", customer_name: q.loyalty ? q.loyalty.customer.first_name : "", loyalty_earned: q.loyalty ? q.loyalty.earn : 0,
+      loyalty_redeemed: q.loyalty ? q.loyalty.redeem_points : 0, loyalty_redeem_cents: q.loyalty ? q.loyalty.redeem_cents : 0, loyalty_balance: q.loyalty ? q.loyalty.balance_after : 0,
       deposit_cents: q.deposit_cents, total_cents: q.total_cents, rounding_cents: st2.rounding, paid_cents: q.total_cents + st2.rounding, change_cents: st2.change,
       taxes: q.taxes, exempt: q.exempt, payments: st2.applied, business: (ix && ix.business) || (info && info.business) || {},
       lines: live2.map((l, i) => ({ ...l, line_no: i + 1 })),
@@ -348,7 +354,8 @@
     if (live.length) { error = "Finish or hold the current sale first."; return; }
     const r = await api("POST", "/api/chedam/holds/" + h.id + "/recall", {});
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
-    cart = { ...newCart(cart.training), lines: r.json.cart.lines || [], cart_discount: r.json.cart.cart_discount || null, exempt: r.json.cart.exempt || null, coupons: r.json.cart.coupons || [] };
+    cart = { ...newCart(cart.training), lines: r.json.cart.lines || [], cart_discount: r.json.cart.cart_discount || null, exempt: r.json.cart.exempt || null, coupons: r.json.cart.coupons || [],
+      customer: r.json.cart.customer || null, redeem_points: r.json.cart.redeem_points || 0 };
     dialog = null; changed();
   }
 
@@ -519,6 +526,14 @@
           </div>
           <div class="flex gap-2"><button class="btn" type="submit">Apply</button><button class="btn-ghost" type="button" onclick={() => { cart.cart_discount = null; dialog = null; changed(); }}>Remove discount</button></div>
         </form>
+      {:else if dialog && dialog.kind === "customer"}
+        <CustomerPanel {ix} onPick={(c) => { cart.customer = { id: c.id, first_name: c.first_name, points: c.points, card: c.card || "" }; cart.redeem_points = 0; dialog = null; changed(); }} onCancel={() => (dialog = null)} />
+      {:else if dialog && dialog.kind === "points"}
+        <form class="space-y-2 rounded-xl border border-accent p-3" onsubmit={(e) => { e.preventDefault(); cart.redeem_points = Math.max(0, Math.floor(Number(dialog.value) || 0)); dialog = null; changed(); }}>
+          <label class="block"><span class="font-semibold">Points to use ({quote && quote.loyalty ? quote.loyalty.customer.points : 0} available)</span>
+            <input class="field" type="number" min="0" step="1" bind:value={dialog.value} use:focusNow /></label>
+          <div class="flex gap-2"><button class="btn" type="submit">Use</button><button class="btn-ghost" type="button" onclick={() => { cart.redeem_points = 0; dialog = null; changed(); }}>Don't use points</button></div>
+        </form>
       {:else if dialog && dialog.kind === "coupon"}
         <form class="space-y-2 rounded-xl border border-accent p-3" onsubmit={(e) => { e.preventDefault(); const c = dialog.code.trim().toUpperCase(); if (c && !(cart.coupons || []).includes(c)) cart.coupons = [...(cart.coupons || []), c]; dialog = null; changed(); }}>
           <label class="block"><span class="font-semibold">Coupon code</span>
@@ -584,6 +599,16 @@
         {/each}
       </ul>
       {#if problems.some((x) => !x.key)}<p class="text-sm text-bad">{problems.find((x) => !x.key).message}</p>{/if}
+      {#if cart.customer}
+        <div class="rounded-xl bg-accent/10 px-3 py-2 text-sm">
+          <p class="flex items-center justify-between gap-2"><span>Customer: <b>{cart.customer.first_name}</b>{quote && quote.loyalty ? " · " + quote.loyalty.customer.points + " points" : ""}</span>
+            <button class="underline" onclick={() => { cart.customer = null; cart.redeem_points = 0; changed(); }}>Remove</button></p>
+          {#if quote && quote.loyalty && quote.loyalty.enabled}
+            <p class="flex items-center justify-between gap-2"><span>Earns {quote.loyalty.earn} points{quote.loyalty.redeem_points ? " · uses " + quote.loyalty.redeem_points : ""} · balance after {quote.loyalty.balance_after}</span>
+              {#if mode === "sell"}<button class="underline" onclick={() => (dialog = { kind: "points", value: cart.redeem_points || quote.loyalty.customer.points })}>{cart.redeem_points ? "Change points" : "Use points"}</button>{/if}</p>
+          {/if}
+        </div>
+      {/if}
       {#if cart.staff}
         <p class="flex items-center justify-between gap-2 rounded-xl bg-accent/10 px-3 py-2 text-sm"><span>Staff sale: <b>{cart.staff.name}</b>{quote && quote.staff ? " · " + quote.staff.pct + "% · " + money(quote.staff.cents) + " off" + (quote.staff.left_cents !== null ? " · " + money(quote.staff.left_cents) + " left this month" : "") : ""}</span>
           <button class="underline" onclick={() => { cart.staff = null; changed(); }}>Remove</button></p>
@@ -592,8 +617,9 @@
       {#if quote && live.length}
         <div class="space-y-1 border-t border-line pt-2 text-sm">
           {#each quote.promotions || [] as a (a.id)}<p class="flex justify-between text-ok"><span>🏷 {a.name}{a.times > 1 ? " ×" + a.times : ""}</span><span>−{money(a.saving_cents)}</span></p>{/each}
+          {#if quote.loyalty && quote.loyalty.redeem_cents}<p class="flex justify-between text-ok"><span>Points used ({quote.loyalty.redeem_points})</span><span>−{money(quote.loyalty.redeem_cents)}</span></p>{/if}
           {#if quote.staff && quote.staff.cents}<p class="flex justify-between text-ok"><span>Staff discount ({quote.staff.name})</span><span>−{money(quote.staff.cents)}</span></p>{/if}
-          {#if quote.discount_cents - quote.cart_discount_cents - (quote.promotions || []).reduce((x, a) => x + a.saving_cents, 0) - (quote.staff ? quote.staff.cents : 0) > 0}<p class="flex justify-between text-ok"><span>Item discounts</span><span>−{money(quote.discount_cents - quote.cart_discount_cents - (quote.promotions || []).reduce((x, a) => x + a.saving_cents, 0) - (quote.staff ? quote.staff.cents : 0))}</span></p>{/if}
+          {#if quote.discount_cents - quote.cart_discount_cents - (quote.promotions || []).reduce((x, a) => x + a.saving_cents, 0) - (quote.staff ? quote.staff.cents : 0) - (quote.loyalty ? quote.loyalty.redeem_cents : 0) > 0}<p class="flex justify-between text-ok"><span>Item discounts</span><span>−{money(quote.discount_cents - quote.cart_discount_cents - (quote.promotions || []).reduce((x, a) => x + a.saving_cents, 0) - (quote.staff ? quote.staff.cents : 0) - (quote.loyalty ? quote.loyalty.redeem_cents : 0))}</span></p>{/if}
           {#if (quote.coupons_unused || []).length}<p class="text-warn">Coupon {quote.coupons_unused.join(", ")} gives nothing on this sale (unknown, not now, or no items for it).</p>{/if}
           {#if quote.cart_discount_cents}<p class="flex justify-between text-ok"><span>Sale discount{quote.cart_discount_label ? " (" + quote.cart_discount_label + ")" : ""}</span><span>−{money(quote.cart_discount_cents)}</span></p>{/if}
           {#if quote.deposit_cents}<p class="flex justify-between"><span>Deposits and fees</span><span>{money(quote.deposit_cents)}</span></p>{/if}
@@ -612,6 +638,7 @@
         <div class="flex flex-wrap gap-2 text-sm">
           {#if can("sales.discount")}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={() => (dialog = { kind: "discount", type: cart.cart_discount ? cart.cart_discount.type : "pct", value: "" })}>Sale discount</button>{/if}
           {#if can("sales.tax_exempt")}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={() => (dialog = { kind: "exempt", reason: cart.exempt ? cart.exempt.reason : "", reference: cart.exempt ? cart.exempt.reference : "" })}>Tax exempt</button>{/if}
+          {#if custOn && can("customers.view")}<button class="btn-ghost min-h-10 text-sm" onclick={() => (dialog = { kind: "customer" })}>{cart.customer ? "Customer ✓" : "Customer"}</button>{/if}
           {#if promoOn}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={() => (dialog = { kind: "coupon", code: "" })}>Coupon{(cart.coupons || []).length ? " (" + cart.coupons.length + ")" : ""}</button>{/if}
           {#if settings.staff_discount && settings.staff_discount.enabled && !cart.staff && !cart.training}<button class="btn-ghost min-h-10 text-sm" disabled={!live.length || isHubDown()} onclick={() => (dialog = { kind: "staff" })}>Staff sale</button>{/if}
           <button class="btn-ghost min-h-10 text-sm" disabled={!live.length} onclick={hold}>Hold</button>

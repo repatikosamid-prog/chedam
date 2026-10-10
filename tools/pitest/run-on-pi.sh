@@ -11,7 +11,8 @@ set -uo pipefail
 cd "$(dirname "$0")/../.."
 SUITES=("$@")
 [ ${#SUITES[@]} -eq 0 ] && SUITES=(step3-access step3b-temp-pin step4-devices step5-status step8-health step11-catalogue step13-sales step13a-pricing
-  step14-offline step16-returns step17-labels step18-import-export step19-reports step20-feedback step21-promotions step22-markdowns-staff)
+  step14-offline step16-returns step17-labels step18-import-export step19-reports step20-feedback step21-promotions step22-markdowns-staff
+  step23-customers-loyalty)
 
 SOCK="${TMPDIR:-/tmp}/chedam-pitest-$$"
 ssh -f -N -M -S "$SOCK" -o ExitOnForwardFailure=yes -L 18099:127.0.0.1:8099 chedam || { echo "tunnel failed"; exit 1; }

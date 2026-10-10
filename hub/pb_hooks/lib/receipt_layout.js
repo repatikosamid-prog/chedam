@@ -89,9 +89,10 @@ function receipt(sale, opts) {
   });
   add({ t: "rule" });
   add({ t: "pair", l: "Subtotal", r: money(sale.subtotal_cents) });
-  const cartDisc = (sale.discount_cents || 0) - lines.reduce((a, l) => a + (l.line_discount_cents || 0), 0);
+  const cartDisc = (sale.discount_cents || 0) - lines.reduce((a, l) => a + (l.line_discount_cents || 0), 0) - (sale.loyalty_redeem_cents || 0);
   if (sale.staff_discount_cents) add({ t: "text", s: "Staff purchase: " + (sale.staff_name || "") + " (" + money(sale.staff_discount_cents) + " off)" });
   if (cartDisc > 0) add({ t: "pair", l: "Sale discount" + (sale.cart_discount_label ? " " + sale.cart_discount_label : ""), r: "-" + money(cartDisc) });
+  if (sale.loyalty_redeem_cents) add({ t: "pair", l: "Points used (" + sale.loyalty_redeemed + ")", r: "-" + money(sale.loyalty_redeem_cents) });
   if (sale.deposit_cents) add({ t: "pair", l: "Deposits and fees", r: money(sale.deposit_cents) });
   (sale.taxes || []).forEach((x) => add({ t: "pair", l: x.label + " " + x.rate + "%" + (sale.tax_mode === "tax_included" ? " (incl.)" : ""), r: money(x.tax_cents) }));
   if (sale.exempt) add({ t: "text", s: "Tax exempt: " + (sale.exempt.label || sale.exempt.reason || "") + (sale.exempt.reference ? " - " + sale.exempt.reference : "") });
@@ -108,6 +109,14 @@ function receipt(sale, opts) {
   });
   if (sale.change_cents) add({ t: "pair", l: "Change", r: money(sale.change_cents), bold: true });
   if (sale.savings_cents > 0) { add({ t: "feed", n: 1 }); add({ t: "text", s: "You saved " + money(sale.savings_cents), align: "center", bold: true }); }
+  // Loyalty (FR-7.04): earned, used, balance
+  if (sale.customer && (sale.loyalty_earned || sale.loyalty_redeemed || sale.loyalty_balance)) {
+    add({ t: "rule" });
+    add({ t: "text", s: "Loyalty: " + (sale.customer_name || "member"), bold: true });
+    if (sale.loyalty_earned) add({ t: "pair", l: "Points earned", r: String(sale.loyalty_earned) });
+    if (sale.loyalty_redeemed) add({ t: "pair", l: "Points used", r: "-" + sale.loyalty_redeemed });
+    add({ t: "pair", l: "Points balance", r: String(sale.loyalty_balance || 0) });
+  }
   // Full GST/HST receipt (NFR-14): from the store's threshold ($150 by default) the buyer's name and the
   // terms of payment are printed when the customer gives a name.
   if (o.buyer) {

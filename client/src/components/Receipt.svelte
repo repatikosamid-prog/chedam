@@ -40,8 +40,9 @@
   <hr class="my-2 border-dashed border-black" />
   <p class="flex justify-between"><span>Subtotal</span><span>{money(sale.subtotal_cents)}</span></p>
   {#if sale.staff_discount_cents}<p class="text-xs">Staff purchase: {sale.staff_name} ({money(sale.staff_discount_cents)} off)</p>{/if}
-  {#if sale.discount_cents - lines.reduce((a, l) => a + l.line_discount_cents, 0) > 0}
-    <p class="flex justify-between"><span>Sale discount{sale.cart_discount_label ? " " + sale.cart_discount_label : ""}</span><span>-{money(sale.discount_cents - lines.reduce((a, l) => a + l.line_discount_cents, 0))}</span></p>
+  {#if sale.loyalty_redeem_cents}<p class="flex justify-between"><span>Points used ({sale.loyalty_redeemed})</span><span>-{money(sale.loyalty_redeem_cents)}</span></p>{/if}
+  {#if sale.discount_cents - lines.reduce((a, l) => a + l.line_discount_cents, 0) - (sale.loyalty_redeem_cents || 0) > 0}
+    <p class="flex justify-between"><span>Sale discount{sale.cart_discount_label ? " " + sale.cart_discount_label : ""}</span><span>-{money(sale.discount_cents - lines.reduce((a, l) => a + l.line_discount_cents, 0) - (sale.loyalty_redeem_cents || 0))}</span></p>
   {/if}
   {#if sale.deposit_cents}<p class="flex justify-between"><span>Deposits and fees</span><span>{money(sale.deposit_cents)}</span></p>{/if}
   {#each sale.taxes as x (x.code + x.rate)}
@@ -60,6 +61,13 @@
   {/each}
   {#if sale.change_cents}<p class="flex justify-between font-bold"><span>Change</span><span>{money(sale.change_cents)}</span></p>{/if}
   {#if sale.savings_cents > 0}<p class="mt-2 text-center">You saved {money(sale.savings_cents)}</p>{/if}
+  {#if sale.customer && (sale.loyalty_earned || sale.loyalty_redeemed || sale.loyalty_balance)}
+    <hr class="my-2 border-dashed border-black" />
+    <p class="font-bold">Loyalty: {sale.customer_name || "member"}</p>
+    {#if sale.loyalty_earned}<p class="flex justify-between"><span>Points earned</span><span>{sale.loyalty_earned}</span></p>{/if}
+    {#if sale.loyalty_redeemed}<p class="flex justify-between"><span>Points used</span><span>-{sale.loyalty_redeemed}</span></p>{/if}
+    <p class="flex justify-between"><span>Points balance</span><span>{sale.loyalty_balance || 0}</span></p>
+  {/if}
   {#if b.footer}<p class="mt-2 whitespace-pre-line text-center">{b.footer}</p>{/if}
   <p class="mt-2 text-center tracking-widest">{sale.number}</p>
 </div>

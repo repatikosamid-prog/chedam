@@ -202,6 +202,20 @@ P2_TESTS = [
     ("P38", "Staff discount", "Till", "Staff sale with a wrong PIN", "Refused; no discount"),
     ("P39", "Staff discount", "Till", "Use up the monthly amount, then another staff sale", "The discount stops at the limit; then 'has used this month's staff discount'"),
     ("P40", "Staff discount", "Till (hub off)", "Switch the Pi off; try a staff sale", "Not available offline"),
+    # ---- Step 3: customers and loyalty (DL-128..134)
+    ("P50", "Loyalty", "Laptop (owner)", "Home → Customers: the programme says Off. Set it up: your points per $1, points for $1 off, fewest points to use; switch On; Save", "Shows your values; only the owner can change them"),
+    ("P51", "Loyalty", "Till", "Sell: Customer → type a new phone number → Find → first name, tick 'Customer agreed' → Join", "The customer is on the sale with 0 points and 'Earns N points'"),
+    ("P52", "Loyalty", "Till", "Pay; look at the receipt", "'Loyalty: name', points earned and the balance"),
+    ("P53", "Loyalty", "Till", "Next sale: Customer → the same phone (any format, e.g. +1 604...)", "Found with the points"),
+    ("P54", "Loyalty", "Till", "Use points (at least your minimum)", "Points used come off before tax ('Points used (N)'); points earned on what is paid; receipt shows earned, used, balance"),
+    ("P55", "Loyalty", "Till", "Return one item of that sale", "The customer's points: the item's share of earned points taken back, its share of used points given back"),
+    ("P56", "Loyalty", "Laptop (manager)", "Customers → Loyalty cards → Make cards (e.g. 30) on a label sheet; print", "A PDF of cards with the store name and a barcode each"),
+    ("P57", "Loyalty", "Till", "Scan a new card at Customer → Find", "Asks to join with that card; afterwards the card finds the customer"),
+    ("P58", "Loyalty", "Laptop", "A customer → Card lost: block it; then link a new card", "The old card no longer works; the points stay"),
+    ("P59", "Loyalty", "Laptop (manager)", "Adjust points with a reason; Merge two records of one person", "Points history shows it; the merged record is gone with its points moved"),
+    ("P60", "Loyalty", "Laptop (manager)", "Their data (download); then Delete on request", "A file with everything held; after deleting, the name and phone are gone and the phone no longer finds them"),
+    ("P61", "Loyalty", "Till (hub off)", "Switch the Pi off; Customer → a member's phone; sell with points", "Found offline; points earned/used; the sale arrives with them when the Pi is back"),
+    ("P62", "Loyalty", "Till", "As a cashier: Customers screen", "Find by phone or card only; no editing, no points adjusting"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

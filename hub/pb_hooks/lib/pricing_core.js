@@ -104,4 +104,28 @@ function discountPct(d, cents, gross) {
   return gross ? (cents / gross) * 100 : 0;
 }
 
-module.exports = { compute, spread, cashRound, roundHalfUp, discountLabel, discountPct };
+// ---- Loyalty (P2 step 3, BR-24, FR-7.04): the same arithmetic on the hub and the offline till.
+// prog: { points_per_dollar, points_per_dollar_off, min_redeem }
+
+// Points for a spend in cents (after discounts, before tax): whole points, rounded down.
+function loyaltyEarn(eligibleCents, prog) {
+  const rate = Number(prog.points_per_dollar) || 0;
+  return eligibleCents > 0 && rate > 0 ? Math.floor((eligibleCents * rate) / 100 + 1e-9) : 0;
+}
+
+// Redeeming `points` (at most `balance`, at least min_redeem) for at most `maxCents` off before tax.
+// Returns {points, cents, error}: the points actually used for the whole cents given (never more than asked).
+function loyaltyRedeem(points, balance, maxCents, prog) {
+  const per = Number(prog.points_per_dollar_off) || 0;              // points for $1 off
+  const want = Math.floor(Number(points) || 0);
+  if (!want) return { points: 0, cents: 0, error: "" };
+  if (per <= 0) return { points: 0, cents: 0, error: "Redeeming points is not set up." };
+  if (want > balance) return { points: 0, cents: 0, error: "Only " + balance + " points to use." };
+  if (want < (Number(prog.min_redeem) || 0)) return { points: 0, cents: 0, error: "At least " + prog.min_redeem + " points at a time." };
+  let cents = Math.floor((want * 100) / per + 1e-9);
+  if (cents > maxCents) cents = Math.max(0, maxCents);
+  const used = Math.ceil((cents * per) / 100 - 1e-9);
+  return { points: used, cents: cents, error: cents ? "" : "Nothing to take the points off." };
+}
+
+module.exports = { compute, spread, cashRound, roundHalfUp, discountLabel, discountPct, loyaltyEarn, loyaltyRedeem };
