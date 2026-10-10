@@ -262,6 +262,13 @@ P2_TESTS = [
     ("P117", "Messages", "Two devices, same person", "Sign in as the same person on a phone and the laptop", "The same conversations and unread counts on both"),
     ("P118", "Announcements", "Laptop (manager)", "New announcement, 'Everyone must confirm'", "Each person: banner on Home and 📌 in the top bar; 'I have read this' clears it"),
     ("P119", "Announcements", "Laptop (manager)", "Look at the announcement after two people confirmed", "'Read: …' and 'Not yet: …' lists; End removes it for everyone"),
+    # ---- Step 9: pings and the till overlay (DL-147..149)
+    ("P120", "Pings", "Phone → till", "📣 → To: Till 1 → 'Price check, please'", "The till shows a banner with the text and quick replies, over the Sell screen"),
+    ("P121", "Pings", "Till", "With items in the cart: reply 'On my way'", "The banner closes; the cart is still there; the phone shows '✓ Cal: On my way'"),
+    ("P122", "Pings", "Phone → all tills", "Urgent: 'Manager to the front' to All tills", "Every till turns red and beeps every 5 s; one till presses I'm on it: closed on all"),
+    ("P123", "Pings", "Phone → till", "Urgent ping to a till; nobody answers for 5 minutes", "It appears on the manager's device marked 'nobody answered', and an urgent task opens; confirming closes both"),
+    ("P124", "Pings", "Phone", "Send a ping, then Take back", "It disappears from the till"),
+    ("P125", "Pings", "Laptop", "Write your own ping to Everyone", "Every device except the customer display and the sender gets it"),
 ]
 
 RESULTS = ["Pass", "Fail", "Blocked", "Not tested"]

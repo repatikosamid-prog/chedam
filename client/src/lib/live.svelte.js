@@ -1,12 +1,12 @@
 // Live updates (P2-e): one PocketBase realtime connection per signed-in device. The connection itself
 // (EventSource) cannot carry headers; subscribing does, with the person's token and the device headers
 // (conventions), so the hub sends each person only what the collection rules allow them to see.
-// listeners: on(topic, fn) for "messages" and "announcements"; badge counts in live.unread / live.toAck.
+// listeners: on(topic, fn) for "messages", "announcements" and "pings"; badge counts in live.unread / live.toAck.
 // When the connection drops it reconnects; the badge is also refreshed every 2 minutes.
 import { api, load } from "./api.js";
 
 export const live = $state({ unread: 0, mentioned: false, toAck: 0, connected: false });
-const subs = { messages: new Set(), announcements: new Set() };
+const subs = { messages: new Set(), announcements: new Set(), pings: new Set() };
 let es = null, timer = null, poll = null, wantOn = false;
 
 export function on(topic, fn) { subs[topic].add(fn); return () => subs[topic].delete(fn); }

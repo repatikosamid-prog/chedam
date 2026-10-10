@@ -45,6 +45,8 @@
   import Dashboard from "./screens/Dashboard.svelte";
   import Team from "./screens/Team.svelte";
   import Messages from "./screens/Messages.svelte";
+  import Pings from "./screens/Pings.svelte";
+  import PingOverlay from "./components/PingOverlay.svelte";
   import { live, startLive, stopLive } from "./lib/live.svelte.js";
 
   // A customer display window opened from Sell on this till (a second monitor): no sign-in, fed by the till.
@@ -119,6 +121,7 @@
       {/if}
     </div>
     {#if signedIn}
+      <button class="flex min-h-12 shrink-0 items-center rounded-xl px-2 text-xl" onclick={() => go("pings")} aria-label="Ping another device" title="Ping"><span aria-hidden="true">📣</span></button>
       <button class="relative flex min-h-12 shrink-0 items-center gap-1 rounded-xl px-2 {live.toAck ? 'text-warn' : ''}" onclick={() => go("messages")}
         aria-label={"Messages" + (live.unread ? ", " + live.unread + " unread" : "") + (live.toAck ? ", announcements to confirm" : "")} title="Messages">
         <span aria-hidden="true" class="text-xl">💬</span>
@@ -133,6 +136,7 @@
   </header>
 </div>
 <Toast />
+{#if signedIn && s.device}<PingOverlay />{/if}
 
 <main class="mx-auto w-full {s.screen === 'sell' ? 'max-w-6xl' : 'max-w-3xl'} px-4 pt-2 pb-12">
 
@@ -183,6 +187,7 @@
   {:else if s.screen === "dashboard"}<Dashboard />
   {:else if s.screen === "team"}<Team />
   {:else if s.screen === "messages"}<Messages />
+  {:else if s.screen === "pings"}<Pings />
   {/if}
 </main>
 {/if}

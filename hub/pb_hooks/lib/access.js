@@ -84,6 +84,8 @@ const TABLES = {
   channel_reads:        { list: ANY, view: ANY, create: null, update: null, delete: null },
   announcements:        { list: ANY, view: ANY, create: null, update: null, delete: null },
   announcement_acks:    { list: "announcements.manage", view: "announcements.manage", create: null, update: null, delete: null },
+  // P2 pings (step 9): store-floor messages between devices; sent and confirmed through /api/chedam/pings.
+  pings:                { list: ANY, view: ANY, create: null, update: null, delete: null },
 };
 
 // Fields a user may send when the only thing that matched was "self" / "assignee".
