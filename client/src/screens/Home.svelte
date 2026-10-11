@@ -199,6 +199,12 @@
           <span class="text-sm text-muted">Card fees, platform payouts, vendor statements</span>
         </button>
       {/if}
+      {#if can("support.manage")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("support")}>
+          <span class="font-semibold">Remote support</span>
+          <span class="text-sm text-muted">Let support in for a few hours</span>
+        </button>
+      {/if}
       {#if can("cloud.connect")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("cloud")}>
           <span class="font-semibold">Cloud drive</span>

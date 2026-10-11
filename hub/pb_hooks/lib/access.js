@@ -155,6 +155,8 @@ const TABLES = {
   cloud_links:          { list: null, view: null, create: null, update: null, delete: null },
   // P5 step 6: saved import mappings: only through /api/chedam/import-templates
   import_templates:     { list: null, view: null, create: null, update: null, delete: null },
+  // P5 step 8: remote support sessions: only through /api/chedam/support
+  support_sessions:     { list: null, view: null, create: null, update: null, delete: null },
   vendor_returns:       { list: "purchasing.view|purchasing.manage|finance.manage", view: "purchasing.view|purchasing.manage|finance.manage", create: null, update: null, delete: null },
 };
 

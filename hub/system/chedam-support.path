@@ -1,0 +1,10 @@
+[Unit]
+Description=Chedam remote support requests from the hub
+
+[Path]
+# The hub (no root rights) writes a request here; chedam-support.service does the work as root
+PathChanged=/opt/chedam/pb_data/support/request.json
+Unit=chedam-support.service
+
+[Install]
+WantedBy=multi-user.target

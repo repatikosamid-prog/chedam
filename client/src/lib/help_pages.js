@@ -99,6 +99,12 @@ export const PAGES = [
       { p: "Updates are checked every day; the owner installs them (and can go back)." },
       { warn: "Keep the backup USB drive in the hub. Keep the printed recovery key somewhere safe, away from the store." },
     ] },
+  { id: "support", title: "Remote support", screens: ["support"], words: "support help remote ssh tunnel key cloudflared",
+    body: [
+      { p: "When you need help with the hub, support can sign in to it from far away, only while you allow it." },
+      { steps: ["The support person sends you their key once (a line starting with ssh-ed25519). Home → Remote support → Add a key.", "When you need help: choose how long (1 to 8 hours) and press Let support in.", "Give support the address shown. You see when they sign in.", "Press End now when they are done; it also ends by itself at the end time."] },
+      { tip: "The hub connects out to the tunnel service; nothing on the store's router is opened, and no password is used." },
+    ] },
   { id: "data", title: "Importing from another system", screens: ["data"], words: "import square shopify lightspeed clover loyverse quickbooks xero wave zoho customers vendors stock bills staff template excel csv",
     body: [
       { p: "Moving from another system: export from it (CSV or Excel) and import here. Exports from Square, Shopify, Lightspeed, Clover, Loyverse, QuickBooks, Xero, Wave and Zoho are recognised by their columns." },

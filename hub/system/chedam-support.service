@@ -1,0 +1,7 @@
+[Unit]
+Description=Chedam remote support helper (time-limited login through an outbound tunnel)
+
+[Service]
+Type=oneshot
+ExecStart=/opt/chedam/bin/chedam-support handle
+TimeoutStartSec=2min

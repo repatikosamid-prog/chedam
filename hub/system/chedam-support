@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+"""Chedam remote support session (P5 step 8; FR-12.10). Root helper, like chedam-backup.
+
+The owner switches support on from the app for a few hours. The hub (no root rights) writes
+pb_data/support/request.json; chedam-support.path starts this as root, and the answer goes to
+pb_data/support/result.json (same id). Actions:
+  start   {hours, keys: [ssh public keys]}  a time-limited login for the support person:
+          - user chedam-support (no password), the keys in authorized_keys with expiry-time,
+            sudo for the session only (/etc/sudoers.d/chedam-support)
+          - an OUTBOUND tunnel to this hub's SSH (cloudflared quick tunnel, a trycloudflare.com address;
+            no port forwarding, no account), as the transient unit chedam-support-tunnel
+          - a timer that ends everything at the end time, even if the hub is not running
+  stop    ends the tunnel, removes the keys and sudo, closes the support person's sessions
+  status  is it on, the address, and the support logins since it started
+Support connects with:  ssh -o ProxyCommand="cloudflared access ssh --hostname %h" chedam-support@<address>
+"""
+
+import datetime as dt
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+
+try:
+    import pwd                    # Linux only (the self-test also runs on the PC)
+except ImportError:
+    pwd = None
+
+ROOT = "/opt/chedam"
+DIR = ROOT + "/pb_data/support"
+SVC = "chedam-hub"
+USER = "chedam-support"
+TUNNEL = "chedam-support-tunnel"
+END = "chedam-support-end"
+SUDOERS = "/etc/sudoers.d/chedam-support"
+KEY_RE = re.compile(r"^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com) [A-Za-z0-9+/=]{40,}( [^\n\r]{0,100})?$")
+URL_RE = re.compile(r"https://([a-z0-9-]+\.trycloudflare\.com)")
+LOGIN_RE = re.compile(r"Accepted (publickey|keyboard-interactive/pam) for " + USER + r" from (\S+)")
+
+
+class Fail(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
+def sh(*args, check=True):
+    r = subprocess.run(list(args), capture_output=True, text=True)
+    if check and r.returncode != 0:
+        raise Fail("command_failed", "%s failed: %s" % (args[0], (r.stderr or r.stdout or "").strip()[:300]))
+    return r
+
+
+def write_json(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.chmod(tmp, 0o640)
+    shutil.chown(tmp, SVC, SVC)
+    os.replace(tmp, path)
+
+
+def clean_keys(keys):
+    out = []
+    for k in keys or []:
+        k = " ".join(str(k).split())
+        if KEY_RE.match(k):
+            out.append(k)
+    return out
+
+
+def authorized_lines(keys, until_utc):
+    stamp = until_utc.strftime("%Y%m%d%H%M") + "Z"
+    return ['expiry-time="%s",no-agent-forwarding %s' % (stamp, k) for k in keys]
+
+
+def tunnel_url(text):
+    m = URL_RE.search(text or "")
+    return m.group(1) if m else ""
+
+
+def logins(text):
+    out = []
+    for line in (text or "").splitlines():
+        m = LOGIN_RE.search(line)
+        if m:
+            out.append({"line": line[:15].strip(), "from": m.group(2)})
+    return out
+
+
+def active(unit):
+    return sh("systemctl", "is-active", unit, check=False).stdout.strip() == "active"
+
+
+def journal(unit, since=None):
+    args = ["journalctl", "-u", unit, "-o", "cat", "--no-pager"]
+    if since:
+        args += ["--since", since]
+    return sh(*args, check=False).stdout
+
+
+def ensure_user():
+    try:
+        pwd.getpwnam(USER)
+    except KeyError:
+        sh("useradd", "-m", "-s", "/bin/bash", "-c", "Chedam remote support (on only when the owner allows)", USER)
+    sh("passwd", "-l", USER, check=False)
+    home = pwd.getpwnam(USER).pw_dir
+    ssh = os.path.join(home, ".ssh")
+    os.makedirs(ssh, exist_ok=True)
+    shutil.chown(ssh, USER, USER)
+    os.chmod(ssh, 0o700)
+    return ssh
+
+
+def remove_access():
+    try:
+        home = pwd.getpwnam(USER).pw_dir
+        ak = os.path.join(home, ".ssh", "authorized_keys")
+        if os.path.exists(ak):
+            os.remove(ak)
+    except KeyError:
+        pass
+    if os.path.exists(SUDOERS):
+        os.remove(SUDOERS)
+    sh("pkill", "-KILL", "-u", USER, check=False)
+
+
+def action_start(req):
+    if not shutil.which("cloudflared"):
+        raise Fail("no_cloudflared", "The tunnel program (cloudflared) is not installed on the hub yet.")
+    keys = clean_keys(req.get("keys"))
+    if not keys:
+        raise Fail("no_keys", "Add the support person's SSH key first.")
+    hours = max(1, min(8, int(req.get("hours") or 2)))
+    until = dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=hours)
+    action_stop({})                                   # a fresh session each time
+    ssh = ensure_user()
+    ak = os.path.join(ssh, "authorized_keys")
+    with open(ak, "w") as f:
+        f.write("\n".join(authorized_lines(keys, until)) + "\n")
+    shutil.chown(ak, USER, USER)
+    os.chmod(ak, 0o600)
+    tmp = SUDOERS + ".tmp"
+    with open(tmp, "w") as f:
+        f.write("# Chedam remote support session: removed when the session ends\n%s ALL=(ALL) NOPASSWD:ALL\n" % USER)
+    os.chmod(tmp, 0o440)
+    sh("visudo", "-cf", tmp)
+    os.replace(tmp, SUDOERS)
+    started = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sh("systemd-run", "--unit=" + TUNNEL, "--collect", "--property=RuntimeMaxSec=%d" % (hours * 3600),
+       shutil.which("cloudflared"), "tunnel", "--no-autoupdate", "--url", "ssh://localhost:22")
+    sh("systemd-run", "--unit=" + END, "--collect", "--on-active=%ds" % (hours * 3600), ROOT + "/bin/chedam-support", "stop")
+    host = ""
+    for _ in range(60):
+        host = tunnel_url(journal(TUNNEL, started))
+        if host or not active(TUNNEL):
+            break
+        time.sleep(0.5)
+    if not host:
+        action_stop({})
+        raise Fail("tunnel_failed", "The tunnel did not start (is the internet up?).")
+    return {"host": host, "user": USER, "until": until.isoformat(), "hours": hours, "started_at": started,
+            "command": 'ssh -o ProxyCommand="cloudflared access ssh --hostname %%h" %s@%s' % (USER, host)}
+
+
+def action_stop(req):
+    for unit in (TUNNEL, END + ".timer", END):
+        sh("systemctl", "stop", unit, check=False)
+    remove_access()
+    return {"stopped": True}
+
+
+def action_status(req):
+    on = active(TUNNEL)
+    since = str(req.get("since") or "")[:19] or None
+    return {"active": on, "host": tunnel_url(journal(TUNNEL, since)) if on else "",
+            "logins": logins(sh("journalctl", "_COMM=sshd", "-o", "short-iso", "--no-pager", *(["--since", since] if since else ["-n", "200"]), check=False).stdout)}
+
+
+ACTIONS = {"start": action_start, "stop": action_stop, "status": action_status}
+
+
+def handle():
+    path = DIR + "/request.json"
+    try:
+        with open(path) as f:
+            req = json.load(f)
+    except (OSError, ValueError):
+        return
+    res = {"id": str(req.get("id", "")), "action": req.get("action")}
+    try:
+        fn = ACTIONS.get(req.get("action"))
+        if not fn:
+            raise Fail("unknown", "Unknown action.")
+        res.update(fn(req))
+        res["ok"] = True
+    except Fail as e:
+        res.update({"ok": False, "code": e.code, "error": str(e)})
+    except Exception as e:  # never leave the hub waiting without an answer
+        res.update({"ok": False, "code": "error", "error": str(e)[:300]})
+    write_json(DIR + "/result.json", res)
+
+
+def self_test():
+    k = "ssh-ed25519 " + "A" * 68 + " support@chedam"
+    assert clean_keys([k, "rm -rf /", "ssh-ed25519 short"]) == [k]
+    lines = authorized_lines([k], dt.datetime(2026, 10, 11, 18, 5, tzinfo=dt.timezone.utc))
+    assert lines[0].startswith('expiry-time="202610111805Z",no-agent-forwarding ssh-ed25519 ')
+    assert tunnel_url("INF |  https://quiet-river-sun.trycloudflare.com  |") == "quiet-river-sun.trycloudflare.com"
+    assert logins("2026-10-11T10:01:02-0700 hub sshd[9]: Accepted publickey for chedam-support from ::1 port 4 ssh2")[0]["from"] == "::1"
+    print("self-test ok")
+
+
+if __name__ == "__main__":
+    if "--self-test" in sys.argv:
+        self_test()
+        sys.exit(0)
+    if os.geteuid() != 0:
+        sys.exit("Run as root.")
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if cmd == "handle":
+        handle()
+    elif cmd in ACTIONS:
+        print(json.dumps(ACTIONS[cmd]({}), indent=2))
+    else:
+        sys.exit(__doc__)

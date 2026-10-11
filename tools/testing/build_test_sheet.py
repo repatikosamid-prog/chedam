@@ -524,6 +524,13 @@ P5_TESTS = [
     ("R05", "Reference", "Laptop (manager)", "Vendors and clients → Exchange rates → Add a rate: USD, last Sunday → Suggest the Bank of Canada rate", "Friday's rate with its day → Use fills the rate and the source"),
     ("R06", "Reference", "Laptop (owner)", "Tax → Show the sales tax rates of every province", "13 provinces and territories (BC 5% + PST 7%, ON HST 13%, NS HST 14%); the store's own rates unchanged"),
     ("R07", "Reference", "Any device", "Help → About Chedam, reference data and licences", "Version, the 4 datasets and the 2 online sources with their licences"),
+    # ---- Step 8: remote support (DL-235, 236); needs cloudflared on the hub
+    ("S01", "Support", "Laptop (owner)", "Home → Remote support → Add a key (paste a public key from the support PC: ssh-ed25519 …)", "Listed by name with the end of the key"),
+    ("S02", "Support", "Laptop (owner)", "Let support in for 1 hour", "Support can sign in until …; an address …trycloudflare.com and a command to give support"),
+    ("S03", "Support", "Support PC (with cloudflared)", "Run the command shown", "Signed in to the hub as chedam-support; sudo works; the owner's screen shows the sign-in"),
+    ("S04", "Support", "Laptop (owner)", "End now", "The support PC's session is closed; signing in again fails"),
+    ("S05", "Support", "Laptop (owner)", "Let support in for 1 hour; wait past the end time", "It ends by itself (Past sessions: ended by the end time); the key no longer works"),
+    ("S06", "Support", "Laptop (manager)", "Look for Remote support on Home", "No tile (owner only)"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):
