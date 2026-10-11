@@ -83,7 +83,7 @@ try {
   check("ID checked: card sale goes through, line marked", r.status === 200 && r.json.sale.lines[0].age_checked === true && r.json.sale.payments[0].last4 === "4242", JSON.stringify(r.json).slice(0, 300));
   const colaNow = (await level(cola)).level;   // 8 loose, 3 cases
   r = await C.post("/api/chedam/sales/quote", { lines: [L(colaM, { qty: 10 })] });
-  check("10 cans with 8 loose: 'open a pack?'", r.json.problems.some((p) => p.type === "pack_break"), JSON.stringify(r.json.problems));
+  check("10 cans with 8 loose: no question on the till (oversell on: the hub opens packs itself, T3)", !r.json.problems.some((p) => p.type === "pack_break"), JSON.stringify(r.json.problems));
   const qt = (await C.post("/api/chedam/sales/quote", { lines: [L(colaM, { qty: 10, break_pack: true })] })).json.total_cents;
   r = await C.post("/api/chedam/sales", { id: sid(), lines: [L(colaM, { qty: 10, break_pack: true })], payments: [{ method: "card", amount_cents: qt }] });
   lv = (await level(cola)).level;

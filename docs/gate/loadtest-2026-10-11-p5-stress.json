@@ -1,0 +1,75 @@
+{
+  "at": "2026-10-11T18:23:00.737Z",
+  "seconds": 241,
+  "tills": 5,
+  "seconds_between_sales": 1.5,
+  "people": [
+    "Mira Manager",
+    "Cal Cashier",
+    "Demo Owner",
+    "Mira Manager",
+    "Cal Cashier"
+  ],
+  "sales_online": 342,
+  "sales_offline": 30,
+  "returns": 41,
+  "voids": 15,
+  "requests": 2285,
+  "errors": 1,
+  "by_status": {
+    "200": 2284,
+    "409": 1
+  },
+  "failures": {
+    "409 SALE (payment to receipt) - Only 0 sealed 'Case of 2 x 12'. Open a larger pack?": 1
+  },
+  "payment_to_receipt_ms": {
+    "p50": 606,
+    "p95": 1362,
+    "max": 2175
+  },
+  "latency_p95_ms": {
+    "GET /api/collections/users/records": 194,
+    "POST /api/chedam/devices/pairing-code": 63,
+    "POST /api/chedam/devices/pair": 45,
+    "POST /api/chedam/auth/pin": 635,
+    "GET /api/chedam/sales/offline-pack": 216,
+    "POST /api/chedam/stock/receive": 266,
+    "POST /api/chedam/tills/open": 123,
+    "GET /api/chedam/catalogue/lookup": 600,
+    "POST /api/chedam/sales/quote": 769,
+    "SALE (payment to receipt)": 1362,
+    "GET /api/chedam/returns/sale/:id": 722,
+    "POST /api/chedam/returns/quote": 496,
+    "POST /api/chedam/returns": 1013,
+    "GET /api/chedam/reports/tills": 2124,
+    "GET /api/chedam/audit": 911,
+    "GET /api/chedam/tills/current": 816,
+    "POST /api/chedam/sales/:id/void": 2442,
+    "OFFLINE upload": 2757,
+    "OFFLINE repeat": 1864,
+    "POST /api/chedam/tills/:id/close": 448,
+    "GET /api/collections/sales/records": 3341,
+    "GET /api/collections/stock_movements/records": 3262,
+    "GET /api/collections/stock_levels/records": 34,
+    "GET /api/collections/events/records": 780
+  },
+  "checks": {
+    "confirmed_sales_missing": 0,
+    "duplicate_receipt_numbers": 0,
+    "offline_repeats_not_answered_with_first": 0,
+    "sales_in_hub": 372,
+    "confirmed_sales": 372,
+    "stock_not_matching_movements": 0,
+    "z_reports_not_matching_sales": [],
+    "sale_audit_entries": 372
+  },
+  "pass": {
+    "NFR-02 no lost or duplicated sales": true,
+    "stock = sum of movements": true,
+    "Z reports = sales": true,
+    "every sale in the audit log": true,
+    "NFR-05 payment to receipt < 1 s (p95)": false,
+    "no server errors (5xx)": true
+  }
+}

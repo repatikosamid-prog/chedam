@@ -289,6 +289,8 @@ function stockCheck(app, live, cartId, problems, need) {
       { p: pid, c: String(cartId || "-"), n: now }).reduce((a, h) => a + h.getFloat("qty_base"), 0);
     const want = r3(ls.reduce((a, l) => a + l.base, 0));
     if (oversell && want > r3(onHand - held) + 1e-9) return;
+    // Packs to open: with oversell on the hub opens what it can by itself and goes below zero for the rest
+    if (oversell) { const lots0 = st().lotsOf(app, pid); if (want > lots0.freshQty + 1e-9 && lots0.allQty > lots0.freshQty + 1e-9) need("Sell expired '" + p.getString("name") + "'"); return; }
     if (want > r3(onHand - held) + 1e-9) {
       problems.push({ key: ls[0].key, type: "stock", available: r3(Math.max(0, onHand - held)),
         message: "Only " + r3(Math.max(0, onHand - held)) + " of '" + p.getString("name") + "' available" + (held ? " (some are in another till's cart)" : "") + "." });
@@ -563,7 +565,13 @@ function complete(app, input, ctx, internal) {
         // A bundle's components leave stock instead of the bundle (P3 step 8)
         require(`${__hooks}/lib/variety.js`).stockItems(app, l).forEach((x) => {
           let t;
-          const short = setting(app, "sales.allow_oversell", true) !== false && st().level(app, x.p.id, ctx).getFloat("on_hand") + 1e-9 < x.base;
+          const over = setting(app, "sales.allow_oversell", true) !== false;
+          let short = over && st().level(app, x.p.id, ctx).getFloat("on_hand") + 1e-9 < x.base;
+          if (over && !short) {
+            // Enough in all, but maybe not in this unit (a case when only loose cans are left): open packs, else go negative
+            try { openPacksFor(app, x, ctx); const lv0 = st().level(app, x.p.id, ctx); st().checkAvailable(x.p, x.u, st().isLooseUnit(x.u) ? x.base : x.qty, lv0, st().sealedOf(lv0)); }
+            catch (_) { short = true; }
+          }
           if (short) t = require(`${__hooks}/lib/offline.js`).forceOut(app, x, ctx);     // T3: sold beyond stock, goes negative
           else {
             openPacksFor(app, x, ctx);
