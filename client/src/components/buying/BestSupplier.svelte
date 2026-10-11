@@ -69,6 +69,7 @@
         <p class="flex flex-wrap gap-x-3 gap-y-1 text-sm">
           {#if v.contact}<span>{v.contact.name}</span>{#if v.contact.phone}<a class="underline" href={"tel:" + v.contact.phone}>📞 {v.contact.phone}</a>{/if}{#if v.contact.email}<a class="underline" href={"mailto:" + v.contact.email}>✉ {v.contact.email}</a>{/if}{/if}
           {#if v.ordering.email && (!v.contact || v.contact.email !== v.ordering.email)}<a class="underline" href={"mailto:" + v.ordering.email}>✉ orders: {v.ordering.email}</a>{/if}
+          {#if v.ordering.phone && (!v.contact || v.contact.phone !== v.ordering.phone)}<a class="underline" href={"tel:" + v.ordering.phone}>📞 orders: {v.ordering.phone}</a>{/if}
           {#if v.ordering.portal_url}<a class="underline" href={v.ordering.portal_url} target="_blank" rel="noopener">🌐 their portal{v.ordering.portal_account ? " (account " + v.ordering.portal_account + ")" : ""}</a>{/if}
           {#if v.ordering.cutoff}<span class="text-muted">order by {v.ordering.cutoff}</span>{/if}
         </p>

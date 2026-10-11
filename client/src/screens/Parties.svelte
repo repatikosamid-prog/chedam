@@ -16,11 +16,29 @@
   const fail = async (r) => { if (!(await handleRefusal(r))) error = r.message; };
   const blank = () => ({ kind: "vendor", name: "", legal_name: "", code: "", tax_id: "", pst_number: "", business_number: "", importer: false, exporter: false, currency: "CAD",
     payment_terms_days: 30, terms_text: "", credit_limit: "", email: "", phone: "", website: "", street: "", city: "", province: "BC", postal_code: "", country: "CA", notes: "", active: true,
-    order_method: "", order_email: "", portal_url: "", portal_account: "", portal_user: "", order_cutoff: "", min_order: "" });
+    order_method: "", order_email: "", portal_url: "", portal_account: "", portal_user: "", order_cutoff: "", min_order: "",
+    order_phone: "", order_notes: "", supplier_preset: "" });
   // T3: a vendor's page also shows what they sell us, consignment, their bills and invoices, orders, how to order
   let sum = $state(null), stab = $state("products");
   const KIND_DOC = { bill: "Bill", vendor_credit: "Credit from them", invoice: "Invoice to them", client_credit: "Credit to them" };
-  const METHOD = { email: "Email", portal: "Their website (portal)", phone: "Phone", rep: "Sales rep visits", edi: "EDI", other: "Other" };
+  const METHOD = { email: "Email", portal: "Their website (portal)", phone: "Phone", rep: "Sales rep or driver visits", edi: "EDI", api: "Ordering API", other: "Other" };
+  // Known suppliers (DL-247): a starting point the owner or a manager can pick, then change anything
+  let presets = $state([]), presetQ = $state("");
+  async function findPresets() {
+    const r = await api("GET", "/api/chedam/reference/suppliers?q=" + encodeURIComponent(presetQ || form.name || ""), null, { quiet: true });
+    presets = r.ok ? r.json.items : [];
+    if (r.ok && !presets.length && (presetQ || form.name)) { const all = await api("GET", "/api/chedam/reference/suppliers", null, { quiet: true }); presets = all.ok ? all.json.items : []; }
+  }
+  function usePreset(x) {
+    form.order_method = x.order_method || form.order_method;
+    form.portal_url = x.portal_url || form.portal_url;
+    form.order_phone = x.phone || form.order_phone;
+    form.order_email = x.email || form.order_email;
+    form.order_notes = [x.notes, x.hours ? "Phone hours: " + x.hours : ""].filter(Boolean).join(" · ");
+    form.supplier_preset = x.key;
+    if (!form.name) form.name = x.name;
+    presets = [];
+  }
 
   async function load() {
     error = "";
@@ -114,6 +132,8 @@
       {#if form.kind !== "vendor"}<label class="block"><span class="text-sm text-muted">Credit limit ($, house account)</span><input class="field" inputmode="decimal" bind:value={form.credit_limit} /></label>{/if}
       {#if form.kind !== "client"}
         <fieldset class="grid gap-2 rounded-xl border border-line p-2 sm:col-span-3 sm:grid-cols-3"><legend class="px-1 text-sm font-semibold">How we order</legend>
+          <div class="flex flex-wrap items-end gap-2 sm:col-span-3"><label class="block grow"><span class="text-sm text-muted">Start from a known supplier (optional)</span><input class="field" bind:value={presetQ} placeholder="Coke, Pepsi, Frito-Lay…" /></label><button class="btn-ghost min-h-12" type="button" onclick={findPresets}>Find</button></div>
+          {#each presets as x (x.key)}<div class="rounded-xl border border-line p-2 text-sm sm:col-span-3"><p class="flex flex-wrap justify-between gap-2"><b>{x.name}</b><button class="underline" type="button" onclick={() => usePreset(x)}>Use</button></p><p class="text-muted">{METHOD[x.order_method] || ""}{x.phone ? " · " + x.phone : ""}{x.portal_url ? " · " + x.portal_url : ""}</p><p class="text-muted">{x.notes}</p></div>{/each}
           <label class="block"><span class="text-sm text-muted">Method</span><select class="field" bind:value={form.order_method}><option value="">—</option>{#each Object.entries(METHOD) as [k, l] (k)}<option value={k}>{l}</option>{/each}</select></label>
           <label class="block"><span class="text-sm text-muted">Order email</span><input class="field" type="email" bind:value={form.order_email} maxlength="120" /></label>
           <label class="block"><span class="text-sm text-muted">Minimum order ($)</span><input class="field" inputmode="decimal" bind:value={form.min_order} /></label>
@@ -121,6 +141,8 @@
           <label class="block"><span class="text-sm text-muted">Our account number there</span><input class="field" bind:value={form.portal_account} maxlength="80" /></label>
           <label class="block"><span class="text-sm text-muted">User name there</span><input class="field" bind:value={form.portal_user} maxlength="120" /></label>
           <label class="block"><span class="text-sm text-muted">Order by (cut-off)</span><input class="field" bind:value={form.order_cutoff} maxlength="120" placeholder="Tue 2 pm for Thu delivery" /></label>
+          <label class="block"><span class="text-sm text-muted">Phone for orders</span><input class="field" type="tel" bind:value={form.order_phone} maxlength="40" /></label>
+          <label class="block sm:col-span-3"><span class="text-sm text-muted">Ordering notes (rep visit days, delivery days, who to ask)</span><textarea class="field" rows="3" bind:value={form.order_notes} maxlength="1500"></textarea></label>
           <p class="text-xs text-muted sm:col-span-3">Passwords are never kept in Chedam: keep them in a password manager.</p>
         </fieldset>
       {/if}
@@ -143,7 +165,9 @@
       {#if sum && (sum.ordering.method || sum.ordering.portal_url)}
         <p class="text-sm">Order by {METHOD[sum.ordering.method] || "—"}{sum.ordering.cutoff ? " · " + sum.ordering.cutoff : ""}{sum.ordering.min_order_cents ? " · minimum " + money(sum.ordering.min_order_cents) : ""}
           {#if sum.ordering.portal_url} · <a class="underline" href={sum.ordering.portal_url} target="_blank" rel="noopener">open their portal</a>{sum.ordering.portal_account ? " (account " + sum.ordering.portal_account + ")" : ""}{/if}
-          {#if sum.ordering.email} · <a class="underline" href={"mailto:" + sum.ordering.email}>{sum.ordering.email}</a>{/if}</p>
+          {#if sum.ordering.email} · <a class="underline" href={"mailto:" + sum.ordering.email}>{sum.ordering.email}</a>{/if}
+          {#if sum.ordering.phone} · <a class="underline" href={"tel:" + sum.ordering.phone}>{sum.ordering.phone}</a>{/if}</p>
+        {#if sum.ordering.notes}<p class="whitespace-pre-line text-sm text-muted">{sum.ordering.notes}</p>{/if}
       {/if}
     </div>
     {#if sum}

@@ -21,7 +21,7 @@
     <div class="card space-y-2">
       <h2 class="font-semibold">Reference data</h2>
       <p class="text-sm text-muted">{ref.note}</p>
-      {#each ref.datasets as d (d.id)}<div class="border-t border-line pt-1 text-sm"><p><b>{d.name}</b> · {d.rows} rows · {d.version}</p><p class="text-muted">{d.source}</p><p class="text-muted">Licence: {d.licence}</p></div>{/each}
+      {#each ref.datasets as d (d.id)}<div class="border-t border-line pt-1 text-sm"><p><b>{d.name}</b> · {d.rows} rows{d.bytes ? " · " + (d.bytes / 1048576).toFixed(1) + " MB" : ""} · {d.version}</p><p class="text-muted">{d.source}</p><p class="text-muted">Licence: {d.licence}</p></div>{/each}
       {#each ref.online as o (o.id)}<div class="border-t border-line pt-1 text-sm"><p><b>{o.name}</b> (asked online when the hub has internet{o.enabled ? "" : "; switched off"})</p><p class="text-muted">Licence: {o.licence} · {o.url}</p></div>{/each}
     </div>
   {/if}

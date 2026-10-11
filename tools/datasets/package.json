@@ -1,0 +1,10 @@
+{
+  "name": "chedam-datasets",
+  "private": true,
+  "type": "module",
+  "description": "Downloads and slims Chedam's large reference datasets (tools/datasets/download.mjs)",
+  "dependencies": {
+    "fflate": "0.8.2",
+    "mdb-reader": "3.1.0"
+  }
+}

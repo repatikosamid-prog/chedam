@@ -19,7 +19,8 @@ try {
   check("'  1.234kg' and 'ST,GS,+001.25kg' read", scaleParse("  1.234kg").value === 1.234 && scaleParse("ST,GS,+001.25kg").value === 1.25);
   check("pounds to kilograms and back", toBase(scaleParse("2.205 LB"), "kg") === 1.0 && toBase(scaleParse("500 g"), "lb") === 1.102);
   check("an unsteady reading is not taken", scaleParse("US,GS,+001.25kg") === null && scaleParse("????") === null);
-  await t.start();
+  // the hub reads its reference datasets with sqlite3 (on the PC: the node stand-in)
+  await t.start(process.platform === "win32" ? { CHEDAM_SQLITE: JSON.stringify([process.execPath, join(HUB, "..", "tools", "devhub", "sqlite3-node.mjs")]) } : {});
   const people = Object.fromEntries((await t.list("users")).items.map((u) => [u.name, u.id]));
   const devs = {};
   const login = async (n) => {
@@ -68,5 +69,17 @@ try {
   check("a cashier can't see suppliers", (await C.get(`/api/chedam/purchasing/best-supplier?product=${chips.product.id}`)).status === 403);
   const sm = await M.get(`/api/chedam/parties/${coastal.id}/summary`);
   check("the vendor's page: products with their price, documents, orders, how to order", sm.status === 200 && sm.json.products.some((x) => x.vendor_sku === "CB-1") && Array.isArray(sm.json.documents) && Array.isArray(sm.json.orders) && sm.json.ordering.portal_account === "ACC-77", JSON.stringify(sm.json).slice(0, 300));
+
+  console.log("Known suppliers, set up by the owner or a manager whenever they want (DL-247)");
+  const ks = (await M.get("/api/chedam/reference/suppliers?q=coke")).json.items;
+  check("Coke Canada found by a brand word", ks.length === 1 && ks[0].key === "coca_cola_canada" && ks[0].phone === "1-800-218-2653", JSON.stringify(ks));
+  check("Frito-Lay found by a brand (Doritos)", (await M.get("/api/chedam/reference/suppliers?q=doritos")).json.items.some((x) => x.key === "frito_lay_canada"));
+  check("all three listed with no search", (await M.get("/api/chedam/reference/suppliers")).json.items.length === 3);
+  const pep = (await M.get("/api/chedam/reference/suppliers?q=pepsi")).json.items.find((x) => x.key === "pepsico_beverages_canada");
+  const up2 = await t.api("PATCH", `/api/collections/parties/records/${fresh.id}`, { order_method: "api", order_phone: pep.phone, order_notes: "Rep visits Tuesday", supplier_preset: pep.key, portal_url: pep.portal_url }, { token: manager });
+  check("a manager sets how we order from a vendor (API as a method too)", up2.status === 200 && up2.json.order_method === "api" && up2.json.supplier_preset === "pepsico_beverages_canada", JSON.stringify(up2.json).slice(0, 200));
+  const sm2 = (await M.get(`/api/chedam/parties/${fresh.id}/summary`)).json;
+  check("the vendor's page shows the order phone and notes", sm2.ordering.phone === "1-800-963-2424" && sm2.ordering.notes === "Rep visits Tuesday" && sm2.ordering.preset === "pepsico_beverages_canada");
+  check("a cashier can't change how we order", (await t.api("PATCH", `/api/collections/parties/records/${fresh.id}`, { order_notes: "x" }, { token: cashier })).status >= 400);
 } catch (e) { err = e; }
 await t.finish(err);

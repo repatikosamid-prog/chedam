@@ -4,8 +4,12 @@
 // the hub has internet (outbound, no keys, a few seconds at most, remembered for the day): Open Food Facts for a
 // barcode and the Bank of Canada for an exchange rate. Everything here only SUGGESTS: nothing is written to the
 // store's data; the screens show a suggestion with its source and the person taps it to use it (FR-11.11).
+// The large downloaded datasets (Open Food Facts Canada, CBSA tariff, Bank of Canada history; DL-246) live in their
+// own folder, /opt/chedam/reference (tools/datasets/download.mjs, copied by deploy.sh): not in the code, so not in
+// update packages, rollback copies, backups or the store's database.
 
 const DIR = `${__hooks}/reference`;
+function extDir() { return String($os.getenv("CHEDAM_REFERENCE_DIR") || "") || "/opt/chedam/reference"; }
 function bad(msg) { throw new BadRequestError(msg); }
 function setting(app, key, fallback) { return require(`${__hooks}/lib/auth.js`).setting(app, key, fallback); }
 const lit = (s) => "'" + String(s).replace(/'/g, "''") + "'";
@@ -18,18 +22,27 @@ function cmd() {
   try { const e = String($os.getenv("CHEDAM_SQLITE") || ""); if (e) return JSON.parse(e); } catch (_) { /* default */ }
   return ["sqlite3"];
 }
-function has(id) { try { $os.stat(DIR + "/" + id + ".db"); return true; } catch (_) { return false; } }
+function file(id) {
+  for (const d of [DIR, extDir()]) { try { $os.stat(d + "/" + id + ".db"); return d + "/" + id + ".db"; } catch (_) { /* next */ } }
+  return "";
+}
+function has(id) { return !!file(id); }
 function query(id, sql) {
-  if (!has(id)) return [];
+  const f = file(id);
+  if (!f) return [];
   const c = cmd();
-  const out = toString($os.cmd(...c.concat(["-readonly", "-json", DIR + "/" + id + ".db", sql])).output()).trim();
+  const out = toString($os.cmd(...c.concat(["-readonly", "-json", f, sql])).output()).trim();
   return out ? JSON.parse(out) : [];
 }
 
 function datasets() {
-  let names = [];
-  try { names = $os.readDir(DIR).map((d) => d.name()).filter((n) => n.endsWith(".json")); } catch (_) { names = []; }
-  return names.sort().map((n) => { try { return JSON.parse(toString($os.readFile(DIR + "/" + n))); } catch (_) { return null; } }).filter(Boolean);
+  const out = [];
+  [DIR, extDir()].forEach((dir) => {
+    let names = [];
+    try { names = $os.readDir(dir).map((d) => d.name()).filter((n) => n.endsWith(".json")); } catch (_) { names = []; }
+    names.sort().forEach((n) => { try { out.push(JSON.parse(toString($os.readFile(dir + "/" + n)))); } catch (_) { /* skip */ } });
+  });
+  return out;
 }
 
 function online(app, which) {
@@ -99,9 +112,19 @@ function hs(app, q) {
   const where = digits.length >= 2 && digits === t.replace(/[.\s]/g, "") ? "code LIKE " + lit(digits.substring(0, 2) + "%")
     : words.length ? words.map((w) => "lower(description) LIKE " + lit("%" + w + "%")).join(" AND ") : "0";
   const out = [];
-  if (has("cbsa_tariff")) query("cbsa_tariff", "SELECT code, description FROM tariff WHERE " + where.replace(/code LIKE '(\d\d)%'/, "code LIKE '" + digits + "%'") + " LIMIT 15").forEach((r) => out.push(Object.assign(r, { source: "CBSA Customs Tariff" })));
+  if (has("cbsa_tariff")) query("cbsa_tariff", "SELECT code, description, mfn, ust FROM tariff WHERE length(code) >= 10 AND " + where.replace(/code LIKE '(\d\d)%'/, "replace(code, '.', '') LIKE '" + digits + "%'") + " ORDER BY code LIMIT 15").forEach((r) => out.push(Object.assign(r, { source: "CBSA Customs Tariff" })));
   query("hs_chapters", "SELECT code, description FROM hs WHERE " + where + " LIMIT 10").forEach((r) => out.push(Object.assign(r, { source: "HS chapter" })));
   return { items: out };
+}
+
+// ---- Known suppliers: how stores order from them (DL-247) ---------------------------------------------------------
+// A starting point for a vendor's "How we order"; the person picks one and changes anything they like.
+function suppliers(app, q) {
+  const t = String(q || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim().substring(0, 60);
+  const words = t.split(" ").filter((w) => w.length > 2).slice(0, 4);
+  const where = words.length ? " WHERE " + words.map((w) => "(lower(name) LIKE " + lit("%" + w + "%") + " OR aliases LIKE " + lit("%" + w + "%") + ")").join(" OR ") : "";
+  const m = datasets().find((d) => d.id === "suppliers") || {};
+  return { items: query("suppliers", "SELECT key, name, order_method, portal_url, phone, email, hours, notes FROM suppliers" + where + " ORDER BY name"), source: m.source || "" };
 }
 
 function taxPresets() { return { items: query("tax_presets", "SELECT * FROM presets ORDER BY province"), source: (datasets().find((d) => d.id === "tax_presets") || {}).source || "" }; }
@@ -113,8 +136,15 @@ function fx(app, currency, day) {
   const cur = String(currency || "").toUpperCase();
   if (!/^[A-Z]{3}$/.test(cur) || cur === "CAD") bad("A currency other than CAD, as 3 letters.");
   const d = /^\d{4}-\d{2}-\d{2}$/.test(String(day || "")) ? day : new Date().toISOString().substring(0, 10);
-  if (!online(app, "bank_of_canada")) return { found: false, offline: true };
-  return cached(app, "fx." + cur + "." + d, () => {
+  // From the downloaded history (works offline): the day, or the last business day before it within 10 days
+  const local = () => {
+    if (!has("boc_fx")) return null;
+    const from = new Date(new Date(d + "T12:00:00Z").getTime() - 10 * 86400000).toISOString().substring(0, 10);
+    const r = query("boc_fx", "SELECT day, rate FROM rates WHERE currency = " + lit(cur) + " AND day <= " + lit(d) + " AND day >= " + lit(from) + " ORDER BY day DESC LIMIT 1")[0];
+    return r ? { found: true, currency: cur, day: r.day, rate: Number(r.rate), source: ONLINE.bank_of_canada.name + " (on the hub)", licence: ONLINE.bank_of_canada.licence } : null;
+  };
+  if (!online(app, "bank_of_canada")) return local() || { found: false, offline: true };
+  const got = cached(app, "fx." + cur + "." + d, () => {
     const from = new Date(new Date(d + "T12:00:00Z").getTime() - 10 * 86400000).toISOString().substring(0, 10);
     let res;
     try { res = $http.send({ url: base("boc") + "/observations/FX" + cur + "CAD/json?start_date=" + from + "&end_date=" + d, method: "GET", timeout: 6 }); }
@@ -123,13 +153,15 @@ function fx(app, currency, day) {
     if (res.statusCode !== 200 || !obs.length) return { found: false, source: ONLINE.bank_of_canada.name };
     return { found: true, currency: cur, day: obs[0].d, rate: Number(obs[0]["FX" + cur + "CAD"].v), source: ONLINE.bank_of_canada.name, licence: ONLINE.bank_of_canada.licence };
   });
+  return got.found ? got : (local() || got);
 }
 
 function about(app) {
   const set = setting(app, "reference.online", { open_food_facts: true, bank_of_canada: true }) || {};
   let version = "";
   try { version = toString($os.readFile(__hooks + "/../VERSION")).trim(); } catch (_) { version = ""; }
-  return { version: version, datasets: datasets(), online: Object.keys(ONLINE).map((k) => Object.assign({ id: k, enabled: set[k] !== false }, ONLINE[k])),
+  const ds = datasets();
+  return { version: version, datasets: ds, bytes: ds.reduce((t, d) => t + (Number(d.bytes) || 0), 0), online: Object.keys(ONLINE).map((k) => Object.assign({ id: k, enabled: set[k] !== false }, ONLINE[k])),
     note: "Reference data only suggests: nothing is changed until someone taps a suggestion (FR-11.11)." };
 }
 
@@ -140,4 +172,4 @@ function ctx(e) {
   return e.request.url.query();
 }
 
-module.exports = { datasets, product, shelfLife, hs, taxPresets, units, fx, about, ctx };
+module.exports = { datasets, product, shelfLife, hs, suppliers, taxPresets, units, fx, about, ctx };

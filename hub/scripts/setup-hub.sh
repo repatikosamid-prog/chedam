@@ -33,6 +33,15 @@ log() { printf '\n== %s\n' "$*"; }
 log "Packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get -y install chrony sqlite3 ufw caddy avahi-daemon age >/dev/null
+# cloudflared: outbound tunnel for remote support (DL-236) and the web store (DL-214); Cloudflare's signed apt repo,
+# so it is updated with the system's packages (Sreya's OK 2026-10-11)
+if [ ! -f /etc/apt/sources.list.d/cloudflared.list ]; then
+  install -d -m 755 /usr/share/keyrings
+  curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg -o /usr/share/keyrings/cloudflare-main.gpg
+  echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' > /etc/apt/sources.list.d/cloudflared.list
+  apt-get update >/dev/null
+fi
+apt-get -y install cloudflared >/dev/null
 
 log "Service user and folders ($ROOT)"
 id "$SVC_USER" >/dev/null 2>&1 || useradd --system --home "$ROOT" --shell /usr/sbin/nologin "$SVC_USER"

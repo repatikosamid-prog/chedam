@@ -478,8 +478,8 @@
       {#if p.imported}
         <label class="block"><span class="text-sm text-muted">HS code</span><input class="field" inputmode="numeric" bind:value={p.hs_code} maxlength="14" /></label>
         <div class="sm:col-span-2 space-y-1 text-sm">
-          <div class="flex gap-2"><input class="field" bind:value={ref.hsq} placeholder="Find the HS chapter (e.g. chocolate, spices)" aria-label="Find an HS code" /><button class="btn-ghost min-h-10" type="button" onclick={findHs}>Find</button></div>
-          {#each ref.hs || [] as h (h.source + h.code)}<p>{h.code} · {h.description} <span class="text-muted">({h.source})</span> <button class="underline" type="button" onclick={() => (p.hs_code = h.code)}>Use</button></p>{/each}
+          <div class="flex gap-2"><input class="field" bind:value={ref.hsq} placeholder="Find the HS code (e.g. chocolate, spices, 2202.10)" aria-label="Find an HS code" /><button class="btn-ghost min-h-10" type="button" onclick={findHs}>Find</button></div>
+          {#each ref.hs || [] as h (h.source + h.code)}<p>{h.code} · {h.description}{h.mfn ? " · duty " + h.mfn + (h.ust ? ", from the US " + h.ust : "") : ""} <span class="text-muted">({h.source})</span> <button class="underline" type="button" onclick={() => (p.hs_code = h.code)}>Use</button></p>{/each}
         </div>
         <label class="block"><span class="text-sm text-muted">Country of origin (2 letters, e.g. IN)</span>
           <input class="field uppercase" bind:value={p.origin_country} maxlength="2" oninput={(e) => (p.origin_country = e.currentTarget.value.toUpperCase())} /></label>

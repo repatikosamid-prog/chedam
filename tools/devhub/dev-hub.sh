@@ -20,4 +20,6 @@ if [ ! -f "$DEV/superuser.txt" ]; then
   "$PB" superuser upsert dev@chedam.test "$PW" "${ARGS[@]}" >/dev/null
   printf '%s\n%s\n' dev@chedam.test "$PW" > "$DEV/superuser.txt"
 fi
+# Downloaded reference datasets (tools/datasets/download.mjs), if built
+export CHEDAM_REFERENCE_DIR="$ROOT/hub/reference-data"
 exec "$PB" serve --dev=false --http=127.0.0.1:8095 "${ARGS[@]}" --publicDir="$ROOT/hub/pb_public"

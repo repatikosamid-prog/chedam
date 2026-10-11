@@ -10,7 +10,8 @@ function bad(msg) { throw new BadRequestError(msg); }
 const name = (app, col, id, f) => { try { return app.findRecordById(col, id).getString(f || "name"); } catch (_) { return ""; } };
 
 function ordering(p) {
-  return { method: p.getString("order_method"), email: p.getString("order_email") || p.getString("email"), phone: p.getString("phone"),
+  return { method: p.getString("order_method"), email: p.getString("order_email") || p.getString("email"), phone: p.getString("order_phone") || p.getString("phone"),
+    notes: p.getString("order_notes"), preset: p.getString("supplier_preset"),
     portal_url: p.getString("portal_url"), portal_account: p.getString("portal_account"), portal_user: p.getString("portal_user"),
     cutoff: p.getString("order_cutoff"), min_order_cents: p.getInt("min_order_cents") };
 }

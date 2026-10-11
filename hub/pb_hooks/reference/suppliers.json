@@ -1,0 +1,20 @@
+{
+  "id": "suppliers",
+  "name": "Known suppliers: how stores order from them",
+  "version": "2026.10.11",
+  "source": "Chedam, from the suppliers' public pages (cokecanada.com, pepsicopartners.com, contact.pepsico.com), checked 2026-10-11; confirm with your sales rep",
+  "licence": "Chedam, part of the app",
+  "rows": 3,
+  "table": "suppliers",
+  "columns": [
+    "key",
+    "name",
+    "aliases",
+    "order_method",
+    "portal_url",
+    "phone",
+    "email",
+    "hours",
+    "notes"
+  ]
+}

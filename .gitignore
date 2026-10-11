@@ -50,3 +50,6 @@ releases/
 
 # Local dev hub data (tools/devhub/dev-hub.sh)
 .devhub/
+
+# Downloaded reference datasets (tools/datasets/download.mjs; deploy.sh sends them to /opt/chedam/reference)
+hub/reference-data/

@@ -18,6 +18,7 @@ const SCHEMA = {
   units: { table: "units", cols: ["code", "kind", "base", "factor", "label", "aliases"], ddl: "code TEXT PRIMARY KEY, kind TEXT, base TEXT, factor REAL, label TEXT, aliases TEXT" },
   tax_presets: { table: "presets", cols: ["province", "name", "gst", "hst", "pst", "qst", "pst_name", "note"], ddl: "province TEXT PRIMARY KEY, name TEXT, gst REAL, hst REAL, pst REAL, qst REAL, pst_name TEXT, note TEXT" },
   shelf_life: { table: "shelf", cols: ["keyword", "item", "pantry_days", "fridge_days", "freezer_days", "opened_fridge_days", "note"], ddl: "keyword TEXT, item TEXT, pantry_days INTEGER, fridge_days INTEGER, freezer_days INTEGER, opened_fridge_days INTEGER, note TEXT" },
+  suppliers: { table: "suppliers", cols: ["key", "name", "aliases", "order_method", "portal_url", "phone", "email", "hours", "notes"], ddl: "key TEXT PRIMARY KEY, name TEXT, aliases TEXT, order_method TEXT, portal_url TEXT, phone TEXT, email TEXT, hours TEXT, notes TEXT" },
   hs_chapters: { table: "hs", cols: ["code", "description"], ddl: "code TEXT PRIMARY KEY, description TEXT" },
 };
 

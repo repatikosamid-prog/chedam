@@ -23,6 +23,6 @@ Section 13 "Phase gate" for P5 Connect and enrich, run by Claude on 2026-10-11. 
 | --- | --- |
 | Square developer account, sandbox token, a Square Terminal (D1) | Linked payments and refunds for real (C01-C25) |
 | Google and Microsoft app registrations (D2) | Cloud drive, off-site backup, remote view for real (D01-D14); browser sign-in from the phone to be checked (DL-228) |
-| `cloudflared` installed on the Pi (Sreya's OK) | Remote support (S01-S06), and the web store next |
-| OK to download the large reference datasets | Open Food Facts offline, CBSA tariff, nutrients, FoodKeeper, ITC-HS |
+| ~~`cloudflared` installed on the Pi~~ done 2026-10-11 (DL-236a); remote support tested end to end | Remote support (S01-S06), and the web store next |
+| ~~OK to download the large reference datasets~~ done 2026-10-11 (DL-246): Open Food Facts Canada, CBSA tariff, Bank of Canada history | Offline barcode and exchange-rate suggestions, tariff items |
 | A USB scale on a till PC | The till scale (T17) |

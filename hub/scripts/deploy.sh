@@ -27,6 +27,37 @@ ROOT_DIR="$(cd "$HUB/.." && pwd)"
 (cd "$ROOT_DIR/client" && npm run build --silent)
 [ -f "$HUB/pb_public/index.html" ] && [ -f "$HUB/pb_public/sw.js" ] || { echo "client build missing"; exit 1; }
 
+# Downloaded reference datasets (tools/datasets/download.mjs -> hub/reference-data, DL-246): to /opt/chedam/reference,
+# outside the code (not in update packages or rollback copies). Only files that changed are sent, and never when the
+# hub would be left with less than 2 GB free.
+REF="$ROOT_DIR/hub/reference-data"
+if ls "$REF"/*.db >/dev/null 2>&1; then
+  echo "== Reference datasets ($(du -sh "$REF" | cut -f1) here)"
+  REMOTE_SUMS=$(ssh "$HOST" "cd /opt/chedam/reference 2>/dev/null && sha256sum *.db *.json 2>/dev/null" || true)
+  SEND=(); NEED=0
+  for f in "$REF"/*.db "$REF"/*.json; do
+    n=$(basename "$f"); sum=$(sha256sum "$f" | cut -d" " -f1)
+    grep -q "^$sum  $n\$" <<<"$REMOTE_SUMS" || { SEND+=("$f"); NEED=$((NEED + $(stat -c %s "$f"))); }
+  done
+  FREE=$(ssh "$HOST" "df --output=avail -B1 /opt/chedam | tail -1")
+  if [ "${#SEND[@]}" -eq 0 ]; then
+    echo "unchanged"
+  elif [ $((FREE - NEED)) -lt $((2 * 1024 * 1024 * 1024)) ]; then
+    echo "NOT sent: the hub has $((FREE / 1048576)) MB free and needs to keep 2 GB free after $((NEED / 1048576)) MB of datasets"
+  else
+    ssh "$HOST" "rm -rf ~/ref-stage && mkdir -p ~/ref-stage"
+    scp -q "${SEND[@]}" "$HOST:ref-stage/"
+    ssh "$HOST" 'set -e; sudo install -d -m 755 -o chedam -g chedam /opt/chedam/reference
+      for f in ~/ref-stage/*; do n=$(basename "$f"); sudo install -m 644 -o chedam -g chedam "$f" "/opt/chedam/reference/.$n.part"; sudo mv -f "/opt/chedam/reference/.$n.part" "/opt/chedam/reference/$n"; done
+      rm -rf ~/ref-stage'
+    echo "sent ${#SEND[@]} file(s), $((NEED / 1048576)) MB"
+  fi
+  # a dataset dropped here is removed on the hub too
+  KEEP=$(cd "$REF" && ls *.db *.json | tr "
+" " ")
+  ssh "$HOST" "cd /opt/chedam/reference 2>/dev/null || exit 0; for n in *.db *.json; do [ -e \"\$n\" ] || continue; case \" $KEEP \" in *\" \$n \"*) ;; *) sudo rm -f \"\$n\"; echo \"removed \$n\";; esac; done; du -sh /opt/chedam/reference | sed 's/^/on the hub: /'"
+fi
+
 echo "== Copy to $HOST:~/$STAGE"
 ssh "$HOST" "rm -rf ~/$STAGE && mkdir -p ~/$STAGE/pb_migrations"
 scp -q -r "$HUB/pb_hooks" "$HOST:$STAGE/"
