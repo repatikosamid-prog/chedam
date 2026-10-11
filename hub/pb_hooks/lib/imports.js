@@ -232,7 +232,7 @@ function commit(app, input, ctx) {
 
 function jobView(j) {
   const g = (f) => { try { return JSON.parse(j.getString(f) || "null"); } catch (_) { return null; } };
-  return { id: j.id, file_name: j.getString("file_name"), status: j.getString("status"), rows: j.getInt("rows"), created: j.getInt("created"),
+  return { id: j.id, kind: j.getString("kind"), file_name: j.getString("file_name"), status: j.getString("status"), rows: j.getInt("rows"), created: j.getInt("created"),
     updated: j.getInt("updated"), drafts: j.getInt("drafts"), skipped: j.getInt("skipped"), excluded: j.getInt("excluded"),
     categories_created: j.getInt("categories_created"), error: j.getString("error"), seconds: j.getFloat("seconds"),
     created_at: j.getString("created_at"), by: j.getString("created_by"), result: g("result") || [], mapping: g("mapping") || {} };

@@ -40,3 +40,35 @@ routerAdd("GET", "/api/chedam/export/table/{name}", (e) => {
   const q = e.request.url.query();
   return e.json(200, require(`${__hooks}/lib/data_export.js`).table(e.app, e.request.pathValue("name"), q.get("page"), q.get("per_page")));
 });
+
+// ---- P5 step 6: every other kind of record, and saved mapping templates. Logic: lib/imports_more.js ----------
+// Each import needs the permission of its screen (customers.manage, parties.manage, stock.receive, finance.manage,
+// hr.manage); templates need catalogue.edit or that permission.
+routerAdd("POST", "/api/chedam/imports/{target}/check", (e) => {
+  const I = require(`${__hooks}/lib/imports_more.js`);
+  const t = e.request.pathValue("target");
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, I.perm(t));
+  return e.json(200, I.check(e.app, t, c.body));
+});
+routerAdd("POST", "/api/chedam/imports/{target}/commit", (e) => {
+  const I = require(`${__hooks}/lib/imports_more.js`);
+  const t = e.request.pathValue("target");
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, I.perm(t));
+  return e.json(200, I.commit(e.app, t, c.body, c));
+});
+routerAdd("GET", "/api/chedam/import-templates/{target}", (e) => {
+  const I = require(`${__hooks}/lib/imports_more.js`);
+  const t = e.request.pathValue("target");
+  require(`${__hooks}/lib/sales_http.js`).ctx(e, t === "products" ? "catalogue.edit" : I.perm(t));
+  return e.json(200, { items: I.templates(e.app, t) });
+});
+routerAdd("POST", "/api/chedam/import-templates", (e) => {
+  const I = require(`${__hooks}/lib/imports_more.js`);
+  const b = e.requestInfo().body || {};
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, b.target === "products" ? "catalogue.edit" : I.perm(String(b.target || "")));
+  return e.json(200, { items: I.saveTemplate(e.app, c, b) });
+});
+routerAdd("POST", "/api/chedam/import-templates/{id}/remove", (e) => {
+  const c = require(`${__hooks}/lib/sales_http.js`).ctx(e, "catalogue.edit|customers.manage|parties.manage|stock.receive|finance.manage|hr.manage");
+  return e.json(200, { items: require(`${__hooks}/lib/imports_more.js`).removeTemplate(e.app, c, e.request.pathValue("id")) });
+});

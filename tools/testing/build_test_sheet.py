@@ -506,6 +506,16 @@ P5_TESTS = [
     ("D12", "Remote view", "iPhone (owner, on mobile data, away)", "Turn Wi-Fi off; open Chedam from the home screen", "The bar says the hub can't be reached; the link Away from the store? See the latest summary opens it"),
     ("D13", "Remote view", "iPhone (owner, away)", "Sell something at the store; 15 minutes later press Refresh", "The sale is in today's total; the time is newer"),
     ("D14", "Remote view", "Laptop (owner)", "Forget enrolled devices; on the iPhone (away) press Refresh after the next summary", "The iPhone says to enrol this device again"),
+    # ---- Step 6: imports and templates (DL-229..231)
+    ("I01", "Import products", "Laptop (manager)", "Import and export → Import products: a Shopify products CSV (or Square item library)", "Step 2 says the columns look like an export from Shopify; name, price, barcode, cost already mapped"),
+    ("I02", "Import products", "Laptop (manager)", "Map an unknown sheet by hand; Save this mapping as a template 'Our sheet'; import the same layout again", "The second time: 'your template Our sheet', mapped by itself"),
+    ("I03", "Import customers", "Laptop (manager)", "Import other records → Customers: a Square customer export, without ticking 'agreed'", "Check: every row says to confirm they agreed"),
+    ("I04", "Import customers", "Laptop (manager)", "Tick 'agreed'; check; import", "New members with their points; found at the till by phone"),
+    ("I05", "Import vendors", "Laptop (manager)", "Vendors and clients: a QuickBooks vendor list", "QuickBooks recognised; vendors with terms and contact; importing again: already there"),
+    ("I06", "Opening stock", "Laptop (manager)", "Opening stock: barcode + quantity + cost for new products", "Stock shows the quantities; Stock history: receive 'Opening stock (import)'; products that had stock are skipped"),
+    ("I07", "Open bills", "Laptop (accountant)", "Open bills and invoices: a QuickBooks A/P aging (Vendor, Num, Due date, Open balance)", "Bills with 'Opening balance' lines, no tax, due dates; in Buying → Bills and the aging"),
+    ("I08", "Import staff", "Laptop (owner)", "Staff: name, legal name, role, start date, rate, SIN", "People listed with their records (SIN masked); they can be paired and choose a PIN; a manager does not see Staff in the list"),
+    ("I09", "Export", "Laptop (owner)", "Export data: pick only 'Card processor and cloud drive'", "The tables are there; no token or secret columns"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):

@@ -13,6 +13,8 @@
   import { toRow, cents } from "../lib/import/transform.js";
   import { fullExport, GROUPS } from "../lib/export.js";
   import { COLUMNS, NEED, downloadTemplate } from "../lib/import/template.js";
+  import { detect } from "../lib/import/targets.js";
+  import ImportRecords from "../components/ImportRecords.svelte";
 
   let step = $state(1);
   let file = $state(null), read = $state(null), tableIx = $state(0), header = $state(0);
@@ -34,9 +36,9 @@
 
   async function loadRefs() {
     const [c, t, j] = await Promise.all([
-      api("GET", "/api/collections/categories/records?perPage=500&sort=name&filter=" + encodeURIComponent("deleted_at=''")),
-      api("GET", "/api/collections/tax_classes/records?perPage=100&sort=name&filter=" + encodeURIComponent("deleted_at=''")),
-      api("GET", "/api/chedam/imports"),
+      api("GET", "/api/collections/categories/records?perPage=500&sort=name&filter=" + encodeURIComponent("deleted_at=''"), null, { quiet: true }),
+      api("GET", "/api/collections/tax_classes/records?perPage=100&sort=name&filter=" + encodeURIComponent("deleted_at=''"), null, { quiet: true }),
+      can("catalogue.edit") ? api("GET", "/api/chedam/imports") : Promise.resolve({ ok: false }),
     ]);
     if (c.ok) cats = c.json.items;
     if (t.ok) classes = t.json.items;
@@ -60,13 +62,24 @@
     } catch (err) { error = "This file could not be read: " + err.message; read = null; }
     busy = "";
   }
-  function toColumns() {
+  // P5 step 6 (FR-11.08): a template recognised from the column names (the store's own first, then the built-in
+  // ones for Square, Shopify, Lightspeed, Clover, Loyverse, QuickBooks, Xero, Wave, Zoho); else suggestions
+  let found = $state(null), tplName = $state(""), tplNote = $state("");
+  async function toColumns() {
     if (body.length > 2000) { error = "This table has " + body.length + " rows; up to 2000 at a time. Split the file."; return; }
     profs = profile(head, body);
+    const sv = await api("GET", "/api/chedam/import-templates/products", null, { quiet: true });
+    found = detect(head.map(String), "products", sv.ok ? sv.json.items : []);
     const sug = suggest(profs);
-    mapping = Object.fromEntries(Object.entries(sug).map(([k, v]) => [k, v.field]));
-    conf = sug;
+    mapping = found ? { ...found.mapping } : Object.fromEntries(Object.entries(sug).map(([k, v]) => [k, v.field]));
+    conf = found ? {} : sug;
     error = ""; step = 2;
+  }
+  async function saveTemplate() {
+    const columns = Object.fromEntries(Object.entries(mapping).filter(([, v]) => v).map(([k, v]) => [head[k], v]));
+    const r = await api("POST", "/api/chedam/import-templates", { target: "products", name: tplName, columns });
+    if (!r.ok) { error = r.message; return; }
+    tplNote = `Saved as "${tplName}".`; tplName = "";
   }
 
   // ---- 2 Columns -> rows
@@ -156,6 +169,7 @@
     catch (e) { error = "Export failed: " + e.message; progress = ""; }
     busy = "";
   }
+  const KIND = { products: "Products", customers: "Customers", parties: "Vendors and clients", opening_stock: "Opening stock", open_bills: "Open bills and invoices", staff: "Staff" };
   const fieldLabel = (f) => (FIELDS.find((x) => x[0] === f) || [f, f])[1];
 </script>
 
@@ -207,7 +221,8 @@
       {/if}
 
       {#if step === 2}
-        <p class="text-sm text-muted">Each column of the file and the product field it goes to. Suggestions come from the column names and the values; check the ones marked medium or low.</p>
+        {#if found}<p class="rounded-xl bg-ok/10 px-3 py-2 text-sm text-ok">These columns look like {found.template.saved ? "your template" : "an export from"} <b>{found.template.name}</b>: mapped by themselves. Check them.</p>
+        {:else}<p class="text-sm text-muted">Each column of the file and the product field it goes to. Suggestions come from the column names and the values; check the ones marked medium or low.</p>{/if}
         <div class="space-y-2">
           {#each profs as p (p.index)}
             <div class="grid gap-2 rounded-xl border border-line p-2 sm:grid-cols-[1fr_1fr_14rem] sm:items-center">
@@ -224,6 +239,10 @@
           {/each}
         </div>
         <label class="flex min-h-10 items-center gap-3"><input type="checkbox" class="h-5 w-5 accent-accent" bind:checked={opts.split_names} /> Split "English / Français" names into the French name</label>
+        <div class="flex flex-wrap items-end gap-2">
+          <label class="block"><span class="text-sm text-muted">Save this mapping as a template</span><input class="field" bind:value={tplName} placeholder="e.g. Our supplier price list" /></label>
+          <button class="btn-ghost min-h-10 text-sm" disabled={!tplName.trim()} onclick={saveTemplate}>Save template</button>{#if tplNote}<span class="text-sm text-ok">{tplNote}</span>{/if}
+        </div>
         <div class="flex gap-2"><button class="btn-ghost" onclick={() => (step = 1)}>Back</button><button class="btn" onclick={toValues}>Next: values</button></div>
       {/if}
 
@@ -330,11 +349,14 @@
       {/if}
     </div>
 
+  {/if}
+  <ImportRecords onDone={loadRefs} />
+  {#if can("catalogue.edit")}
     <div class="card space-y-2">
       <h2 class="font-semibold">Import log</h2>
       {#if !jobs.length}<p class="text-sm text-muted">No imports yet.</p>{/if}
       {#each jobs as j (j.id)}
-        <p class="text-sm"><b class={j.status === "failed" ? "text-bad" : ""}>{j.status === "failed" ? "Failed" : "Done"}</b> · {new Date(j.created_at.replace(" ", "T")).toLocaleString()} · {j.file_name} · {j.rows} rows
+        <p class="text-sm"><b class={j.status === "failed" ? "text-bad" : ""}>{j.status === "failed" ? "Failed" : "Done"}</b> · {new Date(j.created_at.replace(" ", "T")).toLocaleString()} · {(KIND[j.kind] || "Products")} · {j.file_name} · {j.rows} rows
           {#if j.status === "completed"} · {j.created} new ({j.drafts} Drafts), {j.updated} updated, {j.skipped} skipped, {j.excluded} excluded{:else} · {j.error}{/if}</p>
       {/each}
     </div>

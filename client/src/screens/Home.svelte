@@ -293,7 +293,7 @@
           <span class="text-sm text-muted">Tills, insights, loss prevention, promotions, loyalty, audit log</span>
         </button>
       {/if}
-      {#if can("catalogue.edit") || can("data.export")}
+      {#if ["catalogue.edit", "data.export", "customers.manage", "parties.manage", "stock.receive", "finance.manage", "hr.manage"].some((p) => can(p))}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("data")}>
           <span class="font-semibold">Import and export</span>
           <span class="text-sm text-muted">Product file import, full data export</span>

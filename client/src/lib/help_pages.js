@@ -99,6 +99,13 @@ export const PAGES = [
       { p: "Updates are checked every day; the owner installs them (and can go back)." },
       { warn: "Keep the backup USB drive in the hub. Keep the printed recovery key somewhere safe, away from the store." },
     ] },
+  { id: "data", title: "Importing from another system", screens: ["data"], words: "import square shopify lightspeed clover loyverse quickbooks xero wave zoho customers vendors stock bills staff template excel csv",
+    body: [
+      { p: "Moving from another system: export from it (CSV or Excel) and import here. Exports from Square, Shopify, Lightspeed, Clover, Loyverse, QuickBooks, Xero, Wave and Zoho are recognised by their columns." },
+      { steps: ["Products first (Import products).", "Then Import other records: vendors and clients, customers, staff.", "Then opening stock (quantities on hand) and open bills and invoices (what is still owed on the first day).", "Each import: choose the file, check the columns, press Next, fix or exclude the rows with errors, press Import. It is all or nothing."] },
+      { tip: "A sheet of your own? Map it once and Save this mapping as a template: next time it is mapped by itself." },
+      { warn: "Customers are imported only when they agreed to a loyalty program in the old system: tick that box only if they did." },
+    ] },
   { id: "cloud", title: "Cloud drive and off-site backup", screens: ["cloud"], words: "google drive onedrive microsoft cloud off-site backup remote code",
     body: [
       { p: "The nightly backup is encrypted on the hub and also copied to the owner's Google Drive or OneDrive, in a folder of Chedam's own. If the store burns down, the backup and the printed recovery key bring everything back on a new hub." },
