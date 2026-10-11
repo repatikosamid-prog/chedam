@@ -302,6 +302,16 @@ def action_run(req):
                     tar.stdout.close()
                     if tar.wait() != 0 or age.returncode != 0:
                         raise Fail("write_failed", "Could not save the certificate authority.")
+            # The hub's own keys (SIN and bank details, connected services' tokens): without them a restored
+            # database cannot read those fields (P5 step 1)
+            keys = sorted(os.path.basename(k) for k in glob.glob(os.path.join(DATA, "chedam-*.key")))
+            if keys:
+                with open(final + ".keys", "wb") as out:
+                    tar = subprocess.Popen(["tar", "-C", DATA, "-cz"] + keys, stdout=subprocess.PIPE)
+                    age = subprocess.run(["age", "-r", rec], stdin=tar.stdout, stdout=out, stderr=subprocess.PIPE)
+                    tar.stdout.close()
+                    if tar.wait() != 0 or age.returncode != 0:
+                        raise Fail("write_failed", "Could not save the hub's keys.")
             with open(final + ".sha256", "w") as f:
                 f.write("%s  %s\n" % (digest, name))
             sh("sync", check=False)
@@ -316,7 +326,7 @@ def action_run(req):
             existing = [os.path.basename(p) for p in glob.glob(os.path.join(folder, "chedam-*.db.gz.age"))]
             removed = retention(existing, dt.datetime.now())
             for n in removed:
-                for p in (os.path.join(folder, n), os.path.join(folder, n + ".sha256"), os.path.join(folder, n + ".ca")):
+                for p in (os.path.join(folder, n), os.path.join(folder, n + ".sha256"), os.path.join(folder, n + ".ca"), os.path.join(folder, n + ".keys")):
                     if os.path.exists(p):
                         os.remove(p)
             size = os.path.getsize(final)
@@ -441,6 +451,20 @@ def restore(argv):
             print("Certificate authority restored: devices keep trusting the hub.")
         else:
             print("WARNING: the certificate authority could not be restored; devices must install the new certificate.")
+    # The hub's keys saved with the backup (SIN, bank details, service tokens); the current ones are kept aside
+    if os.path.exists(src + ".keys"):
+        for k in glob.glob(os.path.join(DATA, "chedam-*.key")):
+            shutil.copy2(k, "%s/backups/pre-restore-%s-%s" % (ROOT, ts, os.path.basename(k)))
+        age = subprocess.Popen(["age", "-d", "-i", keyfile, src + ".keys"], stdout=subprocess.PIPE)
+        tar = subprocess.run(["tar", "-C", DATA, "-xz", "--wildcards", "chedam-*.key"], stdin=age.stdout)
+        age.stdout.close()
+        if age.wait() == 0 and tar.returncode == 0:
+            for k in glob.glob(os.path.join(DATA, "chedam-*.key")):
+                shutil.chown(k, SVC, SVC)
+                os.chmod(k, 0o600)
+            print("Hub keys restored: SIN, bank details and connected services stay readable.")
+        else:
+            print("WARNING: the hub's keys could not be restored; SIN, bank details and service tokens must be entered again.")
     sh("systemctl", "start", "chedam-hub")
     print("Restored. The previous database is in %s/backups/pre-restore-%s.db" % (ROOT, ts))
 

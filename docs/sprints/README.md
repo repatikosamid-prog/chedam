@@ -8,9 +8,9 @@ Chedam is built in agile sprints: **one phase of the Master Specification (Secti
 | 1 | P1 Sell | A store can sell on the Pi hub | Done (2026-10-09); Q1 tax review, real tax numbers and printer tests at the end (DL-116) |
 | 2 | P2 Engage | Customers, promotions, insights | Built and deployed (2026-10-09..10); gate with the P2-P4 test week |
 | 3 | P3 Buy and spend | Purchasing, vendors, expenses | Built and deployed (2026-10-10); gate with the P2-P4 test week |
-| **4** | **P4 People and money** | **Staff, payroll inputs, accounting** | **Started 2026-10-10** (see `Sprint-4.md`); ends with one test week for P2-P4 |
-| 5 | P5 Connect and enrich | Integrations (linked card terminal: the store's own processor, DL-114), product data | Planned |
-| 6 | Web store | Online shop fed by the store's stock (added 2026-10-09, DL-114, option A: Chedam publishes the shop to a static host; phase to be placed) | Planned |
+| 4 | P4 People and money | Staff, payroll inputs, accounting | Built and deployed (2026-10-10); automated gate done, P2-P4 test week with Sreya |
+| **5** | **P5 Connect and enrich** | **Integrations (linked card terminal: the store's own processor, DL-114), cloud backup and remote view, imports, reference data** | **Started 2026-10-11** (see `Sprint-5.md`) |
+| 6 | Web store | Online shop fed by the store's stock, **hosted on the store's own Pi** through an outbound tunnel (DL-214, 2026-10-11, replaces option A of DL-114); also manager remote access (FR-12.06). Next after P5 | Planned |
 
 ## How a sprint runs
 

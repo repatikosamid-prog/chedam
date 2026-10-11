@@ -145,6 +145,9 @@ const TABLES = {
   periods:              { list: null, view: null, create: null, update: null, delete: null },
   // P4 tax returns (step 9): only through /api/chedam/tax-returns
   tax_returns:          { list: null, view: null, create: null, update: null, delete: null },
+  // P5 step 1: card processor (token sealed, hidden) and terminals: only through /api/chedam/payproc
+  payment_processors:   { list: null, view: null, create: null, update: null, delete: null },
+  card_terminals:       { list: null, view: null, create: null, update: null, delete: null },
   vendor_returns:       { list: "purchasing.view|purchasing.manage|finance.manage", view: "purchasing.view|purchasing.manage|finance.manage", create: null, update: null, delete: null },
 };
 

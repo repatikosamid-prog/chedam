@@ -99,6 +99,13 @@ export const PAGES = [
       { p: "Updates are checked every day; the owner installs them (and can go back)." },
       { warn: "Keep the backup USB drive in the hub. Keep the printed recovery key somewhere safe, away from the store." },
     ] },
+  { id: "payproc", title: "Linked card terminal", screens: ["payproc"], words: "square terminal card processor link pair code token clover",
+    body: [
+      { p: "Link the store's own card processor (Square first) so that Card on a till sends the amount to its terminal by itself. Nothing is keyed in, and the hub records the card type and last 4 digits." },
+      { steps: ["Square Developer Dashboard: open your application, Credentials, copy the access token (Sandbox to try it, Production for real).", "Home → Card processor: paste it and press Connect. Pick the store's location.", "Pair a terminal: give it a name, pick its till, press Get a code.", "On the Square Terminal: Sign in → Use a device code, and type the code shown.", "When it says Paired, Card on that till uses the terminal."] },
+      { tip: "No internet, or the processor is down? Card works as before: key the amount into the terminal and record the result." },
+      { warn: "The token is kept encrypted on the hub and never shown again. If it is changed in Square, connect again with the new one." },
+    ] },
 ];
 
 export function pageFor(screen) { return PAGES.find((p) => p.screens.includes(screen)) || PAGES[0]; }

@@ -1,0 +1,50 @@
+# P5 Connect and enrich: mini-spec
+
+Baseline: Master Specification v1.0 (Sections 7, 8, 12, 13; FR-3.21, 3.22, 4.14, 11.01, 11.08, 11.10, 11.11, 12.05, 12.06, 12.08, 12.10; R1; D1, D2). Status: **started 2026-10-11** (Sreya: "continue to P5, deploy to the Pi"). Sprint 5. Built the same way as P2-P4: each step gets its own hub test suite, a client build, a deploy and a commit; the full test runs wait for the next test week.
+
+## Goal
+
+Chedam talks to the services a store already uses, and knows more about its products: the card terminal wakes up when the cashier presses **Card** (the store's own processor, Square first), card refunds go back through it, the processor's real fees fill in by themselves; the owner's Google Drive or OneDrive gets the encrypted off-site backup and a summary the owner can read away from the store; imports take every kind of record with ready mappings for the systems stores move from; reference data suggests product details without ever overwriting them; support can be let in for a while when the owner asks.
+
+**Done when** (Section 13 phase gate): every Must below passes its tests; linked payments fall back to standalone mode when the internet or the processor is down (a card payment is never blocked); permissions on the hub; every write in the event log; no secret (processor token, cloud token, keys) in the event log, an export or the API; tested on the Pi with 3 devices and a power pull mid-sale; backup and restore verified.
+
+## Build order
+
+| Step | Delivers | Requirements |
+| --- | --- | --- |
+| 1. Payment processors and Square connect | The common payment interface (one adapter per processor) and the Square adapter; the owner connects the store's Square account and location; terminals paired to tills with a code; a fake Square for tests | FR-3.21, 3.22 (DL-114) |
+| 2. Linked card payments at the till | **Card** sends the amount to the till's terminal; the till waits for approved / declined / cancelled; the hub records card brand, last 4 and the processor's payment id itself; cancel from the till; standalone fallback | FR-3.21 |
+| 3. Linked refunds, fees and payouts | Card refunds on returns and voids back to the same card through the processor (Interac on the terminal); the real fee per payment and the processor's payouts fetched, so card fees and bank matching fill in | FR-4.14, 10.05 |
+| 4. Cloud drive connection and off-site backup | The owner connects Google Drive or OneDrive (device code sign-in, app's own folder only); the nightly encrypted backup is also copied there, the newest kept | FR-12.08, D2 |
+| 5. Owner remote view | Every 15 minutes (setting) the hub uploads an encrypted summary (sales today, tills, alerts, stock warnings, tasks); the owner's phone reads it away from the store, read-only, with "last updated" | FR-12.05 |
+| 6. Import everything, mapping templates | Imports for customers, vendors, stock counts, sales history, bills, employees; saved mappings (Square, Shopify, Lightspeed, Clover, Loyverse, QuickBooks, Xero, Wave, Zoho, generic) chosen by themselves from the file's columns | FR-11.01, 11.08 |
+| 7. Reference data | Datasets installed as signed packages (units, tax presets, shelf life, HS / Canada tariff, Open Food Facts subset, nutrients, currency history); they **suggest** in product, vendor and receiving screens and never overwrite; licences in Settings → About | FR-11.10, 11.11 |
+| 8. Remote support session | The owner switches on a support session for a few hours (outbound tunnel, no port forwarding), sees who connected, switches it off; it ends by itself | FR-12.10 |
+| 9. Gate | 3 devices, power pull mid linked payment, backup + restore, Pi load, the test sheet | Section 13 |
+
+FR-12.06 (manager remote access, Could) moves to the web store sprint: it needs the store's own public address and tunnel, which that sprint sets up (DL-214).
+
+## First design choices
+
+| ID | Decision |
+| --- | --- |
+| P5-a | **One payment interface, one adapter per processor** (`lib/payproc.js` + `lib/payproc_square.js`): connect, locations, pair a terminal, checkout, status, cancel, refund, payment details, fees and payouts. Clover, Helcim, Stripe Terminal and Moneris are later adapters behind the same calls (DL-114) |
+| P5-b | **The hub calls the processor, never the till** (outbound HTTPS only; no port forwarding). The till asks the hub, and the hub records what the processor says: a linked card payment can't be typed in or made up on a device |
+| P5-c | **Secrets live encrypted on the hub** (the processor's access token, cloud refresh tokens) with the hub's own key, like SIN (P4-b): never in the API, the event log, exports or the data export; the owner sees only "connected as …" and can disconnect |
+| P5-d | **Card payments are never blocked:** with no internet, no terminal or a processor error the till offers today's standalone dialog (key the amount in, record the result) |
+| P5-e | **Sign-in to Google and Microsoft by device code** (the owner types a short code on google.com/device or microsoft.com/devicelogin): no web address on the hub has to be reachable from outside. The app's own folder only (Drive `drive.file`, OneDrive `Files.ReadWrite.AppFolder`). Needs the Google and Microsoft app registrations (D2); until then the screens show "waiting for the app registration" and the tests use fakes |
+| P5-f | **Reference data suggests, never overwrites** (FR-11.11): a suggestion is shown beside the field with its source and is used only when someone taps it |
+
+## Decisions (2026-10-11)
+
+| ID | Decision |
+| --- | --- |
+| DL-214 | **The web store runs on the store's own Pi** (Sreya, 2026-10-11; replaces option A of DL-114, a static host). The plan for that sprint: the shop is a **separate process under its own user** with a read-only copy of the catalogue (photos, prices, "in stock / few left / sold out") that the hub refreshes, so the shop never touches the hub's database; it is reached through an **outbound tunnel** on the owner's domain (Cloudflare Tunnel: no port forwarding, the TELUS modem has none); online checkout on the processor's hosted page (Square, the same account as the terminal, P5 step 1), paid orders come back to the hub as pick-up orders with stock reserved; rate limits, and the shop stops itself before it can slow the tills. Production hardware is the Pi 4 (the Pi Zero 2 W is for development). The trade-offs written in the proposal (the shop is down when the store's power or internet is) are accepted. Manager remote access (FR-12.06) uses the same tunnel and is built there |
+
+## Design decisions (step 1)
+
+| ID | Decision |
+| --- | --- |
+| DL-215 | **Connecting the processor (FR-3.21, 3.22)**, Home → Card processor (`payments.connect`: owner only, sensitive): the owner pastes the account's **access token** from the processor's developer dashboard (Square: Sandbox to try, Production for real) and chooses the store's location (the main one is picked by itself). The hub checks the token with the processor (merchant, locations; the account must work in CAD) before saving. One processor at a time: connecting again replaces the old one. Square's sign-in page (OAuth) is not used because it needs an address on the internet to come back to; a token per store is Square's way for a business's own application |
+| DL-216 | **Secrets (P5-c):** the token is sealed with the hub's own key (`pb_data/chedam-secrets.key`, made on first use) in a hidden field; it is never in an answer, the event log, exports or the data export, and is wiped on disconnect. **Found and fixed:** the backups saved the database and the HTTPS certificate authority but not the hub's key files, so after a restore on a new card the SIN and bank details (P4) could not be read. `chedam-backup` now saves `pb_data/chedam-*.key` beside each backup (`.keys`, encrypted with the backup key) and the restore puts them back (the current ones kept aside) |
+| DL-217 | **Terminals:** "Pair a terminal" asks the processor for a **device code**, shown on the screen until the terminal signs in with it (checked every few seconds; Square codes expire after 5 minutes). Each terminal is linked to at most one till and each till to at most one terminal (linking takes it from the other). The till only learns whether Card is linked there and the terminal's name (`GET /api/chedam/payproc/till`). Setting `payments.linked` (on, how often the till asks, how long a checkout may wait) switches linked payments off for every till. Tests and the dev hub use a fake Square (`tools/devhub/fake-square.mjs`, `CHEDAM_SQUARE_BASE`) |

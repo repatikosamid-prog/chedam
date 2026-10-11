@@ -464,6 +464,20 @@ P3_TESTS = [
     ("Q95", "Feedback", "Laptop (manager)", "Reports → Feedback", "Average, counts by stars, comments; Read clears the new mark"),
 ]
 
+# P5 (Sprint 5): one block per build step.
+P5_OUT = Path(__file__).resolve().parents[2] / "docs" / "testing" / "Chedam-Manual-Tests-P5.xlsx"
+P5_TESTS = [
+    # ---- Step 1: card processor and terminals (DL-215..217)
+    ("C01", "Card processor", "Laptop (owner)", "Home → Card processor; paste a wrong token, Connect", "Refused: Square says the token is not valid"),
+    ("C02", "Card processor", "Laptop (owner)", "Paste the Square sandbox access token (Sandbox), Connect", "Connected: the account name, the main location chosen; the token is not shown again"),
+    ("C03", "Card processor", "Laptop (manager)", "Look for Card processor on Home", "No tile (owner only)"),
+    ("C04", "Card processor", "Laptop (owner)", "Pair a terminal: name 'Front terminal', till = the iPhone till; Get a code", "A 6-character code and how to type it on the terminal"),
+    ("C05", "Card processor", "Square Terminal (or the sandbox device)", "Sign in → Use a device code → type it", "Within seconds the screen says Paired"),
+    ("C06", "Card processor", "Laptop (owner)", "Link the terminal to another till", "Saved; the first till no longer has a terminal"),
+    ("C07", "Card processor", "Laptop (owner)", "Settings → Export data; Activity log for the processor", "No token anywhere"),
+    ("C08", "Card processor", "Laptop (owner)", "Disconnect", "Card on every till goes back to keying in the amount"),
+]
+
 def build(OUT=OUT, TESTS=TESTS, intro=None):
     wb = Workbook()
     ws = wb.active
@@ -560,6 +574,14 @@ if __name__ == "__main__":
             "Chedam manual tests: P4 People and money (grows with each build step; tested in the P2-P4 test week)",
             "",
             "Laptop and iPhone; Android later. Sample people: Demo Owner, Mira Manager, Ana Accountant, Cal Cashier, Sam Staff.",
+            "For each row: do what it says, compare with 'What should happen', choose Pass / Fail / Blocked, and write what happened when it is not a Pass.",
+        ])
+    elif "--p5" in sys.argv:
+        build(P5_OUT, P5_TESTS, [
+            "Chedam manual tests: P5 Connect and enrich (grows with each build step; tested in the next test week)",
+            "",
+            "Laptop and iPhone; Android later. Linked card tests need a Square sandbox account and access token (or a Square Terminal).",
+            "Sample people: Demo Owner, Mira Manager, Ana Accountant, Cal Cashier, Sam Staff.",
             "For each row: do what it says, compare with 'What should happen', choose Pass / Fail / Blocked, and write what happened when it is not a Pass.",
         ])
     elif "--retest" in sys.argv:
