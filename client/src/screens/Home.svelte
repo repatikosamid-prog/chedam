@@ -4,7 +4,7 @@
   // phases. P0 has the device manager; P1 adds products, categories and tax. My settings: large text, high contrast (NFR-16/17), change PIN.
   import { onMount } from "svelte";
   import { api, load } from "../lib/api.js";
-  import { s, go, can, signOut, applyPrefs, handleRefusal } from "../lib/session.svelte.js";
+  import { s, go, can, mayOpen, signOut, applyPrefs, handleRefusal } from "../lib/session.svelte.js";
   import TempPin from "../components/TempPin.svelte";
 
   let modules = $state([]);
@@ -131,204 +131,198 @@
     <h2 class="mb-2 font-semibold">Your store</h2>
     <div class="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
       {#if can("setup.run")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("wizard")}>
+        {#if mayOpen("wizard")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("wizard")}>
           <span class="font-semibold">Store setup</span>
           <span class="text-sm text-muted">Profile, logo, team, features</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("sales.sell")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-accent p-3 text-left text-accent-ink" onclick={() => go("sell")}>
+        {#if mayOpen("sell")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-accent p-3 text-left text-accent-ink" onclick={() => go("sell")}>
           <span class="font-semibold">Sell</span>
           <span class="text-sm opacity-90">Till, payments, receipts</span>
-        </button>
+        </button>{/if}
       {/if}
-      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("products")}>
+      {#if mayOpen("products")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("products")}>
         <span class="font-semibold">Products</span>
         <span class="text-sm text-muted">{can("catalogue.edit") ? "Add and edit products, packs, prices" : "Look up products and prices"}</span>
-      </button>
-      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("stock")}>
+      </button>{/if}
+      {#if mayOpen("stock")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("stock")}>
         <span class="font-semibold">Stock</span>
         <span class="text-sm text-muted">{can("stock.receive") ? "Add stock by phone, counts, damage" : "What is in stock"}</span>
-      </button>
+      </button>{/if}
       {#if can("health.view")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("health")}>
+        {#if mayOpen("health")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("health")}>
           <span class="font-semibold">Hub health {health ? (health.overall === "bad" ? "✗" : health.overall === "warn" ? "!" : "✓") : ""}</span>
           <span class="text-sm text-muted">Temperature, storage, clock, backups</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("updates.view")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("updates")}>
+        {#if mayOpen("updates")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("updates")}>
           <span class="font-semibold">Updates</span>
           <span class="text-sm text-muted">Check and install</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("backups.view")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("backups")}>
+        {#if mayOpen("backups")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("backups")}>
           <span class="font-semibold">Backups</span>
           <span class="text-sm text-muted">Last backup, back up now</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("devices.view")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("devices")}>
+        {#if mayOpen("devices")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("devices")}>
           <span class="font-semibold">Devices</span>
           <span class="text-sm text-muted">Pair, lock, sign out</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("settings.manage")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("printers")}>
+        {#if mayOpen("printers")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("printers")}>
           <span class="font-semibold">Receipt printer</span>
           <span class="text-sm text-muted">Find, test, cash drawer, preview</span>
-        </button>
+        </button>{/if}
       {/if}
       <!-- Modules whose screens are built have their own tiles above (Sell, Products, Stock). -->
       {#if can("books.manage")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("finance")}>
+        {#if mayOpen("finance")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("finance")}>
           <span class="font-semibold">Statements and returns</span>
           <span class="text-sm text-muted">P&L, balance sheet, cash flow, GST/HST, PST</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("books.manage")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("books")}>
+        {#if mayOpen("books")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("books")}>
           <span class="font-semibold">Books</span>
           <span class="text-sm text-muted">Trial balance, journal, closing months</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("finance.manage")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("statements")}>
+        {#if mayOpen("statements")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("statements")}>
           <span class="font-semibold">Fees and statements</span>
           <span class="text-sm text-muted">Card fees, platform payouts, vendor statements</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("support.manage")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("support")}>
+        {#if mayOpen("support")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("support")}>
           <span class="font-semibold">Remote support</span>
           <span class="text-sm text-muted">Let support in for a few hours</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("cloud.connect")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("cloud")}>
+        {#if mayOpen("cloud")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("cloud")}>
           <span class="font-semibold">Cloud drive</span>
           <span class="text-sm text-muted">Off-site backup copy, remote view</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("payments.connect")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("payproc")}>
+        {#if mayOpen("payproc")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("payproc")}>
           <span class="font-semibold">Card processor</span>
           <span class="text-sm text-muted">Link Square, pair terminals to tills</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("bank.manage")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("bank")}>
+        {#if mayOpen("bank")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("bank")}>
           <span class="font-semibold">Bank</span>
           <span class="text-sm text-muted">Statements, matching, deposits</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("payroll.manage")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("payroll")}>
+        {#if mayOpen("payroll")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("payroll")}>
           <span class="font-semibold">Payroll</span>
           <span class="text-sm text-muted">Pay runs, deductions, T4, ROE</span>
-        </button>
+        </button>{/if}
       {/if}
-      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("timesheets")}>
+      {#if mayOpen("timesheets")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("timesheets")}>
         <span class="font-semibold">Time sheets</span>
         <span class="text-sm text-muted">Hours by pay period, approval</span>
-      </button>
-      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("roster")}>
+      </button>{/if}
+      {#if mayOpen("roster")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("roster")}>
         <span class="font-semibold">Roster</span>
         <span class="text-sm text-muted">The week's shifts, swaps</span>
-      </button>
-      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("clock")}>
+      </button>{/if}
+      {#if mayOpen("clock")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("clock")}>
         <span class="font-semibold">Time clock</span>
         <span class="text-sm text-muted">Clock in and out, breaks, shifts</span>
-      </button>
-      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("people")}>
+      </button>{/if}
+      {#if mayOpen("people")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("people")}>
         <span class="font-semibold">People</span>
         <span class="text-sm text-muted">Staff records, leave; my record</span>
-      </button>
+      </button>{/if}
       {#if can("stock.approve") || can("purchasing.manage")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("recalls")}>
+        {#if mayOpen("recalls")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("recalls")}>
           <span class="font-semibold">Recalls</span>
           <span class="text-sm text-muted">Trace lots, who bought them, block and write off</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("sales.sell")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("delivery")}>
+        {#if mayOpen("delivery")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("delivery")}>
           <span class="font-semibold">Delivery orders</span>
           <span class="text-sm text-muted">Uber Eats, DoorDash, SkipTheDishes orders</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("sales.sell")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("orders")}>
+        {#if mayOpen("orders")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("orders")}>
           <span class="font-semibold">Customer orders</span>
           <span class="text-sm text-muted">Layaways, special orders, quotes</span>
-        </button>
+        </button>{/if}
       {/if}
-      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("expenses")}>
+      {#if mayOpen("expenses")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("expenses")}>
         <span class="font-semibold">Expenses</span>
         <span class="text-sm text-muted">Claim what you paid; approve; petty cash</span>
-      </button>
+      </button>{/if}
       {#if can("purchasing.view")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("buying")}>
+        {#if mayOpen("buying")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("buying")}>
           <span class="font-semibold">Buying</span>
           <span class="text-sm text-muted">Purchase orders, bills, vendor prices</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("parties.view")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("parties")}>
+        {#if mayOpen("parties")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("parties")}>
           <span class="font-semibold">Vendors and clients</span>
           <span class="text-sm text-muted">Contacts, terms, communication log, exchange rates</span>
-        </button>
+        </button>{/if}
       {/if}
-      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("messages")}>
+      {#if mayOpen("messages")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("messages")}>
         <span class="font-semibold">Messages{live.unread ? " (" + live.unread + ")" : ""}</span>
         <span class="text-sm text-muted">Everyone, groups, one-to-one, announcements</span>
-      </button>
+      </button>{/if}
       {#if can("tasks.view")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("team")}>
+        {#if mayOpen("team")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("team")}>
           <span class="font-semibold">Tasks and checklists</span>
           <span class="text-sm text-muted">Tasks, opening and closing, handover notes{can("documents.manage") ? ", licences" : ""}</span>
-        </button>
+        </button>{/if}
       {/if}
-      <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("dashboard")}>
+      {#if mayOpen("dashboard")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("dashboard")}>
         <span class="font-semibold">Dashboard</span>
         <span class="text-sm text-muted">{can("sales.view") ? "What needs attention, today, this month, stock" : "What needs attention, stock"}</span>
-      </button>
+      </button>{/if}
       {#if can("sales.view") || can("till.manage") || can("events.view") || can("promotions.manage") || can("customers.manage")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("reports")}>
+        {#if mayOpen("reports")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("reports")}>
           <span class="font-semibold">Reports</span>
           <span class="text-sm text-muted">Tills, insights, loss prevention, promotions, loyalty, audit log</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if ["catalogue.edit", "data.export", "customers.manage", "parties.manage", "stock.receive", "finance.manage", "hr.manage"].some((p) => can(p))}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("data")}>
+        {#if mayOpen("data")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("data")}>
           <span class="font-semibold">Import and export</span>
           <span class="text-sm text-muted">Product file import, full data export</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("labels.manage") && modules.some((m) => m.module === "labels")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("labels")}>
+        {#if mayOpen("labels")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("labels")}>
           <span class="font-semibold">Labels</span>
           <span class="text-sm text-muted">Shelf labels: new prices, print, reprint</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if (can("promotions.manage") || can("sales.view")) && modules.some((m) => m.module === "promotions")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("promotions")}>
+        {#if mayOpen("promotions")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("promotions")}>
           <span class="font-semibold">Promotions</span>
           <span class="text-sm text-muted">Deals, coupons, scheduled prices</span>
-        </button>
+        </button>{/if}
       {/if}
       {#if can("customers.view") && modules.some((m) => m.module === "customers_loyalty")}
-        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("customers")}>
+        {#if mayOpen("customers")}<button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("customers")}>
           <span class="font-semibold">Customers</span>
           <span class="text-sm text-muted">Loyalty points, cards, programme</span>
-        </button>
+        </button>{/if}
       {/if}
-      {#each modules.filter((m) => !["sell", "stock", "labels", "promotions", "customers_loyalty"].includes(m.module)) as m (m.id)}
-        <div class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-dashed border-line p-3" aria-disabled="true">
-          <span class="font-semibold">{m.label}</span>
-          <span class="text-sm text-muted">Coming in a later phase</span>
-        </div>
-      {/each}
     </div>
   </div>
 

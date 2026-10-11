@@ -87,8 +87,9 @@ function saveLevel(app, lv, sealed, ctx) {
   oversold(app, lv, ctx);
 }
 
-// BR-12: stock below zero (offline sales) raises an urgent task for that product; it closes by itself
-// when stock is back at zero or more (a delivery, a count).
+// BR-12: stock below zero (offline sales, or a sale beyond stock: T3) raises an urgent task for that product and
+// tells managers and stock staff in their inbox (not on the till); it closes by itself when stock is back at zero
+// or more (a delivery, a count).
 function oversold(app, lv, ctx) {
   const pid = lv.getString("product");
   const key = "stock:oversold:" + pid;
@@ -96,9 +97,17 @@ function oversold(app, lv, ctx) {
   if (!neg && !app.findRecordsByFilter("tasks", "rule_key = {:k} && status = 'open'", "", 1, 0, { k: key }).length) return;
   let name = "a product";
   try { name = "'" + app.findRecordById("products", pid).getString("name") + "'"; } catch (_) { /* removed */ }
-  require(`${__hooks}/lib/tasks.js`).syncRuleTask(app, key, neg ? 1 : 0,
-    "Oversold while offline: " + name + " is at " + r3(lv.getFloat("on_hand")) + ". Count it or receive stock.",
+  const wasOpen = app.findRecordsByFilter("tasks", "rule_key = {:k} && status = 'open'", "", 1, 0, { k: key }).length > 0;
+  const title = "Sold more than in stock: " + name + " is at " + r3(lv.getFloat("on_hand")) + ". Count it or receive stock.";
+  require(`${__hooks}/lib/tasks.js`).syncRuleTask(app, key, neg ? 1 : 0, title,
     { kind: "oversold", priority: "urgent", link_collection: "products", link_id: pid }, ctx ? ctx.actor : "system:stock");
+  if (neg && !wasOpen) {
+    try {
+      const access = require(`${__hooks}/lib/access.js`), inbox = require(`${__hooks}/lib/inbox.js`);
+      app.findRecordsByFilter("users", "status = 'active'", "", 0, 0).filter((u) => access.isOwner(app, u) || access.can(app, u, "tasks.manage") || access.can(app, u, "stock.receive"))
+        .forEach((u) => inbox.deliver(app, u.id, "alert", key + ":" + new Date().toISOString().substring(0, 10), title, title, {}, "stock"));
+    } catch (_) { /* the task is there anyway */ }
+  }
 }
 
 function addLot(app, productId, qty, cost, opts, ctx) {

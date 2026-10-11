@@ -114,7 +114,9 @@ function view(app, m, uid, all) {
 function list(app, c, id, before) {
   const uid = me(c), all = people(app);
   const ch = channel(app, id, uid);
-  const ms = app.findRecordsByFilter("messages", "channel = {:c}" + (before ? " && created_at < {:b}" : ""), "-created_at", 50, 0, { c: ch.id, b: before || "" }).reverse();
+  // Newest 50, shown oldest first. Copied into a JS array before reversing: reverse() on the record list
+  // PocketBase returns (a Go slice) swaps badly and repeats messages (T3 fix, 2026-10-11).
+  const ms = app.findRecordsByFilter("messages", "channel = {:c}" + (before ? " && created_at < {:b}" : ""), "-created_at", 50, 0, { c: ch.id, b: before || "" }).map((m) => m).reverse();
   const reads = app.findRecordsByFilter("channel_reads", "channel = {:c}", "", 0, 0, { c: ch.id }).map((r) => ({ user: r.getString("user"), name: all[r.getString("user")] || "", at: r.getString("last_read_at") }));
   return { channel: { id: ch.id, kind: ch.getString("kind"), name: title(ch, uid, all), members: membersOf(app, ch, all).map((x) => ({ id: x, name: all[x] || "" })) },
     messages: ms.map((m) => view(app, m, uid, all)), reads: reads.filter((r) => r.user !== uid && r.name), more: ms.length === 50 };

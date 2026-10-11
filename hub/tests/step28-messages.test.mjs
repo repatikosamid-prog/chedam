@@ -88,6 +88,11 @@ try {
   const seen = (await M.get(`/api/chedam/messages/channels/${dm.json.id}`)).json;
   check("read receipt: Mira sees Cal read it", seen.reads.some((r) => r.name === "Cal Cashier" && r.at >= m1.json.created_at), JSON.stringify(seen.reads));
   check("after reading: nothing unread", (await C.get("/api/chedam/messages/channels")).json.channels.find((x) => x.id === dm.json.id).unread === 0);
+  // A conversation: replies back and forth, oldest first, each message once (T3: messages were repeated)
+  for (const [who, txt] of [[C, "Reply 1"], [M, "Reply 2"], [C, "Reply 3"], [M, "Reply 4"]]) await who.post("/api/chedam/messages", { channel: dm.json.id, text: txt });
+  const conv = (await C.get(`/api/chedam/messages/channels/${dm.json.id}`)).json.messages;
+  check("a conversation: every message once, in order", new Set(conv.map((x) => x.id)).size === conv.length && conv.slice(-4).map((x) => x.text).join() === "Reply 1,Reply 2,Reply 3,Reply 4"
+    && conv[conv.length - 1].mine === false && conv[conv.length - 2].mine === true, JSON.stringify(conv.map((x) => x.text)));
   const r1 = await C.post(`/api/chedam/messages/${m1.json.id}/react`, { emoji: "👍" });
   check("a reaction", r1.status === 200 && r1.json.reactions["👍"].count === 1 && r1.json.reactions["👍"].mine === true);
   check("the same reaction again takes it back", !(await C.post(`/api/chedam/messages/${m1.json.id}/react`, { emoji: "👍" })).json.reactions["👍"]);

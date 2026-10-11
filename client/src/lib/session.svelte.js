@@ -42,6 +42,7 @@ const HASH = { devices: "#devices", wizard: "#setup", backups: "#backups", healt
   sell: "#sell", till: "#till", sales: "#sales", printers: "#printers", returns: "#returns", labels: "#labels", data: "#data", reports: "#reports", promotions: "#promotions", customers: "#customers", dashboard: "#dashboard", team: "#team", messages: "#messages", pings: "#pings", inbox: "#inbox", help: "#help", finance: "#finance", books: "#books", statements: "#statements", payproc: "#payproc", cloud: "#cloud", about: "#about", support: "#support", bank: "#bank", payroll: "#payroll", timesheets: "#timesheets", roster: "#roster", clock: "#clock", people: "#people", recalls: "#recalls", delivery: "#delivery", orders: "#orders", expenses: "#expenses", buying: "#buying", parties: "#parties" };
 
 export function go(screen) {
+  if (!mayOpen(screen)) screen = "home";
   s.screen = screen;
   const hash = HASH[screen] || "";
   if (location.hash !== hash) history.replaceState(null, "", location.pathname + location.search + hash);
@@ -134,7 +135,7 @@ async function loadMe() {
   // An address typed or linked (#tax) wins over the screen already open.
   const fromHash = FROM_HASH[location.hash];
   const want = fromHash && HASH[s.screen] !== location.hash ? fromHash : s.screen in NEEDS ? s.screen : fromHash;
-  if (want && (NEEDS[want] === "" || can(NEEDS[want]))) return go(want);
+  if (want && mayOpen(want) && (NEEDS[want] === "" || can(NEEDS[want]))) return go(want);
   return go("home");
 }
 
@@ -147,6 +148,13 @@ async function loadAutoLock() {
 export function can(code) {
   return !!(s.me && s.me.permissions && s.me.permissions[code]);
 }
+
+// A cashier sees only the cashier's screens (T3, 2026-10-11): selling, products, shifts and roster, customers
+// and loyalty, messages and pings, their own records. Help and the inbox stay. The hub still checks each action.
+const CASHIER_SCREENS = ["home", "sell", "till", "sales", "returns", "products", "product", "clock", "roster", "customers", "messages", "pings", "inbox",
+  "people", "timesheets", "help", "about", "newpin"];
+export function cashierOnly() { return !!(s.me && s.me.role && s.me.role.code === "cashier"); }
+export function mayOpen(screen) { return !cashierOnly() || CASHIER_SCREENS.includes(screen); }
 
 export async function signedIn(auth) {
   save("token", auth.token);

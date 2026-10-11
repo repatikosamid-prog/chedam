@@ -5,9 +5,21 @@
   import { onMount } from "svelte";
   import { api } from "../lib/api.js";
   import { on } from "../lib/live.svelte.js";
+  import { s } from "../lib/session.svelte.js";
 
   const REPLIES = ["On my way", "OK", "Busy, 5 minutes"];
   let open = $state([]), other = $state({});
+  // Pings the sender took back (T3): said on screen, also if this device had already answered
+  let calledOff = $state([]);
+  function tookBack(rec) {
+    let to = rec.recipients;
+    try { if (typeof to === "string") to = JSON.parse(to); } catch { to = []; }
+    const mine = s.device && (to || []).includes(s.device.id);
+    if (!mine || calledOff.some((x) => x.id === rec.id)) return;
+    calledOff = [...calledOff, { id: rec.id, text: rec.text, by: rec.withdrawn_by || rec.from_name }];
+    beep();
+    setTimeout(() => (calledOff = calledOff.filter((x) => x.id !== rec.id)), 20000);
+  }
   let ctx = null, beepT = null;
 
   async function load() {
@@ -37,7 +49,12 @@
 
   onMount(() => {
     load();
-    const off = on("pings", (d) => { if (d.record && (d.action === "create" || d.action === "update")) { if (d.action === "create" && !d.record.urgent) beep(); load(); } });
+    const off = on("pings", (d) => {
+      if (!d.record || (d.action !== "create" && d.action !== "update")) return;
+      if (d.action === "update" && d.record.withdrawn_at) tookBack(d.record);
+      if (d.action === "create" && !d.record.urgent) beep();
+      load();
+    });
     const t = setInterval(load, 30000);
     return () => { off(); clearInterval(t); clearInterval(beepT); };
   });
@@ -50,6 +67,13 @@
   const ago = (t) => { const m = Math.round((Date.now() - new Date(String(t).replace(" ", "T"))) / 60000); return m < 1 ? "just now" : m + " min ago"; };
 </script>
 
+{#each calledOff as c (c.id)}
+  <div class="fixed inset-x-2 top-2 z-[61] mx-auto max-w-lg rounded-2xl border-2 border-warn bg-card p-3 shadow-lg" role="alert">
+    <p class="font-semibold text-warn">Called off by {c.by}</p>
+    <p>"{c.text}" is no longer needed.</p>
+    <button class="btn-ghost mt-1 min-h-10 text-sm" onclick={() => (calledOff = calledOff.filter((x) => x.id !== c.id))}>OK</button>
+  </div>
+{/each}
 {#if urgent.length}
   {@const p = urgent[0]}
   <div class="fixed inset-0 z-[60] flex items-center justify-center bg-bad/90 p-4 text-white" role="alertdialog" aria-modal="true" aria-label="Urgent ping">

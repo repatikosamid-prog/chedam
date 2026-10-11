@@ -15,7 +15,14 @@
     if (a) { if (a.ok) tg = a.json; else if (!(await handleRefusal(a))) error = a.message; }
     if (b && b.ok) sent = b.json.sent;
   }
-  onMount(() => { load(); return on("pings", () => load()); });
+  // Which devices are online changes all the time: asked again every 15 s (T3)
+  async function refreshTargets() { const a = await api("GET", "/api/chedam/pings/targets", null, { quiet: true }); if (a.ok) tg = a.json; }
+  onMount(() => {
+    load();
+    const t = setInterval(refreshTargets, 15000);
+    const off = on("pings", () => load());
+    return () => { clearInterval(t); off(); };
+  });
 
   async function send(t) {
     const body = { target, text: t || text, urgent };
@@ -58,7 +65,7 @@
       <h2 class="font-semibold">Sent from this device (last 12 hours)</h2>
       {#each sent as p (p.id)}
         <div class="border-b border-line pb-2 text-sm">
-          <p><b>{p.urgent ? "⚠ " : ""}{p.text}</b> → {p.to} · {when(p.created_at)}{p.escalated ? " · sent to managers" : ""}{p.closed ? " · closed" : ""}</p>
+          <p><b>{p.urgent ? "⚠ " : ""}{p.text}</b> → {p.to} · {when(p.created_at)}{p.escalated ? " · sent to managers" : ""}{p.withdrawn ? " · taken back (they were told)" : p.closed ? " · closed" : ""}</p>
           {#each p.acks as a, i (i)}<p class="text-ok">✓ {a.name || a.device_name}{a.device_name ? " (" + a.device_name + ")" : ""}{a.reply ? ": " + a.reply : ""}</p>{:else}<p class="text-muted">No answer yet</p>{/each}
           {#if !p.closed}<button class="underline" onclick={() => withdraw(p)}>Take back</button>{/if}
         </div>

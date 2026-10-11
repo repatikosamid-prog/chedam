@@ -219,4 +219,4 @@ function complete(app, input, ctx) {
   return { duplicate: false, sale: sales().saleView(app, id, ctx.showCost) };
 }
 
-module.exports = { pack, complete };
+module.exports = { pack, complete, forceOut };

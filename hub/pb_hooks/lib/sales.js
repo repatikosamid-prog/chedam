@@ -270,7 +270,11 @@ function build(app, input, actor) {
 
 // Stock before payment (BR-11): enough on hand (minus other carts' soft holds, BR-13), loose units or
 // sealed packs as the line needs (pack-break prompt, FR-3.05), unexpired lots (BR-14).
+// T3 (2026-10-11): with setting sales.allow_oversell (on by default) a sale with more than is in stock goes
+// through with no message on the till: stock goes below zero and the oversold task (BR-12, lib/stock.js) tells
+// the managers and stock staff. Expired lots still need a manager (BR-14).
 function stockCheck(app, live, cartId, problems, need) {
+  const oversell = setting(app, "sales.allow_oversell", true) !== false;
   const byProduct = {};
   live.forEach((l) => { (byProduct[l.p.id] || (byProduct[l.p.id] = [])).push(l); });
   const now = new Date().toISOString().replace("T", " ");
@@ -284,6 +288,7 @@ function stockCheck(app, live, cartId, problems, need) {
     const held = app.findRecordsByFilter("soft_holds", "product = {:p} && cart_id != {:c} && expires_at > {:n}", "", 0, 0,
       { p: pid, c: String(cartId || "-"), n: now }).reduce((a, h) => a + h.getFloat("qty_base"), 0);
     const want = r3(ls.reduce((a, l) => a + l.base, 0));
+    if (oversell && want > r3(onHand - held) + 1e-9) return;
     if (want > r3(onHand - held) + 1e-9) {
       problems.push({ key: ls[0].key, type: "stock", available: r3(Math.max(0, onHand - held)),
         message: "Only " + r3(Math.max(0, onHand - held)) + " of '" + p.getString("name") + "' available" + (held ? " (some are in another till's cart)" : "") + "." });
@@ -557,14 +562,19 @@ function complete(app, input, ctx, internal) {
       if (!b.training) {
         // A bundle's components leave stock instead of the bundle (P3 step 8)
         require(`${__hooks}/lib/variety.js`).stockItems(app, l).forEach((x) => {
-          openPacksFor(app, x, ctx);
-          const lv = st().level(app, x.p.id, ctx);
-          const sealed = st().sealedOf(lv);
-          st().removeFromLevel(app, x.p, x.u, st().isLooseUnit(x.u) ? x.base : x.qty, lv, sealed);
-          st().saveLevel(app, lv, sealed, ctx);
-          // Expired lots only when fresh ones are not enough (the sale was approved for it, BR-14).
-          const have = st().lotsOf(app, x.p.id);
-          const t = st().takeLots(app, x.p.id, x.base, { lots: have.freshQty + 1e-9 < x.base ? have.all : have.fresh }, ctx);
+          let t;
+          const short = setting(app, "sales.allow_oversell", true) !== false && st().level(app, x.p.id, ctx).getFloat("on_hand") + 1e-9 < x.base;
+          if (short) t = require(`${__hooks}/lib/offline.js`).forceOut(app, x, ctx);     // T3: sold beyond stock, goes negative
+          else {
+            openPacksFor(app, x, ctx);
+            const lv = st().level(app, x.p.id, ctx);
+            const sealed = st().sealedOf(lv);
+            st().removeFromLevel(app, x.p, x.u, st().isLooseUnit(x.u) ? x.base : x.qty, lv, sealed);
+            st().saveLevel(app, lv, sealed, ctx);
+            // Expired lots only when fresh ones are not enough (the sale was approved for it, BR-14).
+            const have = st().lotsOf(app, x.p.id);
+            t = st().takeLots(app, x.p.id, x.base, { lots: have.freshQty + 1e-9 < x.base ? have.all : have.fresh }, ctx);
+          }
           lots = lots.concat(t.taken); cost += t.value;
           require(`${__hooks}/lib/delivery.js`).onSold(app, ctx, x.p, x.base, id, "");      // consignment: owed to the vendor (FR-6.14)
           st().movement(app, { product: x.p.id, type: "sale", qty_base: -x.base, selling_unit: x.u.id, unit_qty: x.qty, lots_taken: t.taken,

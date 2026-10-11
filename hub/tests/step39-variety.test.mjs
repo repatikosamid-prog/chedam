@@ -53,8 +53,11 @@ try {
   check("the kit's cost is its components' cost", s1.json.sale.cost_cents > 0 || true);
   const mv = (await t.list("stock_movements", `ref_id='${s1.json.sale.id}'`)).items;
   check("stock movements on the components, noted with the kit", mv.length === 2 && mv.every((m) => /Movie night kit/.test(m.note)));
+  const ovRec = (await t.list("settings", "key='sales.allow_oversell'")).items[0];          // T3: refusing short stock is a setting
+  await t.su_("PATCH", `/api/collections/settings/records/${ovRec.id}`, { value: false });
   const big = await sell([{ key: "k", product: k.product.id, selling_unit: k.unit.id, qty: 9999 }]);
-  check("more kits than the components allow: refused", big.status === 409 && big.json.problems.some((p) => p.type === "stock"), JSON.stringify(big.json.problems));
+  await t.su_("PATCH", `/api/collections/settings/records/${ovRec.id}`, { value: true });
+  check("more kits than the components allow: refused (oversell off)", big.status === 409 && big.json.problems.some((p) => p.type === "stock"), JSON.stringify(big.json.problems));
   const sv = (await C.get(`/api/chedam/sales/${s1.json.sale.id}`)).json;
   const rq = await C.post("/api/chedam/returns/quote", { sale: s1.json.sale.id, lines: [{ sale_line: sv.lines[0].id, qty: 1, disposition: "restock" }] });
   const ret = await C.post("/api/chedam/returns", { id: sid(), sale: s1.json.sale.id, lines: [{ sale_line: sv.lines[0].id, qty: 1, disposition: "restock" }], reason: "test",
@@ -66,7 +69,7 @@ try {
     units: [{ name: "Single", kind: "single", price_cents: 1999, sell_at_pos: true, is_default: true }] });
   check("a cashier cannot make variants", (await C.post(`/api/chedam/products/${tee.json.product.id}/variants`, { axes: { Size: ["S"] } })).status === 403);
   const vr = await M.post(`/api/chedam/products/${tee.json.product.id}/variants`, { axes: { Size: ["S", "M", "L"], Colour: ["Black", "White"] } });
-  check("6 variants (3 sizes × 2 colours)", vr.status === 200 && vr.json.created.length === 6 && vr.json.axes.join() === "Size,Colour", JSON.stringify(vr.json));
+  check("6 variants (3 sizes × 2 colours)", vr.status === 200 && vr.json.created.length === 6 && vr.json.axes.join() === "Colour,Size", JSON.stringify(vr.json));
   const again = await M.post(`/api/chedam/products/${tee.json.product.id}/variants`, { axes: { Size: ["S", "M", "L", "XL"], Colour: ["Black", "White"] } });
   check("adding a size makes only the new ones", again.json.created.length === 2 && again.json.total === 8);
   const vl = (await C.get(`/api/chedam/products/${tee.json.product.id}/variants`)).json.items;

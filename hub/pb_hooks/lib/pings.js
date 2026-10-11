@@ -30,7 +30,7 @@ function targets(app, c) {
 function view(app, p, c) {
   const acks = j(p, "acks", []);
   return { id: p.id, from: p.getString("from_name"), from_device: p.getString("from_device_name"), mine: p.getString("from_user") === c.actor, to: p.getString("target_label"),
-    text: p.getString("text"), urgent: p.getBool("urgent"), closed: p.getBool("closed"), escalated: !!p.getString("escalated_at"), created_at: p.getString("created_at"),
+    text: p.getString("text"), urgent: p.getBool("urgent"), closed: p.getBool("closed"), withdrawn: !!p.getString("withdrawn_at"), withdrawn_by: p.getString("withdrawn_by"), escalated: !!p.getString("escalated_at"), created_at: p.getString("created_at"),
     acks: acks, acked_here: acks.some((a) => a.device === c.device), for_me: j(p, "recipients", []).indexOf(c.device) >= 0 };
 }
 
@@ -85,7 +85,7 @@ function ack(app, c, id, reply) {
 function withdraw(app, c, id) {
   const p = app.findRecordById("pings", id);
   if (p.getString("from_user") !== c.actor && !c.can("users.manage")) throw new ForbiddenError("Only who sent it can take it back.");
-  p.set("closed", true); stamp(p, c); app.save(p);
+  p.set("closed", true); p.set("withdrawn_at", new DateTime()); p.set("withdrawn_by", c.user ? c.user.getString("name") : ""); stamp(p, c); app.save(p);
   require(`${__hooks}/lib/tasks.js`).syncRuleTask(app, "ping:" + p.id, 0, "", null, c.actor);
   return view(app, p, c);
 }

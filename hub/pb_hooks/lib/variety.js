@@ -74,7 +74,7 @@ function makeVariants(app, c, parentId, body) {
   const parent = app.findRecordById("products", parentId);
   if (parent.getString("parent")) bad("A variant cannot have variants; use its parent.");
   const axes = body.axes || {};
-  const names = Object.keys(axes).filter((k) => Array.isArray(axes[k]) && axes[k].length).slice(0, 3);
+  const names = Object.keys(axes).filter((k) => Array.isArray(axes[k]) && axes[k].length).sort().slice(0, 3);   // sorted: the request body has no key order
   if (!names.length) bad("Give at least one axis with values, e.g. Size: S, M, L.");
   let combos = [{}];
   names.forEach((k) => {

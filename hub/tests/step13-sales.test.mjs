@@ -161,6 +161,9 @@ try {
   check("cannot recall twice", (await C.post(`/api/chedam/holds/${hd.json.id}/recall`, {})).status === 400);
   const vapeLeft = (await level(vape.product.id)).level.on_hand;   // 4 left: not low yet (limit 3)
   await C.post("/api/chedam/sales", { id: sid(), lines: [L(vape, { age_checked: true })], payments: [{ method: "card", amount_cents: (await C.post("/api/chedam/sales/quote", { lines: [L(vape, { age_checked: true })] })).json.total_cents }] });
+  // The till refusing short stock is the store's choice (T3: sales.allow_oversell, on by default); off here
+  const ovRec = (await t.list("settings", "key='sales.allow_oversell'")).items[0];
+  await t.su_("PATCH", `/api/collections/settings/records/${ovRec.id}`, { value: false });
   const sh = await M.post("/api/chedam/sales/soft-holds", { cart_id: "cartM12345", items: [{ product: vape.product.id, qty_base: 2 }] });
   check("low stock (3 left): 2 held for the manager's cart", sh.status === 200 && sh.json.held.length === 1, JSON.stringify(sh.json) + " left " + (vapeLeft - 1));
   r = await C.post("/api/chedam/sales/quote", { cart_id: "cartC12345", lines: [L(vape, { qty: 2, age_checked: true })] });
@@ -169,6 +172,15 @@ try {
   r = await C.post("/api/chedam/sales/quote", { cart_id: "cartC12345", lines: [L(vape, { qty: 2, age_checked: true })] });
   check("released: now it can", r.json.problems.length === 0, JSON.stringify(r.json.problems));
   check("more than on hand refused (BR-11)", (await C.post("/api/chedam/sales/quote", { lines: [L(vape, { qty: 50, age_checked: true })] })).json.problems.some((p) => p.type === "stock"));
+  await t.su_("PATCH", `/api/collections/settings/records/${ovRec.id}`, { value: true });
+  const big = await C.post("/api/chedam/sales/quote", { lines: [L(vape, { qty: 50, age_checked: true })] });
+  check("oversell on (default): no message on the till", !big.json.problems.some((p) => p.type === "stock" || p.type === "pack_break"), JSON.stringify(big.json.problems));
+  const os = await C.post("/api/chedam/sales", { id: sid(), lines: [L(vape, { qty: 50, age_checked: true })], payments: [{ method: "cash", amount_cents: big.json.total_cents + 100 }] });
+  const vl = (await level(vape.product.id)).level.on_hand;
+  const ot = (await t.list("tasks", `kind='oversold' && link_id='${vape.product.id}' && status='open'`)).items[0];
+  const mi = (await t.list("inbox_items", `kind='alert' && title~'Sold more than in stock'`)).items;
+  check("the sale goes through; stock below zero", os.status === 200 && vl < 0, JSON.stringify(os.json).slice(0, 200) + " level " + vl);
+  check("managers and stock staff are told: an urgent task and an inbox alert", ot && ot.priority === "urgent" && /Sold more than in stock/.test(ot.title) && mi.length >= 1, JSON.stringify(mi.map((x) => x.title)));
 
   console.log("Void (FR-3.11)");
   const before = (await level(chips.product.id)).level.on_hand;

@@ -15,6 +15,12 @@
   let mentionQ = $state(null), linkQ = $state(null), linkHits = $state([]);
   let anns = $state([]), canAnn = $state(false), newAnn = $state(null), newChan = $state(null);
   let list;
+  let picked = $state("");             // the message tapped: its reactions and Remove show (T3: like a chat app)
+  async function chatWith(p) {
+    const r = await api("POST", "/api/chedam/messages/channels", { kind: "direct", members: [p.id] }, { quiet: true });
+    if (!r.ok) return fail(r);
+    await loadChans(); openChan(r.json.id);
+  }
 
   const when = (t) => (t ? new Date(String(t).replace(" ", "T")).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "");
   const fail = async (r) => { if (!(await handleRefusal(r))) error = r.message; };
@@ -167,10 +173,16 @@
         <div class="flex gap-2"><button class="btn" type="submit">Start</button><button class="btn-ghost" type="button" onclick={() => (newChan = null)}>Cancel</button></div>
       </form>
     {/if}
+    {#if people.length > 1}
+      <div class="flex gap-2 overflow-x-auto pb-1" aria-label="Chat with">
+        {#each people.filter((p) => p.id !== me) as p (p.id)}<button class="flex min-h-12 shrink-0 items-center gap-2 rounded-full border border-line bg-card px-3" onclick={() => chatWith(p)}>
+          <span class="flex h-8 w-8 items-center justify-center rounded-full bg-accent/15 font-semibold">{p.name.charAt(0)}</span><span class="text-sm">{p.name.split(" ")[0]}</span></button>{/each}
+      </div>
+    {/if}
     {#each chans as c (c.id)}
       <button class="card flex w-full items-center justify-between gap-3 text-left {c.unread ? 'border-accent' : ''}" onclick={() => openChan(c.id)}>
         <span class="min-w-0"><span class="block font-semibold">{c.kind === "everyone" ? "📣 " : c.kind === "group" ? "👥 " : ""}{c.name}</span>
-          {#if c.last}<span class="block truncate text-sm text-muted">{c.last.author}: {c.last.text}</span>{/if}</span>
+          {#if c.last}<span class="block truncate text-sm text-muted">{c.last.author}: {c.last.text}</span><span class="block text-xs text-muted">{when(c.last.at)}</span>{/if}</span>
         {#if c.unread}<span class="shrink-0 rounded-full px-2 font-semibold {c.mentioned ? 'bg-warn text-white' : 'bg-accent text-accent-ink'}">{c.mentioned ? "@ " : ""}{c.unread}</span>{/if}
       </button>
     {/each}
@@ -180,7 +192,8 @@
         {#if more}<button class="btn-ghost w-full text-sm" onclick={() => openChan(open.id, msgs[0].created_at)}>Earlier messages</button>{/if}
         {#each msgs as m (m.id)}
           <div class="flex {m.mine ? 'justify-end' : 'justify-start'}">
-            <div class="max-w-[85%] rounded-2xl px-3 py-2 {m.mine ? 'bg-accent/15' : m.mentions_me ? 'bg-warn/15' : 'bg-soft'}">
+            <div class="max-w-[85%] rounded-2xl px-3 py-2 {m.mine ? 'bg-accent/15' : m.mentions_me ? 'bg-warn/15' : 'bg-soft'}" role="button" tabindex="0"
+              onclick={() => (picked = picked === m.id ? "" : m.id)} onkeydown={(e) => { if (e.key === "Enter") picked = picked === m.id ? "" : m.id; }}>
               {#if !m.mine}<p class="text-xs font-semibold">{m.author_name}</p>{/if}
               {#if m.removed}<p class="text-sm italic text-muted">Message removed</p>{:else}
                 {#if m.text}<p class="whitespace-pre-line break-words">{m.text}</p>{/if}
@@ -190,8 +203,8 @@
               {/if}
               <p class="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted">{when(m.created_at)}
                 {#each Object.entries(m.reactions) as [e, r] (e)}<button class="rounded-full border px-1 {r.mine ? 'border-accent' : 'border-line'}" title={r.who.join(", ")} onclick={() => react(m, e)}>{e} {r.count}</button>{/each}
-                {#if !m.removed}<span class="inline-flex gap-0.5">{#each EMOJI.filter((e) => !m.reactions[e]) as e (e)}<button class="opacity-50 hover:opacity-100" aria-label={"React " + e} onclick={() => react(m, e)}>{e}</button>{/each}</span>{/if}
-                {#if m.mine && !m.removed}<button class="underline" onclick={() => removeMsg(m)}>Remove</button>{/if}
+                {#if picked === m.id && !m.removed}<span class="inline-flex gap-1">{#each EMOJI.filter((e) => !m.reactions[e]) as e (e)}<button class="text-base" aria-label={"React " + e} onclick={(ev) => { ev.stopPropagation(); react(m, e); picked = ""; }}>{e}</button>{/each}</span>{/if}
+                {#if picked === m.id && m.mine && !m.removed}<button class="underline" onclick={(ev) => { ev.stopPropagation(); removeMsg(m); }}>Remove</button>{/if}
                 {#if m.mine && open.kind !== "everyone" && readers(m).length}<span>· Read by {readers(m).join(", ")}</span>{/if}</p>
             </div>
           </div>
