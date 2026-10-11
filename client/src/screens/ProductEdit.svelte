@@ -18,7 +18,9 @@
   let p = $state({ name: "", name_fr: "", category: "", base_unit: "each", tax_class: "", plu: "", pos_button: false,
     reorder_point: 0, reorder_max: 0, is_bundle: false, components: [], serial_tracked: false, warranty_days: 0, consignment_vendor: "", consignment_cost_cents: 0, parent: "", variant: {}, variant_axes: [], description: "", tare: 0, scale_code: "", scale_ack: false, perishable: false, shelf_life_days: 0,
     expiry_at_receiving: false, storage_area: "", temp_min_c: 0, temp_max_c: 0, age_restricted: false, min_age: 19, deposits_fees: [], imported: false,
-    hs_code: "", origin_country: "", non_returnable: false, size_qty: 0, size_unit: "", status: "draft" });
+    hs_code: "", origin_country: "", non_returnable: false, size_qty: 0, size_unit: "", brand: "", vendor: "", status: "draft" });
+  // T3: stock to add when the product is saved (new products), with the day it came in (today unless changed)
+  let addStock = $state({ qty: "", cost: "", on: new Date().toLocaleDateString("en-CA") });
   let costText = $state("");
   // P5 step 7 (FR-11.10, 11.11): suggestions from reference data, used only when tapped
   let ref = $state({ product: null, shelf: null, hs: null, hsq: "", busy: "" });
@@ -104,6 +106,7 @@
     taxes = v.taxes;
     if (!p.parent) loadVariants();
     if (p.consignment_vendor) { loadVendors(); consCost = (p.consignment_cost_cents / 100).toFixed(2); }
+    if (p.vendor) loadVendors();
   }
 
   onMount(async () => {
@@ -121,6 +124,17 @@
       units = [blankUnit("single")];
       // From "Add stock": an unknown barcode starts a new product with it filled in.
       if (s.newBarcode) { units[0].codes = s.newBarcode; s.newBarcode = ""; }
+      // Duplicate (T3): a copy of another product, not saved yet; barcodes and PLU are left out (they are unique)
+      if (s.productCopy) {
+        const cp = s.productCopy; s.productCopy = null;
+        Object.keys(p).forEach((k) => { if (cp.product[k] !== undefined && k !== "status" && k !== "plu") p[k] = cp.product[k]; });
+        p.name = cp.product.name + " (copy)";
+        costText = cp.costText || "";
+        units = cp.units.map((u) => ({ ...u, id: newId(), saved: false, codes: "", oldPrice: 0 }));
+        const ids = Object.fromEntries(cp.units.map((u, i) => [u.id, units[i].id]));
+        units.forEach((u) => { if (u.contains_unit) u.contains_unit = ids[u.contains_unit] || ""; });
+        ok = "A copy of " + cp.product.name + ": change what differs, add its barcode, then save.";
+      }
     } else {
       await loadProduct();
     }
@@ -180,8 +194,15 @@
       if (r.json && r.json.data && Array.isArray(r.json.data.problems)) problems = r.json.data.problems;
       return;
     }
+    const wasNew = isNew;
     s.productId = r.json.product.id;
     show(r.json);
+    // Stock added with the new product (T3)
+    if (wasNew && Number(addStock.qty) > 0 && can("stock.receive")) {
+      const sr = await api("POST", "/api/chedam/stock/receive", { op_id: newId(), lines: [{ product: r.json.product.id, qty: Number(addStock.qty),
+        cost_cents: toCents(addStock.cost) ?? undefined, received_on: addStock.on, note: "Stock added with the new product" }] });
+      if (!sr.ok) { error = "Saved, but the stock was not added: " + sr.message; return; }
+    }
     ok = r.json.product.status === "active" ? "Saved. The product can be sold." : "Saved as a Draft.";
   }
 
@@ -230,6 +251,17 @@
         <input class="field" bind:value={p.name} maxlength="160" required /></label>
       <label class="block"><span class="text-sm text-muted">French name (labels, optional)</span>
         <input class="field" bind:value={p.name_fr} maxlength="160" /></label>
+      <label class="block"><span class="text-sm text-muted">Brand</span><input class="field" bind:value={p.brand} maxlength="80" /></label>
+      <label class="block"><span class="text-sm text-muted">Supplier</span>
+        <select class="field" bind:value={p.vendor} onfocus={loadVendors}><option value="">—</option>{#each vendorList as v (v.id)}<option value={v.id}>{v.name}</option>{/each}
+          {#if p.vendor && !vendorList.some((v) => v.id === p.vendor)}<option value={p.vendor}>(saved supplier)</option>{/if}</select></label>
+      {#if isNew && can("stock.receive")}
+        <div class="sm:col-span-2 grid gap-2 rounded-xl border border-line p-2 sm:grid-cols-3">
+          <label class="block"><span class="text-sm text-muted">Stock to add now (base units)</span><input class="field" type="number" min="0" step="any" bind:value={addStock.qty} /></label>
+          <label class="block"><span class="text-sm text-muted">Its cost each ($, optional)</span><input class="field" inputmode="decimal" bind:value={addStock.cost} /></label>
+          <label class="block"><span class="text-sm text-muted">Received on</span><input class="field" type="date" bind:value={addStock.on} max={new Date().toLocaleDateString("en-CA")} /></label>
+        </div>
+      {/if}
       <div class="sm:col-span-2 space-y-1 rounded-xl border border-line p-2 text-sm">
         <button class="underline" type="button" disabled={ref.busy === "product"} onclick={lookUpBarcode}>{ref.busy === "product" ? "Looking up…" : "Suggest from the barcode"}</button>
         {#if ref.product}
@@ -465,6 +497,7 @@
         <button class={mayPrice ? "btn-ghost" : "btn"} disabled={busy} onclick={() => save(false)}>Save as draft</button>
       {/if}
       {#if !isNew && p.status === "active"}<button class="btn-ghost" disabled={busy} onclick={() => setStatus("archived")}>Archive</button>{/if}
+      {#if !isNew && can("catalogue.edit")}<button class="btn-ghost" disabled={busy} onclick={() => { s.productCopy = { product: $state.snapshot(p), units: $state.snapshot(units), costText }; s.productId = ""; }}>Duplicate</button>{/if}
       {#if !isNew && !fromReceive}<button class="btn-ghost" onclick={() => { s.stockProductId = s.productId; go("stockitem"); }}>Stock</button>{/if}
       {#if s.returnTo === "receive" && s.productId}
         <button class="btn-ghost" onclick={() => { s.receiveProduct = s.productId; s.returnTo = ""; go("receive"); }}>Add it to the delivery</button>

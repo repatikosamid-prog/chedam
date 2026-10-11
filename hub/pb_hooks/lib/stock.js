@@ -114,7 +114,7 @@ function addLot(app, productId, qty, cost, opts, ctx) {
   const lot = new Record(app.findCollectionByNameOrId("stock_lots"));
   lot.load({ product: productId, lot_code: opts.lot_code || "", expiry_date: opts.expiry ? dbDate(opts.expiry) : "",
     received_qty: r3(qty), qty: r3(qty), cost_cents: Math.round(cost * 10000) / 10000, storage_area: opts.storage_area || "",
-    source: opts.source, received_at: new DateTime() });
+    source: opts.source, received_at: opts.received_on ? opts.received_on + " 12:00:00.000Z" : new DateTime() });
   stamp(lot, ctx);
   app.save(lot);
   return lot;
@@ -220,15 +220,17 @@ function receive(app, body, ctx) {
       if (p.getInt("shelf_life_days") > 0 && !p.getBool("expiry_at_receiving")) expiry = today(p.getInt("shelf_life_days"));
       else bad("Enter the expiry date for '" + p.getString("name") + "'.");
     }
+    // The day it came in, when not today (T3: "stock added" on the product form; never in the future)
+    const on = /^\d{4}-\d{2}-\d{2}$/.test(String(ln.received_on || "")) && ln.received_on <= today() ? ln.received_on : "";
     const lot = addLot(app, p.id, base, perBase, { lot_code: String(ln.lot_code || "").substring(0, 60), expiry: expiry,
-      storage_area: ln.storage_area || p.getString("storage_area"), source: "receive" }, ctx);
+      storage_area: ln.storage_area || p.getString("storage_area"), source: "receive", received_on: on }, ctx);
     const lv = level(app, p.id, ctx);
     const sealed = sealedOf(lv);
     addToLevel(u, n, lv, sealed);
     lv.set("last_received_at", new DateTime());
     saveLevel(app, lv, sealed, ctx);
     out.push(movement(app, { product: p.id, type: "receive", qty_base: base, selling_unit: u.id, unit_qty: n, lot: lot.id,
-      cost_cents: Math.round(perBase * 10000) / 10000, value_cents: Math.round(base * perBase), note: String(ln.note || "").substring(0, 1000) }, ctx, i));
+      cost_cents: Math.round(perBase * 10000) / 10000, value_cents: Math.round(base * perBase), note: (String(ln.note || "") + (on && on !== today() ? " (received " + on + ")" : "")).trim().substring(0, 1000) }, ctx, i));
     // Last cost becomes the product's cost (FR-6.04 "last cost"); the change goes to price history.
     if (unitCost !== null && Math.round(perBase) !== p.getInt("cost_cents")) {
       p.set("cost_cents", Math.round(perBase));
