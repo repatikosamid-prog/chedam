@@ -26,6 +26,9 @@
     if (p.ok && p.json.items[0]) province = p.json.items[0].value;
   }
   onMount(load);
+  // P5 step 7: the sales tax rates of each province, for reference (nothing is changed from here)
+  let presets = $state(null);
+  async function showPresets() { const r = await api("GET", "/api/chedam/reference/tax-presets", null, { quiet: true }); presets = r.ok ? r.json : { items: [] }; }
 
   // What a class charges today in this store's province.
   function charges(c) {
@@ -78,6 +81,13 @@
   </div>
   {#if error}<p role="alert" class="rounded-xl bg-bad/10 px-3 py-2 text-bad">{error}</p>{/if}
   {#if ok}<p role="status" class="rounded-xl bg-ok/10 px-3 py-2 text-ok">{ok}</p>{/if}
+  <div class="card space-y-1 text-sm">
+    <button class="underline" onclick={() => (presets ? (presets = null) : showPresets())}>{presets ? "Hide" : "Show"} the sales tax rates of every province (for reference)</button>
+    {#if presets}
+      {#each presets.items as x (x.province)}<p class={x.province === province ? "font-semibold" : ""}>{x.province} {x.name}: {[x.gst ? "GST " + x.gst + "%" : "", x.hst ? "HST " + x.hst + "%" : "", x.pst ? (x.pst_name || "PST") + " " + x.pst + "%" : "", x.qst ? "QST " + x.qst + "%" : ""].filter(Boolean).join(" + ")}{x.note ? " · " + x.note : ""}</p>{/each}
+      <p class="text-xs text-muted">{presets.source}. Suggestions only: the store's own rates above are what Chedam charges.</p>
+    {/if}
+  </div>
 
   {#if rates.some((r) => r.pending_review) || classes.some((c) => c.pending_review)}
     <div class="card border-warn">

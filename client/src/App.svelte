@@ -55,6 +55,7 @@
   import CardTerminal from "./screens/CardTerminal.svelte";
   import CloudDrive from "./screens/CloudDrive.svelte";
   import RemoteView from "./screens/RemoteView.svelte";
+  import About from "./screens/About.svelte";
   import { enrolment as remoteEnrolment } from "./lib/remote_read.js";
   import Bank from "./screens/Bank.svelte";
   import Payroll from "./screens/Payroll.svelte";
@@ -243,6 +244,7 @@
   {:else if s.screen === "statements"}<Statements />
   {:else if s.screen === "payproc"}<CardTerminal />
   {:else if s.screen === "cloud"}<CloudDrive />
+  {:else if s.screen === "about"}<About />
   {:else if s.screen === "books"}<Books />
   {:else if s.screen === "finance"}<Finance />
   {:else if s.screen === "help"}{#key s.helpFor}<Help />{/key}

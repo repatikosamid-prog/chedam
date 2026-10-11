@@ -1,0 +1,17 @@
+{ "id": "tax_presets", "name": "Canadian sales tax rates by province", "version": "2026.10.1",
+  "source": "Chedam, from the federal and provincial rates in force on 2026-10-01 (Nova Scotia HST 14% since 2025-04-01)", "licence": "Chedam, part of the app; check with the CRA and your accountant before using",
+  "rows": [
+    ["AB", "Alberta", 5, 0, 0, 0, "", "GST only"],
+    ["BC", "British Columbia", 5, 0, 7, 0, "PST", "PST rules differ by product (e.g. prepared food, liquor 10%)"],
+    ["MB", "Manitoba", 5, 0, 7, 0, "RST", "Retail sales tax"],
+    ["NB", "New Brunswick", 0, 15, 0, 0, "", "HST"],
+    ["NL", "Newfoundland and Labrador", 0, 15, 0, 0, "", "HST"],
+    ["NS", "Nova Scotia", 0, 14, 0, 0, "", "HST 14% since 2025-04-01"],
+    ["NT", "Northwest Territories", 5, 0, 0, 0, "", "GST only"],
+    ["NU", "Nunavut", 5, 0, 0, 0, "", "GST only"],
+    ["ON", "Ontario", 0, 13, 0, 0, "", "HST; point-of-sale rebates on some items"],
+    ["PE", "Prince Edward Island", 0, 15, 0, 0, "", "HST"],
+    ["QC", "Quebec", 5, 0, 0, 9.975, "QST", "QST on the price before GST"],
+    ["SK", "Saskatchewan", 5, 0, 6, 0, "PST", "Provincial sales tax"],
+    ["YT", "Yukon", 5, 0, 0, 0, "", "GST only"]
+  ] }

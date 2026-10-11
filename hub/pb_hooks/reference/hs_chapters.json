@@ -1,0 +1,13 @@
+{
+  "id": "hs_chapters",
+  "name": "HS chapters (customs tariff, 2 digits)",
+  "version": "2026.10.1",
+  "source": "Chedam: short descriptions of the 97 chapters of the Harmonized System, to find a product's chapter. The full Canadian Customs Tariff (CBSA) is a separate download.",
+  "licence": "Chedam, part of the app",
+  "rows": 96,
+  "table": "hs",
+  "columns": [
+    "code",
+    "description"
+  ]
+}

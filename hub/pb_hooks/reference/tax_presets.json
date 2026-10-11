@@ -1,0 +1,19 @@
+{
+  "id": "tax_presets",
+  "name": "Canadian sales tax rates by province",
+  "version": "2026.10.1",
+  "source": "Chedam, from the federal and provincial rates in force on 2026-10-01 (Nova Scotia HST 14% since 2025-04-01)",
+  "licence": "Chedam, part of the app; check with the CRA and your accountant before using",
+  "rows": 13,
+  "table": "presets",
+  "columns": [
+    "province",
+    "name",
+    "gst",
+    "hst",
+    "pst",
+    "qst",
+    "pst_name",
+    "note"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "units",
+  "name": "Units and conversions",
+  "version": "2026.10.1",
+  "source": "Chedam (SI and Canadian / US customary units)",
+  "licence": "Chedam, part of the app",
+  "rows": 24,
+  "table": "units",
+  "columns": [
+    "code",
+    "kind",
+    "base",
+    "factor",
+    "label",
+    "aliases"
+  ]
+}

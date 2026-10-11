@@ -12,7 +12,7 @@ Started 2026-10-11. Goal: the store's own card processor linked to the till (Squ
 | 4 | Cloud drive connection and off-site backup | Claude | Done, deployed (21 tests; DL-224, 225) |
 | 5 | Owner remote view | Claude | Done, deployed (16 tests; DL-226..228) |
 | 6 | Import everything, mapping templates | Claude | Done, deployed (36 tests; DL-229..231) |
-| 7 | Reference data that suggests | Claude | To do |
+| 7 | Reference data that suggests | Claude | Done, deployed (19 tests; DL-232..234); large downloaded datasets wait for Sreya's OK |
 | 8 | Remote support session | Claude | To do |
 | 9 | Gate | Claude + Sreya | To do |
 

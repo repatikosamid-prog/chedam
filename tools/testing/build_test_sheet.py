@@ -516,6 +516,14 @@ P5_TESTS = [
     ("I07", "Open bills", "Laptop (accountant)", "Open bills and invoices: a QuickBooks A/P aging (Vendor, Num, Due date, Open balance)", "Bills with 'Opening balance' lines, no tax, due dates; in Buying → Bills and the aging"),
     ("I08", "Import staff", "Laptop (owner)", "Staff: name, legal name, role, start date, rate, SIN", "People listed with their records (SIN masked); they can be paired and choose a PIN; a manager does not see Staff in the list"),
     ("I09", "Export", "Laptop (owner)", "Export data: pick only 'Card processor and cloud drive'", "The tables are there; no token or secret columns"),
+    # ---- Step 7: reference data (DL-232..234)
+    ("R01", "Reference", "Laptop (manager)", "New product: barcode of a packaged food (e.g. a cracker box); Suggest from the barcode", "Name with the brand, French name and size from Open Food Facts, each with Use; nothing changes until Use"),
+    ("R02", "Reference", "Laptop (manager)", "Same with the hub offline (router internet off)", "Not available: the hub is offline"),
+    ("R03", "Reference", "Laptop (manager)", "Product '2% Milk 4L', perishable → Shelf life → Suggest", "Milk: 7 in the fridge … Use 7 fills 7"),
+    ("R04", "Reference", "Laptop (manager)", "Imported product → HS → Find 'chocolate'", "18 · Cocoa and chocolate (HS chapter) → Use"),
+    ("R05", "Reference", "Laptop (manager)", "Vendors and clients → Exchange rates → Add a rate: USD, last Sunday → Suggest the Bank of Canada rate", "Friday's rate with its day → Use fills the rate and the source"),
+    ("R06", "Reference", "Laptop (owner)", "Tax → Show the sales tax rates of every province", "13 provinces and territories (BC 5% + PST 7%, ON HST 13%, NS HST 14%); the store's own rates unchanged"),
+    ("R07", "Reference", "Any device", "Help → About Chedam, reference data and licences", "Version, the 4 datasets and the 2 online sources with their licences"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):

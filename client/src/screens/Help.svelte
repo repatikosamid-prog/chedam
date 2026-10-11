@@ -79,4 +79,5 @@
       </article>
     {/if}
   </div>
+  <p class="text-sm"><button class="underline" onclick={() => go("about")}>About Chedam, reference data and licences</button></p>
 </section>

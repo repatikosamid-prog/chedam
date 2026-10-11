@@ -178,6 +178,8 @@
           <label class="block"><span class="text-sm text-muted">Day</span><input class="field" type="date" bind:value={rate.day} required /></label>
           <label class="block"><span class="text-sm text-muted">CAD for 1 {rate.currency}</span><input class="field" inputmode="decimal" bind:value={rate.rate} required /></label>
           <label class="block"><span class="text-sm text-muted">Source</span><input class="field" bind:value={rate.source} maxlength="80" /></label>
+          <p class="text-sm sm:col-span-4"><button class="underline" type="button" onclick={async () => { const r = await api("GET", `/api/chedam/reference/fx?currency=${encodeURIComponent(rate.currency)}&day=${rate.day}`, null, { quiet: true }); rate.hint = r.ok ? r.json : { found: false }; }}>Suggest the Bank of Canada rate</button>
+            {#if rate.hint}{#if rate.hint.found} · {rate.hint.day}: 1 {rate.hint.currency} = {rate.hint.rate} CAD <button class="underline" type="button" onclick={() => { rate.rate = String(rate.hint.rate); rate.source = "Bank of Canada " + rate.hint.day; }}>Use</button>{:else} · {rate.hint.offline ? "not available offline" : "no rate found"}{/if}{/if}</p>
           <div class="flex gap-2 sm:col-span-4"><button class="btn" type="submit">Save</button><button class="btn-ghost" type="button" onclick={() => (rate = null)}>Cancel</button></div>
         </form>
       {/if}

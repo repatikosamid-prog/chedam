@@ -20,6 +20,25 @@
     expiry_at_receiving: false, storage_area: "", temp_min_c: 0, temp_max_c: 0, age_restricted: false, min_age: 19, deposits_fees: [], imported: false,
     hs_code: "", origin_country: "", non_returnable: false, size_qty: 0, size_unit: "", status: "draft" });
   let costText = $state("");
+  // P5 step 7 (FR-11.10, 11.11): suggestions from reference data, used only when tapped
+  let ref = $state({ product: null, shelf: null, hs: null, hsq: "", busy: "" });
+  async function lookUpBarcode() {
+    const code = units.map((u) => (u.codes || "").split(/[\s,]+/)[0]).find(Boolean) || "";
+    if (!code) { ref.product = { found: false, msg: "Add a barcode to a unit first." }; return; }
+    ref.busy = "product";
+    const r = await api("GET", "/api/chedam/reference/product?barcode=" + encodeURIComponent(code), null, { quiet: true });
+    ref.busy = "";
+    ref.product = r.ok ? r.json : { found: false, msg: r.message };
+  }
+  async function suggestShelf() {
+    const cat = (cats.find((c) => c.id === p.category) || {}).name || "";
+    const r = await api("GET", "/api/chedam/reference/shelf-life?name=" + encodeURIComponent(p.name + " " + cat), null, { quiet: true });
+    ref.shelf = r.ok ? r.json : null;
+  }
+  async function findHs() {
+    const r = await api("GET", "/api/chedam/reference/hs?q=" + encodeURIComponent(ref.hsq || p.name), null, { quiet: true });
+    ref.hs = r.ok ? r.json.items : [];
+  }
   let units = $state([]);          // { id, saved, name, kind, contains_qty, contains_unit, codes, priceText, sell_at_pos, is_default }
   let removed = $state([]);        // ids of saved units to remove
   let problems = $state([]), history = $state([]), taxes = $state([]);
@@ -211,6 +230,19 @@
         <input class="field" bind:value={p.name} maxlength="160" required /></label>
       <label class="block"><span class="text-sm text-muted">French name (labels, optional)</span>
         <input class="field" bind:value={p.name_fr} maxlength="160" /></label>
+      <div class="sm:col-span-2 space-y-1 rounded-xl border border-line p-2 text-sm">
+        <button class="underline" type="button" disabled={ref.busy === "product"} onclick={lookUpBarcode}>{ref.busy === "product" ? "Looking up…" : "Suggest from the barcode"}</button>
+        {#if ref.product}
+          {#if ref.product.found}
+            {@const x = ref.product.suggestions}
+            <p class="text-muted">From {ref.product.source} ({ref.product.licence}). Nothing changes until you tap Use.</p>
+            {#if x.name}<p>Name: <b>{x.name}</b> <button class="underline" type="button" onclick={() => (p.name = x.name)}>Use</button></p>{/if}
+            {#if x.name_fr}<p>French: <b>{x.name_fr}</b> <button class="underline" type="button" onclick={() => (p.name_fr = x.name_fr)}>Use</button></p>{/if}
+            {#if x.size_qty}<p>Size: <b>{x.size_qty} {x.size_unit}</b> <button class="underline" type="button" onclick={() => { p.size_qty = x.size_qty; p.size_unit = ["g", "kg", "ml", "l"].includes(x.size_unit) ? x.size_unit : p.size_unit; }}>Use</button></p>{/if}
+            {#if x.category}<p class="text-muted">Their category: {x.category}</p>{/if}
+          {:else}<p class="text-muted">{ref.product.msg || (ref.product.offline ? "Not available: the hub is offline or the lookup is switched off." : "No suggestion for this barcode.")}</p>{/if}
+        {/if}
+      </div>
       {#if p.base_unit === "each"}
         <div class="block"><span class="text-sm text-muted">Size of one (for the unit price on labels, optional)</span>
           <div class="flex gap-2"><input class="field" type="number" min="0" step="any" bind:value={p.size_qty} aria-label="Size" placeholder="e.g. 200" />
@@ -329,7 +361,17 @@
         <span class="font-semibold">Perishable (has an expiry)</span></label>
       {#if p.perishable}
         <label class="block"><span class="text-sm text-muted">Shelf life (days)</span>
-          <input class="field" type="number" min="0" step="1" bind:value={p.shelf_life_days} disabled={p.expiry_at_receiving} /></label>
+          <input class="field" type="number" min="0" step="1" bind:value={p.shelf_life_days} disabled={p.expiry_at_receiving} />
+          <button class="text-sm underline" type="button" onclick={suggestShelf}>Suggest</button></label>
+        {#if ref.shelf}
+          <div class="sm:col-span-2 space-y-1 rounded-xl border border-line p-2 text-sm">
+            {#each ref.shelf.items as x (x.keyword)}
+              <p><b>{x.item}</b>: {[x.pantry_days ? x.pantry_days + " days on the shelf" : "", x.fridge_days ? x.fridge_days + " in the fridge" : "", x.freezer_days ? x.freezer_days + " frozen" : ""].filter(Boolean).join(", ")}{x.note ? " · " + x.note : ""}
+                {#each [x.pantry_days, x.fridge_days, x.freezer_days].filter(Boolean) as d (d)}<button class="ml-1 underline" type="button" onclick={() => (p.shelf_life_days = d)}>Use {d}</button>{/each}</p>
+            {:else}<p class="text-muted">No suggestion for this name.</p>{/each}
+            {#if ref.shelf.items.length}<p class="text-xs text-muted">{ref.shelf.source}. The date on the package comes first.</p>{/if}
+          </div>
+        {/if}
         <label class="block"><span class="text-sm text-muted">Storage area</span>
           <select class="field" bind:value={p.storage_area}>
             <option value="">Choose…</option>
@@ -403,6 +445,10 @@
         <span class="font-semibold">Imported by the store</span></label>
       {#if p.imported}
         <label class="block"><span class="text-sm text-muted">HS code</span><input class="field" inputmode="numeric" bind:value={p.hs_code} maxlength="14" /></label>
+        <div class="sm:col-span-2 space-y-1 text-sm">
+          <div class="flex gap-2"><input class="field" bind:value={ref.hsq} placeholder="Find the HS chapter (e.g. chocolate, spices)" aria-label="Find an HS code" /><button class="btn-ghost min-h-10" type="button" onclick={findHs}>Find</button></div>
+          {#each ref.hs || [] as h (h.source + h.code)}<p>{h.code} · {h.description} <span class="text-muted">({h.source})</span> <button class="underline" type="button" onclick={() => (p.hs_code = h.code)}>Use</button></p>{/each}
+        </div>
         <label class="block"><span class="text-sm text-muted">Country of origin (2 letters, e.g. IN)</span>
           <input class="field uppercase" bind:value={p.origin_country} maxlength="2" oninput={(e) => (p.origin_country = e.currentTarget.value.toUpperCase())} /></label>
       {/if}
