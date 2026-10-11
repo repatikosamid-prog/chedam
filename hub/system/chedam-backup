@@ -323,6 +323,21 @@ def action_run(req):
             if ok2 != "ok" or after != before:
                 raise Fail("verify_failed", "The copy on the drive did not check out (%s)." % ok2)
 
+            # Off-site copy (FR-12.08, P5 step 4): the hub uploads what it finds in its outbox to the owner's
+            # cloud drive. Only the newest set waits there (the SD card is not a second backup drive).
+            if req.get("outbox"):
+                ob = os.path.join(DATA, "backup", "outbox")
+                os.makedirs(ob, exist_ok=True)
+                shutil.chown(ob, SVC, SVC)
+                for old in glob.glob(os.path.join(ob, "chedam-*")):
+                    os.remove(old)
+                for ext in ("", ".keys", ".ca", ".sha256"):
+                    if os.path.exists(final + ext):
+                        dst = os.path.join(ob, name + ext)
+                        shutil.copyfile(final + ext, dst)
+                        shutil.chown(dst, SVC, SVC)
+                        os.chmod(dst, 0o640)
+
             existing = [os.path.basename(p) for p in glob.glob(os.path.join(folder, "chedam-*.db.gz.age"))]
             removed = retention(existing, dt.datetime.now())
             for n in removed:

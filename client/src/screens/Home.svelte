@@ -199,6 +199,12 @@
           <span class="text-sm text-muted">Card fees, platform payouts, vendor statements</span>
         </button>
       {/if}
+      {#if can("cloud.connect")}
+        <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("cloud")}>
+          <span class="font-semibold">Cloud drive</span>
+          <span class="text-sm text-muted">Off-site backup copy, remote view</span>
+        </button>
+      {/if}
       {#if can("payments.connect")}
         <button class="flex min-h-20 flex-col items-start justify-center rounded-2xl border border-accent bg-card p-3 text-left" onclick={() => go("payproc")}>
           <span class="font-semibold">Card processor</span>

@@ -99,6 +99,13 @@ export const PAGES = [
       { p: "Updates are checked every day; the owner installs them (and can go back)." },
       { warn: "Keep the backup USB drive in the hub. Keep the printed recovery key somewhere safe, away from the store." },
     ] },
+  { id: "cloud", title: "Cloud drive and off-site backup", screens: ["cloud"], words: "google drive onedrive microsoft cloud off-site backup remote code",
+    body: [
+      { p: "The nightly backup is encrypted on the hub and also copied to the owner's Google Drive or OneDrive, in a folder of Chedam's own. If the store burns down, the backup and the printed recovery key bring everything back on a new hub." },
+      { steps: ["Home → Cloud drive. The first time, enter the app registration (the client ID; Google also its secret).", "Press Connect. A short code appears.", "On any phone or computer open the address shown (google.com/device or microsoft.com/devicelogin), type the code, sign in with the owner's account and allow Chedam.", "The page says Connected. After the next nightly backup, Last backup copied shows its name."] },
+      { tip: "The newest 14 backups are kept in the cloud (setting cloud.backup_keep); older ones are removed there." },
+      { warn: "Without the printed backup key a backup cannot be opened, also not from the cloud. Keep the key away from the store." },
+    ] },
   { id: "payproc", title: "Linked card terminal", screens: ["payproc"], words: "square terminal card processor link pair code token clover",
     body: [
       { p: "Link the store's own card processor (Square first) so that Card on a till sends the amount to its terminal by itself. Nothing is keyed in, and the hub records the card type and last 4 digits." },

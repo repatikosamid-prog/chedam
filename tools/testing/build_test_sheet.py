@@ -493,6 +493,13 @@ P5_TESTS = [
     ("C23", "Linked void", "Till (manager)", "Void the last sale that was paid on the terminal", "Asks first; the money goes back to the card; then the sale is voided"),
     ("C24", "Unused payment", "Till + laptop (manager)", "Card → Send, pay on the terminal, then Clear sale (OK); after 15 minutes open Sales", "Card payments taken on the terminal with no sale: the payment → Refund to the card"),
     ("C25", "Fees", "Laptop (accountant)", "Fees and statements → Card fees → Get fees and payouts now", "From the linked card processor: the fees; payouts listed with their dates"),
+    # ---- Step 4: cloud drive and off-site backup (DL-224, 225); needs the Google/Microsoft app registration (D2)
+    ("D01", "Cloud drive", "Laptop (owner)", "Home → Cloud drive → Google Drive → Enter the client ID and secret → Save", "App registration: client ID 1234…; the secret is not shown"),
+    ("D02", "Cloud drive", "Laptop (owner) + phone", "Connect Google Drive; on the phone open google.com/device, type the code, allow", "Within seconds the laptop says Google Drive is connected, with the owner's email"),
+    ("D03", "Cloud drive", "Laptop (owner)", "Backups → Back up now; then Cloud drive → Upload now", "Last backup copied: chedam-…db.gz.age; in Google Drive a 'Chedam' folder has the backup and its .keys/.ca/.sha256"),
+    ("D04", "Cloud drive", "Google account", "Remove Chedam's access in the Google account's security page; next upload", "Cloud drive says: connect the cloud drive again; the backup waits in the outbox"),
+    ("D05", "Cloud drive", "Laptop (owner)", "Disconnect; connect OneDrive the same way (microsoft.com/devicelogin)", "Connected; the next backup is in OneDrive → Apps → Chedam"),
+    ("D06", "Cloud drive", "Laptop (manager)", "Look for Cloud drive on Home", "No tile (owner only)"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):

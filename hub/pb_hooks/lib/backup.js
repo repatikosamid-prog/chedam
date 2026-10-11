@@ -78,7 +78,10 @@ function start(app, kind, actor, device) {
   if (!keyReady(app)) throw new BadRequestError("Make the backup key first.");
   const running = app.findRecordsByFilter("backups", "status = 'running' && deleted_at = ''", "", 1, 0);
   if (running.length) throw new ApiError(409, "A backup is already running.");
-  const id = request(app, "run", { drive: drive.uuid, kind: kind });
+  // P5 step 4: with a cloud drive connected, the helper also leaves the files for the off-site copy
+  let outbox = false;
+  try { outbox = !!require(`${__hooks}/lib/cloud.js`).connected(app); } catch (_) { outbox = false; }
+  const id = request(app, "run", { drive: drive.uuid, kind: kind, outbox: outbox });
   const r = new Record(app.findCollectionByNameOrId("backups"));
   r.load({ kind: kind, target: "usb", status: "running", started_at: new DateTime(), encrypted: true, job_id: id });
   r.set("created_by", actor); r.set("updated_by", actor); r.set("device_id", device || "");

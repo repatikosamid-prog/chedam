@@ -151,6 +151,8 @@ const TABLES = {
   terminal_checkouts:   { list: null, view: null, create: null, update: null, delete: null },
   processor_refunds:    { list: null, view: null, create: null, update: null, delete: null },
   processor_payouts:    { list: null, view: null, create: null, update: null, delete: null },
+  // P5 step 4: the owner's cloud drive (tokens sealed, hidden): only through /api/chedam/cloud
+  cloud_links:          { list: null, view: null, create: null, update: null, delete: null },
   vendor_returns:       { list: "purchasing.view|purchasing.manage|finance.manage", view: "purchasing.view|purchasing.manage|finance.manage", create: null, update: null, delete: null },
 };
 
