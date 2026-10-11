@@ -14,7 +14,7 @@ Started 2026-10-11. Goal: the store's own card processor linked to the till (Squ
 | 6 | Import everything, mapping templates | Claude | Done, deployed (36 tests; DL-229..231) |
 | 7 | Reference data that suggests | Claude | Done, deployed (19 tests; DL-232..234); large downloaded datasets wait for Sreya's OK |
 | 8 | Remote support session | Claude | Done, deployed (15 tests; DL-235, 236); cloudflared to install with Sreya's OK |
-| 9 | Gate | Claude + Sreya | To do |
+| 9 | Gate | Claude + Sreya | Automated gate done (`docs/gate/P5-gate.md`); testing round 3 fixed and deployed (DL-237..245); Sreya: retest and the real-device items |
 
 ## Needed from outside
 

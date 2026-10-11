@@ -533,6 +533,29 @@ P5_TESTS = [
     ("S06", "Support", "Laptop (manager)", "Look for Remote support on Home", "No tile (owner only)"),
 ]
 
+# Fixes and changes from Sreya's testing on 2026-10-11 (Android; round T3): retest these.
+RETEST3_OUT = Path(__file__).resolve().parents[2] / "docs" / "testing" / "Chedam-Retest-2026-10-11.xlsx"
+RETEST3 = [
+    ("T01", "Messages", "Android + iPhone", "Mira sends Cal 3 messages; on Cal's phone open Messages → the conversation", "It opens like a chat: bubbles, newest at the bottom; reply and the other phone shows it at once"),
+    ("T02", "Messages", "Android", "Messages: tap a person in the row at the top", "A chat with that person opens (the same one again next time)"),
+    ("T03", "Messages", "Android", "Tap a message", "Its reactions and Remove (own messages) show; tap again to hide"),
+    ("T04", "Ping", "Laptop + Android", "Leave the Ping screen open on the laptop; switch the Android's Wi-Fi off, wait 2 minutes", "Within about 15 s of the 2 minutes the Android shows (offline) in the list, without reloading"),
+    ("T05", "Ping", "Laptop → Android", "Send a ping to the Android; on the Android answer On my way; on the laptop press Take back", "The Android shows Called off by … with the text, and beeps"),
+    ("T06", "Cashier", "Android (Cal Cashier)", "Look at Home", "Only Sell, Products, Time sheets (own), Roster, Time clock, People (Me), Messages, Customers; no Stock, Expenses, Delivery, Orders, Team, Dashboard"),
+    ("T07", "Cashier", "Android (Cal Cashier)", "Type …/#expenses in the address bar", "Goes to Home"),
+    ("T08", "Sell", "Till", "Sell 5 of a product that has 2 in stock", "No message; the sale completes"),
+    ("T09", "Sell", "Laptop (manager)", "After T08: Home tasks and the inbox", "Urgent task 'Sold more than in stock: … is at -3'; an inbox alert; nothing was shown on the till"),
+    ("T10", "Products", "Laptop (manager)", "Products → Below zero (to count) → Print for counting", "The product from T08 with its code and an empty Counted column; prints as a sheet with the date"),
+    ("T11", "Products", "Laptop (manager)", "New product: Brand, Supplier, Stock to add now 12, Received on yesterday; save", "Saved with brand and supplier; Stock shows 12, received yesterday"),
+    ("T12", "Products", "Laptop (manager)", "Open a product → Duplicate → change the name and size → add its barcode → save", "A new product; the original unchanged"),
+    ("T13", "Vendors", "Laptop (manager)", "Vendors and clients → Coastal → Change: How we order: portal, account, user name, cut-off; save", "Shown under the vendor with 'open their portal'; no password field anywhere"),
+    ("T14", "Vendors", "Laptop (manager)", "Coastal: Products / Consignment / Bills and invoices / Orders tabs", "What they sell us with prices and changes, consignment owed, their bills and invoices with what is open, the orders"),
+    ("T15", "Buying", "Laptop (manager)", "Buying → Buy: best supplier: Cola, 48", "Vendors ranked by cost per can with why (last bought, price change, lead time); contacts and portal"),
+    ("T16", "Buying", "Laptop (manager)", "On the best one: Make a draft order; on a portal vendor: Quick-order file + open portal", "A draft purchase order; a CSV of their codes and quantities is downloaded and their portal opens"),
+    ("T17", "Scale", "Till PC (Chrome) with a USB scale", "Receipt printer → Scale: switch on, choose this till's scale, Test; then sell bananas", "The weight is read by itself; typing it still works (needs a scale: else Blocked)"),
+    ("T18", "Home", "Any", "Look at Home", "No 'Coming in a later phase' tiles"),
+]
+
 def build(OUT=OUT, TESTS=TESTS, intro=None):
     wb = Workbook()
     ws = wb.active
@@ -637,6 +660,13 @@ if __name__ == "__main__":
             "",
             "Laptop and iPhone; Android later. Linked card tests need a Square sandbox account and access token (or a Square Terminal).",
             "Sample people: Demo Owner, Mira Manager, Ana Accountant, Cal Cashier, Sam Staff.",
+            "For each row: do what it says, compare with 'What should happen', choose Pass / Fail / Blocked, and write what happened when it is not a Pass.",
+        ])
+    elif "--retest3" in sys.argv:
+        build(RETEST3_OUT, RETEST3, [
+            "Chedam retest: fixes and changes from testing on 2026-10-11 (round T3)",
+            "",
+            "On the Android phone, the iPhone and the laptop. Sample people: Demo Owner, Mira Manager, Cal Cashier, Sam Staff.",
             "For each row: do what it says, compare with 'What should happen', choose Pass / Fail / Blocked, and write what happened when it is not a Pass.",
         ])
     elif "--retest" in sys.argv:
