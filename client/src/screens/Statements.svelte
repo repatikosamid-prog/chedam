@@ -14,12 +14,24 @@
   let tab = $state("fees"), error = $state(""), ok = $state("");
   const first = () => new Date().toISOString().substring(0, 8) + "01", today = () => new Date().toISOString().substring(0, 10);
   let from = $state(first()), to = $state(today()), fees = $state(null), pays = $state(null), pform = $state(null), vendors = $state([]), stm = $state(null), vform = $state(null), last = $state(null);
+  let procPayouts = $state([]), syncing = $state(false);
+  async function syncProcessor() {
+    syncing = true; error = "";
+    const r = await api("POST", "/api/chedam/payproc/sync", {});
+    syncing = false;
+    if (!r.ok) return fail(r);
+    procPayouts = r.json.items; ok = r.json.skipped ? "No card processor is connected." : `Fees updated for ${r.json.fees} payments; ${r.json.items.length} payouts.`;
+    load();
+  }
   const fail = async (r) => { if (!(await handleRefusal(r))) error = r.message; };
   const c = (v) => Math.round(Number(String(v || "0").replace(/[$,\s]/g, "")) * 100) || 0;
 
   async function load() {
     error = "";
-    if (tab === "fees") { const r = await api("GET", `/api/chedam/card-fees?from=${from}&to=${to}`); if (r.ok) fees = r.json; else await fail(r); }
+    if (tab === "fees") {
+      const r = await api("GET", `/api/chedam/card-fees?from=${from}&to=${to}`); if (r.ok) fees = r.json; else await fail(r);
+      const p = await api("GET", "/api/chedam/payproc/payouts", null, { quiet: true }); procPayouts = p.ok ? p.json.items : [];
+    }
     if (tab === "payouts") { const r = await api("GET", "/api/chedam/payouts"); if (r.ok) pays = r.json; else await fail(r); }
     if (tab === "vendors") {
       if (!vendors.length) { const r = await api("GET", "/api/collections/parties/records?perPage=200&sort=name&filter=" + encodeURIComponent("deleted_at='' && (kind='vendor' || kind='both')"), null, { quiet: true }); vendors = r.ok ? (r.json.items || []) : []; }
@@ -82,7 +94,15 @@
           <tr class="border-t border-line font-semibold"><td>All cards</td><td>{fees.total.payments}</td><td>{money(fees.total.amount_cents)}</td><td>{money(fees.total.est_fee_cents)}</td><td></td></tr></tbody>
       </table>
       <p class="mt-2 text-sm">Actual fees from the bank: {fees.total.actual_days ? money(fees.total.actual_fee_cents) + " on " + fees.total.actual_days + " days (" + fees.total.actual_rate_pct + "% of " + money(fees.total.actual_amount_cents) + ")" : "none matched yet (Bank → match the card deposits)"}</p>
+      {#if fees.total.processor_amount_cents}<p class="text-sm">From the linked card processor: {money(fees.total.processor_fee_cents)} on {money(fees.total.processor_amount_cents)} paid on the terminal (used where the bank has not shown the day yet).</p>{/if}
       <p class="text-sm"><b>Fees for the period: {money(fees.total.fee_cents)}</b> <span class="text-muted">(actual where known, else estimated; goes to the P&L)</span></p>
+    </div>
+    <div class="card space-y-2">
+      <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="font-semibold">Card processor payouts</h2>
+        <button class="btn-ghost min-h-10 text-sm" disabled={syncing} onclick={syncProcessor}>{syncing ? "Asking…" : "Get fees and payouts now"}</button></div>
+      <p class="text-sm text-muted">What the linked processor paid into the bank (fetched every hour). Use them when matching card deposits in Bank.</p>
+      {#each procPayouts as x (x.id)}<p class="flex justify-between text-sm"><span>{x.arrival_date || "—"} · {x.status}</span><span>{money(x.amount_cents)}</span></p>
+      {:else}<p class="text-sm text-muted">None yet.</p>{/each}
     </div>
   {:else if tab === "payouts" && pays}
     <button class="btn min-h-10 text-sm" onclick={() => { last = null; pform = { platform: pays.names[0] || "", from: first(), to: today(), day: today(), gross: "", commission: "", fees: "", adjustments: "", payout: "", orders: "", note: "" }; }}>Enter a payout statement</button>

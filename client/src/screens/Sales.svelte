@@ -9,8 +9,28 @@
   import Receipt from "../components/Receipt.svelte";
   import PrintButtons from "../components/PrintButtons.svelte";
   import Approve from "../components/Approve.svelte";
+  import { voidRefunds } from "../lib/linked.js";
 
   let list = $state([]), q = $state(""), sale = $state(null), error = $state(""), voiding = $state(null), exempt = $state(null);
+  let unused = $state([]), unusedMsg = $state("");          // P5 step 3: card payments on the terminal that no sale took
+
+  async function loadUnused() {
+    if (!can("sales.void")) return;
+    const r = await api("GET", "/api/chedam/terminal/checkouts", null, { quiet: true });
+    unused = r.ok ? r.json.items : [];
+  }
+  async function refundUnused(x) {
+    if (!confirm(`Refund ${money(x.amount_cents)} to the card ****${x.last4}?`)) return;
+    let r = await api("POST", `/api/chedam/terminal/checkouts/${x.id}/refund`, {});
+    if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
+    for (let i = 0; i < 150 && r.ok && !r.json.accepted && r.json.status === "pending"; i++) {
+      unusedMsg = `Customer: tap or insert the card on ${r.json.terminal} to get ${money(r.json.amount_cents)} back.`;
+      await new Promise((ok) => setTimeout(ok, 2000));
+      r = await api("GET", `/api/chedam/terminal/refunds/${r.json.id}`, null, { quiet: true });
+    }
+    unusedMsg = r.ok && r.json.accepted ? "Refunded." : "The refund did not go through: try again.";
+    loadUnused();
+  }
 
   async function load() {
     const f = ["deleted_at=''"];
@@ -20,7 +40,7 @@
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
     list = r.json.items;
   }
-  onMount(load);
+  onMount(() => { load(); loadUnused(); });
 
   async function open(id) {
     const r = await api("GET", "/api/chedam/sales/" + id);
@@ -29,7 +49,10 @@
   }
 
   async function doVoid(approval) {
-    const r = await api("POST", "/api/chedam/sales/" + sale.id + "/void", { reason: voiding.reason, approval });
+    // P5 step 3: a card paid on the linked terminal goes back to the card first
+    const pr = await voidRefunds(sale, (m) => (error = m), (m) => (error = m));
+    if (pr === null) { voiding = null; return; }
+    const r = await api("POST", "/api/chedam/sales/" + sale.id + "/void", { reason: voiding.reason, approval, processor_refunds: pr });
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; voiding = null; return; }
     sale = r.json; voiding = null; load();
   }
@@ -56,6 +79,16 @@
       {#if can("sales.view")}<button class="btn-ghost" onclick={showExempt}>Tax-exempt report</button>{/if}</div>{/if}
   </div>
   {#if error}<p role="alert" class="rounded-xl bg-bad/10 px-3 py-2 text-bad">{error}</p>{/if}
+  {#if !sale && (unused.length || unusedMsg)}
+    <div class="card space-y-2 border-warn">
+      <p class="font-semibold">Card payments taken on the terminal with no sale</p>
+      {#if unusedMsg}<p class="text-sm" aria-live="polite">{unusedMsg}</p>{/if}
+      {#each unused as x (x.id)}
+        <p class="flex flex-wrap items-center justify-between gap-2 text-sm"><span>{money(x.amount_cents)} · {x.card_type || "card"} ****{x.last4} · {when(x.completed_at)} · {x.terminal}</span>
+          <button class="btn-ghost min-h-10 text-sm" onclick={() => refundUnused(x)}>Refund to the card</button></p>
+      {/each}
+    </div>
+  {/if}
 
   {#if sale}
     <div class="flex flex-wrap gap-2 print:hidden">

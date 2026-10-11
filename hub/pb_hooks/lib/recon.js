@@ -39,15 +39,22 @@ function cardFees(app, q) {
       by[t].payments++; by[t].amount_cents += amt; by[t].est_fee_cents += fee;
       let day = "";
       try { day = T().localDay(T().ms(app.findRecordById("sales", p.getString("sale")).getString("completed_at"))); } catch (_) { day = ""; }
-      const d = perDay[day] || (perDay[day] = { day: day, amount_cents: 0, est_fee_cents: 0, actual_fee_cents: null });
+      const d = perDay[day] || (perDay[day] = { day: day, amount_cents: 0, est_fee_cents: 0, actual_fee_cents: null, processor_fee_cents: 0, processor_amount_cents: 0, processor_est_cents: 0 });
       d.amount_cents += amt; d.est_fee_cents += fee;
+      // P5 step 3: a payment on a linked terminal has the processor's own fee once it is known
+      if (p.getString("checkout")) {
+        try {
+          const t = app.findRecordById("terminal_checkouts", p.getString("checkout"));
+          if (t.getBool("fee_known")) { d.processor_fee_cents += t.getInt("fee_cents"); d.processor_amount_cents += amt; d.processor_est_cents += fee; }
+        } catch (_) { /* gone */ }
+      }
     });
   app.findRecordsByFilter("bank_lines", "status = 'matched' && match_kind = 'card_batch' && deleted_at = ''", "", 0, 0).forEach((l) => {
     const refs = j(l, "match_refs", []);
     const inRange = refs.filter((x) => x.id >= from && x.id <= to);
     if (!inRange.length) return;
     const share = Math.round(l.getInt("fee_cents") / refs.length);
-    inRange.forEach((x) => { const d = perDay[x.id] || (perDay[x.id] = { day: x.id, amount_cents: 0, est_fee_cents: 0, actual_fee_cents: null }); d.actual_fee_cents = (d.actual_fee_cents || 0) + share; });
+    inRange.forEach((x) => { const d = perDay[x.id] || (perDay[x.id] = { day: x.id, amount_cents: 0, est_fee_cents: 0, actual_fee_cents: null, processor_fee_cents: 0, processor_amount_cents: 0, processor_est_cents: 0 }); d.actual_fee_cents = (d.actual_fee_cents || 0) + share; });
   });
   const days = Object.keys(perDay).sort().map((k) => perDay[k]);
   const known = days.filter((d) => d.actual_fee_cents !== null);
@@ -55,8 +62,11 @@ function cardFees(app, q) {
   const tot = { payments: types.reduce((a, x) => a + x.payments, 0), amount_cents: types.reduce((a, x) => a + x.amount_cents, 0), est_fee_cents: types.reduce((a, x) => a + x.est_fee_cents, 0),
     actual_fee_cents: known.reduce((a, d) => a + d.actual_fee_cents, 0), actual_days: known.length, actual_amount_cents: known.reduce((a, d) => a + d.amount_cents, 0) };
   tot.actual_rate_pct = tot.actual_amount_cents ? Math.round((tot.actual_fee_cents * 10000) / tot.actual_amount_cents) / 100 : null;
-  // The fee for the period: actual where the bank showed it, else the estimate
-  tot.fee_cents = days.reduce((a, d) => a + (d.actual_fee_cents !== null ? d.actual_fee_cents : d.est_fee_cents), 0);
+  tot.processor_fee_cents = days.reduce((a, d) => a + d.processor_fee_cents, 0);
+  tot.processor_amount_cents = days.reduce((a, d) => a + d.processor_amount_cents, 0);
+  // The fee for the period: actual where the bank showed it; else the processor's own fee for linked payments
+  // (P5) and the estimate for the rest
+  tot.fee_cents = days.reduce((a, d) => a + (d.actual_fee_cents !== null ? d.actual_fee_cents : d.est_fee_cents - d.processor_est_cents + d.processor_fee_cents), 0);
   return { from: from, to: to, types: types, days: days, total: tot, rates: rates };
 }
 

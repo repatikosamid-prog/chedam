@@ -24,7 +24,7 @@
   let qty = $state({}), dispo = $state({}), reason = $state(""), fee = $state(false), feePct = $state(0);
   let quote = $state(null), approval = $state(""), asking = $state(false);
   let error = $state(""), busy = $state(false), scanning = $state(false), done = $state(null);
-  let returnId = newId();
+  let returnId = $state(newId());
   let qTimer;
 
   onMount(async () => {
@@ -95,7 +95,7 @@
   function exchange() {
     if (!quote) return;
     if (quote.needs_approval.length && !approval) { asking = true; return; }
-    startExchange({ id: returnId, body: body(), credit_cents: quote.refund_cents, receipt: !noReceipt, card_max_cents: sale ? sale.card_refundable_cents : 0,
+    startExchange({ id: returnId, body: body(), credit_cents: quote.refund_cents, receipt: !noReceipt, card_max_cents: sale ? sale.card_refundable_cents : 0, linked_max_cents: sale ? sale.linked_refundable_cents || 0 : 0,
       label: sale ? sale.number : "no receipt" });
     go("sell");
   }
@@ -220,7 +220,7 @@
   {#if step === "refund" && quote}
     <div class="card space-y-3">
       <h2 class="font-semibold">Refund {money(quote.refund_cents)}</h2>
-      <RefundChooser total={quote.refund_cents} receipt={!noReceipt} cardMax={sale ? sale.card_refundable_cents : 0} {busy} onDone={finish} />
+      <RefundChooser total={quote.refund_cents} receipt={!noReceipt} cardMax={sale ? sale.card_refundable_cents : 0} linkedMax={sale ? sale.linked_refundable_cents || 0 : 0} saleId={sale ? sale.id : ""} refId={returnId} {busy} onDone={finish} />
     </div>
   {/if}
 

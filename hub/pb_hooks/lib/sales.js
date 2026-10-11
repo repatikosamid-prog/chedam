@@ -649,6 +649,21 @@ function voidSale(app, id, body, ctx) {
         Object.assign({}, ctx, { op: "" }));
     });
   }
+  // P5 step 3: card payments taken on a linked terminal go back through the processor first (POST
+  // /api/chedam/terminal/refunds, purpose void); the void names those refunds and they must cover them.
+  const linkedPaid = app.findRecordsByFilter("payments", "sale = {:s} && status = 'approved' && method = 'card' && checkout != ''", "", 0, 0, { s: id }).reduce((a, p) => a + p.getInt("amount_cents"), 0);
+  if (linkedPaid) {
+    const ids = Array.isArray(body.processor_refunds) ? body.processor_refunds : [];
+    if (!ids.length) bad("This sale was paid on the linked card terminal: refund the card first (Refund to the card), then void.");
+    let back = 0;
+    ids.forEach((rid) => {
+      let r = null;
+      try { r = app.findRecordById("processor_refunds", String(rid)); } catch (_) { bad("The card refund was not found."); }
+      require(`${__hooks}/lib/procrefunds.js`).claim(app, null, rid, r.getInt("amount_cents"), { sale: id, ref: id, ctx: ctx });
+      back += r.getInt("amount_cents");
+    });
+    if (back !== linkedPaid) bad("The card refunds (" + back + " cents) do not match the card payments on the terminal (" + linkedPaid + " cents).");
+  }
   app.findRecordsByFilter("payments", "sale = {:s} && status = 'approved'", "", 0, 0, { s: id }).forEach((p) => {
     // Store credit spent on the sale goes back on the credit.
     if (p.getString("method") === "store_credit") {

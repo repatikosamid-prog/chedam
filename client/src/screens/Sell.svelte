@@ -29,6 +29,7 @@
   import ReturnSlip from "../components/ReturnSlip.svelte";
   import { ex, endExchange } from "../lib/exchange.svelte.js";
   import { publish, useHub, openWindow } from "../lib/customer_display.js";
+  import { voidRefunds } from "../lib/linked.js";
 
   const KEY = "chedam.cart";
   let info = $state(null);                       // /tills/current: till, settings, business
@@ -485,7 +486,10 @@
   }
 
   async function voidLast(reason, approval) {
-    const r = await api("POST", "/api/chedam/sales/" + sale.id + "/void", { reason, approval });
+    // P5 step 3: a card paid on the linked terminal goes back to the card first
+    const pr = await voidRefunds(sale, (m) => (note = m), (m) => (error = m));
+    if (pr === null) return;
+    const r = await api("POST", "/api/chedam/sales/" + sale.id + "/void", { reason, approval, processor_refunds: pr });
     if (!r.ok) { if (!(await handleRefusal(r))) error = r.message; return; }
     sale = r.json; dialog = null; loadTill();
   }
@@ -791,7 +795,7 @@
           <p class="flex justify-between"><span>Returned items</span><span>{money(ex.draft.credit_cents)}</span></p>
           <p class="flex justify-between"><span>New items</span><span>−{money(quote.total_cents)}</span></p>
           {#if ex.draft.credit_cents > quote.total_cents}
-            <RefundChooser total={ex.draft.credit_cents - quote.total_cents} receipt={ex.draft.receipt} cardMax={ex.draft.card_max_cents} {busy} onDone={finishExchange} />
+            <RefundChooser total={ex.draft.credit_cents - quote.total_cents} receipt={ex.draft.receipt} cardMax={ex.draft.card_max_cents} linkedMax={ex.draft.linked_max_cents || 0} saleId={ex.draft.body.sale || ""} refId={ex.draft.id} {busy} onDone={finishExchange} />
           {:else}<button class="btn" disabled={busy} onclick={() => finishExchange([])}>Complete exchange</button>{/if}
           <button class="btn-ghost" disabled={busy} onclick={() => { payments = []; mode = "sell"; dialog = null; }}>Back to the sale</button>
           {#if busy}<p class="text-muted">Saving…</p>{/if}

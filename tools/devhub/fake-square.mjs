@@ -21,10 +21,10 @@ export async function startFakeSquare(port = 0, { auto = false } = {}) {
     st,
     pair(codeId) { const c = st.codes[codeId]; c.status = "PAIRED"; c.device_id = "device:" + rid("T"); return c.device_id; },
     expire(codeId) { st.codes[codeId].status = "EXPIRED"; },
-    complete(id, { brand = "VISA", last4 = "4242", entry = "EMV" } = {}) {
+    complete(id, { brand = "VISA", last4 = "4242", entry = "EMV", withFee = true } = {}) {
       const c = st.checkouts[id];
       const p = { id: rid("PAY"), status: "COMPLETED", amount_money: c.amount_money, location_id: "LOC1", created_at: now(), reference_id: c.reference_id,
-        card_details: { card: { card_brand: brand, last_4: last4 }, entry_method: entry }, processing_fee: [{ amount_money: { amount: fee(c.amount_money.amount, brand), currency: "CAD" } }] };
+        card_details: { card: { card_brand: brand, last_4: last4 }, entry_method: entry }, processing_fee: withFee ? [{ amount_money: { amount: fee(c.amount_money.amount, brand), currency: "CAD" } }] : [] };
       st.payments[p.id] = p; c.status = "COMPLETED"; c.payment_ids = [p.id];
       return p.id;
     },
@@ -32,6 +32,8 @@ export async function startFakeSquare(port = 0, { auto = false } = {}) {
     cancel(id, reason = "BUYER_CANCELED") { const c = st.checkouts[id]; c.status = "CANCELED"; c.cancel_reason = reason; },
     lastCheckout() { const ids = Object.keys(st.checkouts); return ids.length ? st.checkouts[ids[ids.length - 1]] : null; },
     finishRefund(id, status = "COMPLETED") { st.refunds[id].status = status; },
+    setFee(paymentId) { const p = st.payments[paymentId]; p.processing_fee = [{ amount_money: { amount: fee(p.amount_money.amount, p.card_details.card.card_brand), currency: "CAD" } }]; return p.processing_fee[0].amount_money.amount; },
+    addPayout(amount, arrival, status = "PAID") { const p = { id: rid("PO"), status, amount_money: { amount, currency: "CAD" }, arrival_date: arrival, created_at: now() }; st.payouts.push(p); return p.id; },
     get down() { return st.down; }, set down(v) { st.down = !!v; },
     close: null, url: "",
   };

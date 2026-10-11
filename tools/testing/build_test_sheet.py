@@ -486,6 +486,13 @@ P5_TESTS = [
     ("C16", "Linked card", "Till", "Switch the router's internet off; Card", "The till shows Could not reach the terminal → Key it in instead works"),
     ("C17", "Linked card", "Till", "Training mode on; Card", "The old dialog (training never charges a card)"),
     ("C18", "Linked card", "Till without a terminal", "Card", "The old dialog: key the amount in"),
+    # ---- Step 3: linked refunds, fees, payouts (DL-221..223)
+    ("C20", "Linked refund", "Till", "Sell 2 items paid on the terminal (Visa); Sell → Return → 1 item → Back to the card", "Refunded without the card; the return slip shows Card ****… · back to the card; Square shows the refund"),
+    ("C21", "Linked refund", "Till + terminal", "A sale paid by debit (Interac) on the terminal; return it → Back to the card", "The till says: Customer, tap or insert the card; after the tap the return completes"),
+    ("C22", "Linked refund", "Till", "Start a return Back to the card, then reload the page and do the same return again", "The refund already made comes back (no second refund in Square)"),
+    ("C23", "Linked void", "Till (manager)", "Void the last sale that was paid on the terminal", "Asks first; the money goes back to the card; then the sale is voided"),
+    ("C24", "Unused payment", "Till + laptop (manager)", "Card → Send, pay on the terminal, then Clear sale (OK); after 15 minutes open Sales", "Card payments taken on the terminal with no sale: the payment → Refund to the card"),
+    ("C25", "Fees", "Laptop (accountant)", "Fees and statements → Card fees → Get fees and payouts now", "From the linked card processor: the fees; payouts listed with their dates"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):

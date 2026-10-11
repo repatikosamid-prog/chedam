@@ -103,6 +103,7 @@ export const PAGES = [
     body: [
       { p: "Link the store's own card processor (Square first) so that Card on a till sends the amount to its terminal by itself. Nothing is keyed in, and the hub records the card type and last 4 digits." },
       { steps: ["Square Developer Dashboard: open your application, Credentials, copy the access token (Sandbox to try it, Production for real).", "Home → Card processor: paste it and press Connect. Pick the store's location.", "Pair a terminal: give it a name, pick its till, press Get a code.", "On the Square Terminal: Sign in → Use a device code, and type the code shown.", "When it says Paired, Card on that till uses the terminal."] },
+      { p: "Returns and voids of a sale paid on the linked terminal send the money back to the same card: Back to the card. Debit (Interac) needs the customer's card on the terminal; other cards go back without it." },
       { tip: "No internet, or the processor is down? Card works as before: key the amount into the terminal and record the result." },
       { warn: "The token is kept encrypted on the hub and never shown again. If it is changed in Square, connect again with the new one." },
     ] },

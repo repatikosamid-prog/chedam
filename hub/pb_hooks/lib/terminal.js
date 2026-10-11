@@ -105,7 +105,7 @@ function unused(app, saleId) {
 
 // Managers: paid checkouts never used by a sale (refund them or finish the sale)
 function orphans(app) {
-  return app.findRecordsByFilter("terminal_checkouts", "status = 'completed' && used_sale = '' && completed_at < {:t}", "-created_at", 100, 0,
+  return app.findRecordsByFilter("terminal_checkouts", "status = 'completed' && used_sale = '' && refund = '' && completed_at < {:t}", "-created_at", 100, 0,
     { t: new Date(Date.now() - 15 * 60000).toISOString().replace("T", " ") }).map(view);
 }
 

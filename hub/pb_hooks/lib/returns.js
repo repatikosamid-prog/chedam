@@ -120,6 +120,7 @@ function returnable(app, saleId) {
   });
   view.status_note = s.getString("status") === "voided" ? "This sale was voided: nothing to return." : "";
   view.card_refundable_cents = Math.max(0, cardPaid - cardBack);
+  view.linked_refundable_cents = Math.min(view.card_refundable_cents, require(`${__hooks}/lib/procrefunds.js`).linkedRefundable(app, saleId));   // P5: back through the processor
   view.days_ago = Math.floor(age);
   view.returns = app.findRecordsByFilter("returns", "sale = {:s}", "completed_at", 0, 0, { s: saleId }).map((r) => ({ id: r.id, number: r.getString("number"), refund_cents: r.getInt("refund_cents") }));
   return view;
@@ -262,7 +263,9 @@ function quoteView(b, approved) {
 // ---- Refund payments ------------------------------------------------------------------------------
 // refunds: [{method: cash|card|store_credit, amount_cents, last4, reference}] adding up to `total`.
 // Cash that finishes the refund is rounded to 5 cents (BR-16). Card only up to what was paid by card.
-function settleRefunds(app, total, refunds, b) {
+// P5 step 3: a card refund naming a processor refund (processor_refund) went back to a linked card; the hub
+// checks it (lib/procrefunds.js claim) and fills the last 4 and the processor's reference.
+function settleRefunds(app, total, refunds, b, retId, ctx) {
   let remaining = total, rounding = 0;
   const out = [];
   (refunds || []).forEach((rf, i) => {
@@ -274,6 +277,10 @@ function settleRefunds(app, total, refunds, b) {
     if (remaining <= 0) bad("The refund is already complete; remove refund " + (i + 1) + ".");
     const rec = { method, amount_cents: amt, last4: String(rf.last4 || "").substring(0, 4), reference: String(rf.reference || "").substring(0, 60) };
     if (rec.last4 && !/^[0-9]{4}$/.test(rec.last4)) bad("Card: the last 4 digits are 4 numbers.");
+    if (method === "card" && rf.processor_refund) {
+      if (!b.sale) bad("A card refund through the processor needs the sale.");
+      require(`${__hooks}/lib/procrefunds.js`).claim(app, rec, rf.processor_refund, amt, { sale: b.sale.id, ref: retId, ctx: ctx });
+    }
     if (method === "cash") {
       const due = core().cashRound(remaining);
       if (amt >= remaining || amt >= due) { rounding = due - remaining; rec.amount_cents = due; remaining = 0; }
@@ -381,7 +388,7 @@ function complete(app, input, ctx) {
     exchangeSale = r.sale;
   }
   const toRefund = b.refund - applied;
-  const pay = toRefund > 0 ? settleRefunds(app, toRefund, input.refunds, b) : { refunds: [], rounding_cents: 0, paid_cents: 0 };
+  const pay = toRefund > 0 ? settleRefunds(app, toRefund, input.refunds, b, id, ctx) : { refunds: [], rounding_cents: 0, paid_cents: 0 };
   if (toRefund <= 0 && (input.refunds || []).length) bad("Nothing is left to refund: the new items take the whole return.");
 
   const number = "R-" + ("000000" + sales().nextNumber(app, "return", ctx)).slice(-6);
@@ -432,7 +439,7 @@ function complete(app, input, ctx) {
       credits.push(c.getString("code"));
       rf.reference = c.getString("code");
     }
-    saveRefund({ method: rf.method, amount_cents: rf.amount_cents, reference: rf.reference, last4: rf.last4, credit });
+    saveRefund({ method: rf.method, amount_cents: rf.amount_cents, reference: rf.reference, last4: rf.last4, credit, processor_refund: rf.processor_refund || "" });
   });
   if (approval) sales().useApproval(app, input.approval);
   return { duplicate: false, return: view(app, id, ctx.showCost), sale: exchangeSale };
