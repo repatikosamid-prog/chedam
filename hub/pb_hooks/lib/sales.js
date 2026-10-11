@@ -340,6 +340,7 @@ function settlePayments(app, total, payments, opts) {
     if (method === "card" || method === "store_credit" || method === "platform" || method === "exchange" || method === "deposit" || method === "house_account") {
       if (amt > remaining) bad("A card payment cannot be more than what is left to pay (" + remaining + " cents).");
       rec.amount_cents = amt; rec.tendered_cents = amt; remaining -= amt;
+      if (method === "card" && pm.checkout) require(`${__hooks}/lib/terminal.js`).claim(app, rec, pm, amt, o);   // P5 step 2: linked terminal
       if (method === "store_credit") useCredit(app, rec, amt, relaxed, o.ctx);
       if (method === "deposit") require(`${__hooks}/lib/client_orders.js`).useDeposit(app, rec, amt, relaxed, o);
       if (method === "house_account") require(`${__hooks}/lib/client_orders.js`).chargeAccount(app, rec, amt, relaxed, o);
@@ -435,7 +436,7 @@ function saleView(app, id, showCost) {
   });
   const payments = app.findRecordsByFilter("payments", "sale = {:s}", "created_at", 0, 0, { s: id }).map((p) => ({
     method: p.getString("method"), status: p.getString("status"), amount_cents: p.getInt("amount_cents"), tendered_cents: p.getInt("tendered_cents"),
-    currency: p.getString("currency"), fx_rate: p.getFloat("fx_rate"), change_cents: p.getInt("change_cents"), last4: p.getString("last4"), card_type: p.getString("card_type"), reference: p.getString("reference") }));
+    currency: p.getString("currency"), fx_rate: p.getFloat("fx_rate"), change_cents: p.getInt("change_cents"), last4: p.getString("last4"), card_type: p.getString("card_type"), reference: p.getString("reference"), linked: !!p.getString("checkout") }));
   let cashier = "";
   try { cashier = app.findRecordById("users", s.getString("cashier")).getString("name"); } catch (_) { cashier = ""; }
   return {
@@ -524,6 +525,7 @@ function complete(app, input, ctx, internal) {
   if (!b.training && !till) return { refused: 409, message: "Open the till before selling.", quote };
   const number = (b.training ? "T-" : "S-") + ("000000" + nextNumber(app, b.training ? "training" : "sale", ctx)).slice(-6);
   if (b.training && (input.payments || []).some((p) => p.method === "deposit" || p.method === "house_account")) return { refused: 409, message: "Training sales cannot use a deposit or a house account.", quote };
+  if (b.training && (input.payments || []).some((p) => p.checkout)) return { refused: 409, message: "Training sales cannot take a linked card payment.", quote };
   const pay = settlePayments(app, b.priced.total_cents, input.payments, { ctx, exchange_cents: internal && internal.exchange_cents, sale_id: id, number: number, platform: !!(internal && internal.delivery) });
   if (pay.remaining > 0) return { refused: 409, message: "Not paid in full: " + pay.remaining + " cents left.", quote };
   const s = new Record(app.findCollectionByNameOrId("sales"));

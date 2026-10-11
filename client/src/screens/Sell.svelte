@@ -9,7 +9,10 @@
   // printing, then the till is back to selling (a tap on the receipt area keeps it).
   // Offline (FR-3.16, DL-86..89): products and prices come from the offline pack; when the hub does not
   // answer, the till prices the sale itself, prints an offline receipt and queues the sale for upload.
-  import { onMount } from "svelte";
+  // Linked card terminal (P5 step 2, DL-218..220): when this till has a terminal and the hub is up, Card sends
+  // the amount to it and waits for the result; otherwise (or on request) the standalone dialog as before. A card
+  // paid on the terminal stays with the sale (cart.pay_sale) until it completes, even after a reload.
+  import { onMount, onDestroy } from "svelte";
   import { api, isHubDown } from "../lib/api.js";
   import { off, getPack, refreshPack, enqueue, nextOfflineRef, syncQueue, tillInfo, saveTillInfo, tillWaiting } from "../lib/offline.svelte.js";
   import { quoteOffline, lookupOffline } from "../lib/offline_price.js";
@@ -41,6 +44,8 @@
   let codeInput;
   let qTimer;
   let ix = $state.raw(null);                               // offline pack (indexed)
+  let linked = $state(null);                               // P5: {linked, terminal, poll_seconds} for this till
+  let pollTimer = null;
   const perms = () => ({ discount: can("sales.discount"), approve: can("sales.approve"), exempt: can("sales.tax_exempt") });
 
   const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(cart)); } catch { /* private mode */ } };
@@ -53,7 +58,7 @@
   onMount(() => {
     try { const c = JSON.parse(localStorage.getItem(KEY) || "null"); if (c && Array.isArray(c.lines)) cart = c; } catch { /* none */ }
     (async () => {
-      await Promise.all([loadTill(), loadCatalogue()]);
+      await Promise.all([loadTill(), loadCatalogue(), loadLinked()]);
       if (s.tillOrder) await loadOrder(s.tillOrder);
       if (cart.lines.length) requote();
       focusCode();
@@ -64,6 +69,13 @@
 
   // The till's own open till is remembered, so offline sales still belong to it. A till opened offline
   // (DL-90) is uploaded first when the hub answers; until it has arrived, this device's copy counts.
+  async function loadLinked() {
+    if (isHubDown() || !can("sales.sell")) return;
+    const r = await api("GET", "/api/chedam/payproc/till", null, { quiet: true });
+    linked = r.ok ? r.json : null;
+  }
+  onDestroy(() => clearTimeout(pollTimer));
+
   async function loadTill(again = true) {
     const r = await api("GET", "/api/chedam/tills/current");
     if (r.status === 0) { info = tillInfo(); return; }
@@ -186,7 +198,7 @@
   }
 
   function clearCart(ask = true) {
-    if (ask && live.length && !confirm("Clear this sale?")) return;
+    if (ask && live.length && !confirm(cart.pay_sale ? "A card payment was taken on the terminal for this sale. Clear it anyway? (A manager refunds it from Sales.)" : "Clear this sale?")) return;
     softHolds([]);
     cart = newCart(cart.training);
     quote = null; payments = []; mode = "sell"; keep(); focusCode();
@@ -219,8 +231,9 @@
     if (problems.length) { error = problems[0].message; return; }
     if (!cart.training && !(info && info.till)) { error = "Open the till first (Till, then Open till)."; return; }
     if (quote.needs_approval.length && !cart.approval) { dialog = { kind: "approve", what: quote.needs_approval }; return; }
-    payments = []; saleId = newId(); mode = "pay";
+    payments = []; saleId = cart.pay_sale || newId(); mode = "pay";
     if (cart.order && cart.order.deposit_cents > 0 && !cart.training) payments = [{ method: "deposit", amount_cents: Math.min(cart.order.deposit_cents, quote.total_cents), reference: cart.order.id }];
+    if (cart.pay_sale) recoverLinked();
     // Exchange (FR-4.13): the returned items pay first; the hub records the return and this sale together.
     if (ex.draft) {
       if (cart.training) { error = "Switch training off for an exchange."; mode = "sell"; return; }
@@ -235,6 +248,65 @@
     const r = await api("GET", "/api/chedam/house-accounts");
     if (!r.ok) { error = r.message; return; }
     dialog = { kind: "account", list: r.json.items };
+  }
+
+  // ---- Linked card terminal (P5 step 2) ------------------------------------------------------------
+  const useLinked = () => !!(linked && linked.linked && !isHubDown() && !cart.training && quote && !quote.offline);
+  const REASON = { buyer_canceled: "The customer cancelled on the terminal, or the card was declined.", seller_canceled: "Cancelled.", timed_out: "No card in time: cancelled on the terminal." };
+  function cardDialog() {
+    const amount = (st.remaining / 100).toFixed(2);
+    dialog = useLinked() ? { kind: "linked", amount, phase: "ready", msg: "", co: null } : { kind: "card", amount, last4: "", reference: "" };
+  }
+  async function sendToTerminal() {
+    const amt = toCents(dialog.amount);
+    if (!(amt > 0) || amt > st.remaining) { dialog.msg = "Enter an amount up to " + money(st.remaining) + "."; return; }
+    dialog.phase = "sending"; dialog.msg = "";
+    const r = await api("POST", "/api/chedam/terminal/checkouts", { sale_id: saleId, amount_cents: amt }, { quiet: true });
+    if (!dialog || dialog.kind !== "linked") return;
+    if (!r.ok) {
+      if (await handleRefusal(r)) return;
+      dialog.phase = "failed"; dialog.msg = (r.status === 0 ? "The hub did not answer." : r.message) + " Key the amount into the terminal instead.";
+      return;
+    }
+    cart.pay_sale = saleId; keep();
+    dialog.co = r.json; dialog.phase = "waiting";
+    schedulePoll();
+  }
+  function schedulePoll() { clearTimeout(pollTimer); pollTimer = setTimeout(pollTerminal, (Number(linked && linked.poll_seconds) || 2) * 1000); }
+  async function pollTerminal() {
+    if (!dialog || dialog.kind !== "linked" || !dialog.co) return;
+    const r = await api("GET", `/api/chedam/terminal/checkouts/${dialog.co.id}`, null, { quiet: true, timeout: 15000 });
+    if (!dialog || dialog.kind !== "linked" || !dialog.co) return;
+    if (!r.ok) { dialog.msg = r.status === 0 ? "Still checking with the terminal…" : r.message; return schedulePoll(); }
+    dialog.co = r.json; dialog.msg = "";
+    if (r.json.status === "completed") return linkedPaid(r.json);
+    if (r.json.status === "cancelled" || r.json.status === "failed") { dialog.phase = "cancelled"; dialog.msg = REASON[r.json.cancel_reason] || "The terminal did not take the payment."; return; }
+    schedulePoll();
+  }
+  async function cancelTerminal(thenKeyIn) {
+    clearTimeout(pollTimer);
+    const r = await api("POST", `/api/chedam/terminal/checkouts/${dialog.co.id}/cancel`, {}, { quiet: true });
+    if (!dialog || dialog.kind !== "linked") return;
+    if (r.ok && r.json.status === "completed") return linkedPaid(r.json);     // paid a moment before the cancel
+    if (!r.ok || r.json.status !== "cancelled") { dialog.msg = "The terminal has not confirmed the cancel yet: cancel it on the terminal too."; return schedulePoll(); }
+    if (thenKeyIn) return keyIn();
+    dialog.phase = "cancelled"; dialog.msg = "Cancelled.";
+  }
+  function keyIn() { clearTimeout(pollTimer); dialog = { kind: "card", amount: dialog.amount, last4: "", reference: "" }; }
+  function linkedPaid(co) {
+    clearTimeout(pollTimer);
+    if (payments.some((p) => p.checkout === co.id)) { dialog = null; return; }
+    pay({ method: "card", amount_cents: co.amount_cents, checkout: co.id, last4: co.last4, card_type: co.card_type });
+  }
+  // A card already paid on the terminal for this sale (a reload, or the sale was refused): back in the payments
+  async function recoverLinked() {
+    const id = saleId;
+    const r = await api("GET", `/api/chedam/terminal/checkouts?sale=${id}`, null, { quiet: true });
+    if (!r.ok || saleId !== id || mode !== "pay") return;
+    const add = r.json.items.filter((co) => !payments.some((p) => p.checkout === co.id));
+    if (!add.length) return;
+    note = "The card payment taken on the terminal is kept: " + add.map((co) => money(co.amount_cents)).join(", ") + ".";
+    add.forEach((co) => pay({ method: "card", amount_cents: co.amount_cents, checkout: co.id, last4: co.last4, card_type: co.card_type }));
   }
 
   function pay(p) {
@@ -388,6 +460,7 @@
 
   async function hold() {
     if (!live.length) return;
+    if (cart.pay_sale) { error = "A card payment was taken on the terminal for this sale: finish the sale before holding it."; return; }
     const label = prompt("Name for this sale (e.g. customer):", "") ?? null;
     if (label === null) return;
     const r = await api("POST", "/api/chedam/holds", { label, cart: $state.snapshot(cart), total_cents: quote ? quote.total_cents : 0 });
@@ -726,7 +799,7 @@
       {:else if mode === "pay" && st}
         <div class="space-y-2 border-t border-line pt-2">
           {#each payments as p, i (i)}
-            <p class="flex justify-between text-sm"><span>{METHOD[p.method]}{p.last4 ? " ****" + p.last4 : ""}{p.status === "declined" ? " · declined" : ""}</span><span>{money(p.amount_cents)}{p.method === "usd_cash" ? " US" : ""}</span></p>
+            <p class="flex justify-between text-sm"><span>{METHOD[p.method]}{p.last4 ? " ****" + p.last4 : ""}{p.checkout ? " · terminal" : ""}{p.status === "declined" ? " · declined" : ""}</span><span>{money(p.amount_cents)}{p.method === "usd_cash" ? " US" : ""}</span></p>
           {/each}
           <p class="flex justify-between text-xl font-bold"><span>To pay</span><span class="tabular-nums">{money(st.remaining)}</span></p>
           {#if (settings.payment_methods || []).includes("cash")}
@@ -741,7 +814,7 @@
               <input class="field" inputmode="decimal" bind:value={dialog.value} placeholder="Cash given ($)" aria-label="Cash given" use:focusNow /><button class="btn" type="submit">OK</button></form>
           {/if}
           <div class="flex flex-wrap gap-2">
-            {#if (settings.payment_methods || []).includes("card")}<button class="btn" disabled={busy} onclick={() => (dialog = { kind: "card", amount: (st.remaining / 100).toFixed(2), last4: "", reference: "" })}>Card</button>{/if}
+            {#if (settings.payment_methods || []).includes("card")}<button class="btn" disabled={busy || (dialog && dialog.kind === "linked" && dialog.phase !== "ready")} onclick={cardDialog}>Card</button>{/if}
             {#if (settings.payment_methods || []).includes("usd_cash")}<button class="btn-ghost" disabled={busy} onclick={() => (dialog = { kind: "usd", value: "" })}>US cash</button>{/if}
             {#if !isHubDown() && !cart.training}<button class="btn-ghost" disabled={busy} onclick={() => (dialog = { kind: "credit", code: "", error: "" })}>Store credit</button>
               <button class="btn-ghost" disabled={busy} onclick={openAccounts}>On account</button>{/if}
@@ -752,6 +825,26 @@
               {#each dialog.list as a (a.id)}<button class="btn-ghost w-full justify-between" disabled={a.owed_cents + st.remaining > a.credit_limit_cents}
                 onclick={() => pay({ method: "house_account", amount_cents: st.remaining, reference: a.id })}><span>{a.name}</span><span class="text-sm">owes {money(a.owed_cents)} of {money(a.credit_limit_cents)}</span></button>
               {:else}<p class="text-sm text-muted">No client has a house account (a credit limit in Vendors and clients).</p>{/each}
+            </div>
+          {:else if dialog && dialog.kind === "linked"}
+            <div class="space-y-2 rounded-xl border border-accent p-3" aria-live="polite">
+              {#if dialog.phase === "ready" || dialog.phase === "sending"}
+                <form class="space-y-2" onsubmit={(e) => { e.preventDefault(); sendToTerminal(); }}>
+                  <label class="block"><span class="text-sm text-muted">Amount on {linked.terminal} ($)</span><input class="field text-lg" inputmode="decimal" bind:value={dialog.amount} /></label>
+                  <div class="flex flex-wrap gap-2"><button class="btn" type="submit" disabled={dialog.phase === "sending"}>{dialog.phase === "sending" ? "Sending…" : "Send to the terminal"}</button>
+                    <button class="btn-ghost" type="button" onclick={keyIn}>Key it in instead</button></div>
+                </form>
+              {:else if dialog.phase === "waiting"}
+                <p class="text-lg font-semibold">Waiting for the card on {linked.terminal}… {money(dialog.co.amount_cents)}</p>
+                <p class="text-sm text-muted">{dialog.co.status === "in_progress" ? "The customer is paying." : "The terminal shows the amount: tap, insert or swipe."}</p>
+                <div class="flex flex-wrap gap-2"><button class="btn-ghost text-bad" onclick={() => cancelTerminal(false)}>Cancel</button>
+                  <button class="btn-ghost" onclick={() => cancelTerminal(true)}>Cancel and key it in</button></div>
+              {:else}
+                <p class="font-semibold {dialog.phase === 'failed' ? 'text-bad' : 'text-warn'}">{dialog.phase === "failed" ? "Could not reach the terminal." : "Not paid."}</p>
+                <div class="flex flex-wrap gap-2"><button class="btn" onclick={() => { dialog.phase = "ready"; dialog.msg = ""; dialog.co = null; }}>Try again</button>
+                  <button class="btn-ghost" onclick={keyIn}>Key it in instead</button></div>
+              {/if}
+              {#if dialog.msg}<p class="text-sm" role="alert">{dialog.msg}</p>{/if}
             </div>
           {:else if dialog && dialog.kind === "card"}
             <div class="space-y-2 rounded-xl border border-accent p-3">

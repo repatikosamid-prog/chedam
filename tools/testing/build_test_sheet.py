@@ -476,6 +476,16 @@ P5_TESTS = [
     ("C06", "Card processor", "Laptop (owner)", "Link the terminal to another till", "Saved; the first till no longer has a terminal"),
     ("C07", "Card processor", "Laptop (owner)", "Settings → Export data; Activity log for the processor", "No token anywhere"),
     ("C08", "Card processor", "Laptop (owner)", "Disconnect", "Card on every till goes back to keying in the amount"),
+    # ---- Step 2: linked card payments (DL-218..220)
+    ("C10", "Linked card", "Till with a terminal", "Sell an item → Pay → Card → Send to the terminal", "The terminal shows the amount; the till says Waiting for the card"),
+    ("C11", "Linked card", "Terminal", "Pay with the sandbox card (or tap a card)", "Within seconds the till adds Card ****1111 · terminal; the sale completes; the receipt shows the card"),
+    ("C12", "Linked card", "Till", "Card → Send → Cancel on the till", "The terminal goes back to idle; the till says Cancelled; Try again works"),
+    ("C13", "Linked card", "Terminal", "Card → Send; cancel on the terminal", "The till says the customer cancelled; Key it in instead opens the old dialog"),
+    ("C14", "Linked card", "Till", "Split: Card $5.00 on the terminal, the rest cash", "Both payments on the receipt"),
+    ("C15", "Linked card", "Till", "Card → Send, pay on the terminal, then reload the page before the sale completes; press Pay", "The card payment is back in the payments (a note says so); the sale completes without charging again"),
+    ("C16", "Linked card", "Till", "Switch the router's internet off; Card", "The till shows Could not reach the terminal → Key it in instead works"),
+    ("C17", "Linked card", "Till", "Training mode on; Card", "The old dialog (training never charges a card)"),
+    ("C18", "Linked card", "Till without a terminal", "Card", "The old dialog: key the amount in"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):

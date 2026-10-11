@@ -17,7 +17,7 @@ export const PAGES = [
     ] },
   { id: "pay", title: "Payments and receipts", screens: ["sell", "sales"], words: "cash card change rounding split receipt print pdf reprint usd store credit",
     body: [
-      { steps: ["Cash: tap a note button or type the amount; Chedam shows the change (cash is rounded to 5¢).", "Card: take the payment on the card terminal, then press Card approved.", "Split: pay part by one method, the rest by another.", "US cash: Chedam converts at the store's rate."] },
+      { steps: ["Cash: tap a note button or type the amount; Chedam shows the change (cash is rounded to 5¢).", "Card: with a linked terminal, Card → Send to the terminal and the customer pays there; otherwise take the payment on the terminal, then press Approved.", "Split: pay part by one method, the rest by another.", "US cash: Chedam converts at the store's rate."] },
       { p: "The receipt stays 15 seconds so you can print it or save it as a PDF, then the till is back to selling. Tap the receipt to keep it on the screen." },
       { tip: "A reprint needs a manager's approval: it is recorded." },
     ] },

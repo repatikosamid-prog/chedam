@@ -7,7 +7,7 @@ Started 2026-10-11. Goal: the store's own card processor linked to the till (Squ
 | # | Item | Owner | Status |
 | --- | --- | --- | --- |
 | 1 | Payment interface, Square connect, terminal pairing | Claude | Done, deployed (27 tests; DL-215..217) |
-| 2 | Linked card payments at the till | Claude | To do |
+| 2 | Linked card payments at the till | Claude | Done, deployed (26 tests; DL-218..220) |
 | 3 | Linked refunds, processor fees and payouts | Claude | To do |
 | 4 | Cloud drive connection and off-site backup | Claude | To do |
 | 5 | Owner remote view | Claude | To do |
