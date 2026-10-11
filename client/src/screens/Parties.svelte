@@ -15,7 +15,12 @@
   const when = (t) => (t ? new Date(String(t).replace(" ", "T")).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "");
   const fail = async (r) => { if (!(await handleRefusal(r))) error = r.message; };
   const blank = () => ({ kind: "vendor", name: "", legal_name: "", code: "", tax_id: "", pst_number: "", business_number: "", importer: false, exporter: false, currency: "CAD",
-    payment_terms_days: 30, terms_text: "", credit_limit: "", email: "", phone: "", website: "", street: "", city: "", province: "BC", postal_code: "", country: "CA", notes: "", active: true });
+    payment_terms_days: 30, terms_text: "", credit_limit: "", email: "", phone: "", website: "", street: "", city: "", province: "BC", postal_code: "", country: "CA", notes: "", active: true,
+    order_method: "", order_email: "", portal_url: "", portal_account: "", portal_user: "", order_cutoff: "", min_order: "" });
+  // T3: a vendor's page also shows what they sell us, consignment, their bills and invoices, orders, how to order
+  let sum = $state(null), stab = $state("products");
+  const KIND_DOC = { bill: "Bill", vendor_credit: "Credit from them", invoice: "Invoice to them", client_credit: "Credit to them" };
+  const METHOD = { email: "Email", portal: "Their website (portal)", phone: "Phone", rep: "Sales rep visits", edi: "EDI", other: "Other" };
 
   async function load() {
     error = "";
@@ -36,17 +41,19 @@
     const r = await api("GET", "/api/chedam/parties/" + id);
     if (!r.ok) return fail(r);
     open = r.json; form = null; contact = null;
+    const sm = await api("GET", `/api/chedam/parties/${id}/summary`, null, { quiet: true });
+    sum = sm.ok ? sm.json : null;
     if (open.party.documents && open.party.documents.length) { const t = await api("POST", "/api/files/token", {}, { quiet: true }); fileToken = t.ok ? t.json.token : ""; }
   }
   async function saveParty(e) {
     e.preventDefault();
-    const body = { ...form, credit_limit_cents: form.credit_limit === "" ? 0 : Math.round(Number(form.credit_limit) * 100) };
-    delete body.credit_limit; delete body.id;
+    const body = { ...form, credit_limit_cents: form.credit_limit === "" ? 0 : Math.round(Number(form.credit_limit) * 100), min_order_cents: form.min_order === "" ? 0 : Math.round(Number(form.min_order) * 100) };
+    delete body.credit_limit; delete body.min_order; delete body.id;
     const r = form.id ? await api("PATCH", "/api/collections/parties/records/" + form.id, body) : await api("POST", "/api/collections/parties/records", body);
     if (!r.ok) return fail(r);
     form = null; await load(); openParty(r.json.id);
   }
-  const editParty = (p) => (form = { ...blank(), ...p, credit_limit: p.credit_limit_cents ? (p.credit_limit_cents / 100).toFixed(2) : "" });
+  const editParty = (p) => (form = { ...blank(), ...p, credit_limit: p.credit_limit_cents ? (p.credit_limit_cents / 100).toFixed(2) : "", min_order: p.min_order_cents ? (p.min_order_cents / 100).toFixed(2) : "" });
   async function saveContact(e) {
     e.preventDefault();
     const body = { party: open.party.id, name: contact.name, role: contact.role, email: contact.email, phone: contact.phone, primary: contact.primary };
@@ -105,6 +112,18 @@
       <label class="block"><span class="text-sm text-muted">PST number</span><input class="field" bind:value={form.pst_number} maxlength="40" /></label>
       <label class="block"><span class="text-sm text-muted">Business number (CRA)</span><input class="field" bind:value={form.business_number} maxlength="40" /></label>
       {#if form.kind !== "vendor"}<label class="block"><span class="text-sm text-muted">Credit limit ($, house account)</span><input class="field" inputmode="decimal" bind:value={form.credit_limit} /></label>{/if}
+      {#if form.kind !== "client"}
+        <fieldset class="grid gap-2 rounded-xl border border-line p-2 sm:col-span-3 sm:grid-cols-3"><legend class="px-1 text-sm font-semibold">How we order</legend>
+          <label class="block"><span class="text-sm text-muted">Method</span><select class="field" bind:value={form.order_method}><option value="">—</option>{#each Object.entries(METHOD) as [k, l] (k)}<option value={k}>{l}</option>{/each}</select></label>
+          <label class="block"><span class="text-sm text-muted">Order email</span><input class="field" type="email" bind:value={form.order_email} maxlength="120" /></label>
+          <label class="block"><span class="text-sm text-muted">Minimum order ($)</span><input class="field" inputmode="decimal" bind:value={form.min_order} /></label>
+          <label class="block sm:col-span-3"><span class="text-sm text-muted">Their ordering website (portal)</span><input class="field" type="url" bind:value={form.portal_url} maxlength="300" placeholder="https://" /></label>
+          <label class="block"><span class="text-sm text-muted">Our account number there</span><input class="field" bind:value={form.portal_account} maxlength="80" /></label>
+          <label class="block"><span class="text-sm text-muted">User name there</span><input class="field" bind:value={form.portal_user} maxlength="120" /></label>
+          <label class="block"><span class="text-sm text-muted">Order by (cut-off)</span><input class="field" bind:value={form.order_cutoff} maxlength="120" placeholder="Tue 2 pm for Thu delivery" /></label>
+          <p class="text-xs text-muted sm:col-span-3">Passwords are never kept in Chedam: keep them in a password manager.</p>
+        </fieldset>
+      {/if}
       <label class="flex min-h-12 items-center gap-3"><input type="checkbox" class="h-6 w-6 accent-accent" bind:checked={form.importer} /> We import from them</label>
       <label class="flex min-h-12 items-center gap-3"><input type="checkbox" class="h-6 w-6 accent-accent" bind:checked={form.exporter} /> We export to them</label>
       <label class="block sm:col-span-3"><span class="text-sm text-muted">Notes</span><textarea class="field" rows="3" bind:value={form.notes} maxlength="4000"></textarea></label>
@@ -121,7 +140,33 @@
       <p class="text-sm">{[p.email, p.phone, p.website].filter(Boolean).join(" · ")}</p>
       <p class="text-sm text-muted">{p.payment_terms_days ? "Pay within " + p.payment_terms_days + " days" : ""}{p.terms_text ? " (" + p.terms_text + ")" : ""}{p.tax_id ? " · GST/HST " + p.tax_id : ""}{p.pst_number ? " · PST " + p.pst_number : ""}{p.business_number ? " · BN " + p.business_number : ""}{p.importer ? " · importer" : ""}{p.exporter ? " · exporter" : ""}{p.credit_limit_cents ? " · credit limit " + money(p.credit_limit_cents) : ""}</p>
       {#if p.notes}<p class="whitespace-pre-line text-sm">{p.notes}</p>{/if}
+      {#if sum && (sum.ordering.method || sum.ordering.portal_url)}
+        <p class="text-sm">Order by {METHOD[sum.ordering.method] || "—"}{sum.ordering.cutoff ? " · " + sum.ordering.cutoff : ""}{sum.ordering.min_order_cents ? " · minimum " + money(sum.ordering.min_order_cents) : ""}
+          {#if sum.ordering.portal_url} · <a class="underline" href={sum.ordering.portal_url} target="_blank" rel="noopener">open their portal</a>{sum.ordering.portal_account ? " (account " + sum.ordering.portal_account + ")" : ""}{/if}
+          {#if sum.ordering.email} · <a class="underline" href={"mailto:" + sum.ordering.email}>{sum.ordering.email}</a>{/if}</p>
+      {/if}
     </div>
+    {#if sum}
+      <div class="card space-y-2">
+        <p class="text-sm">{#if p.kind !== "client"}We owe them <b>{money(sum.totals.owed_to_them_cents)}</b>{sum.totals.consignment_owed_cents ? " + consignment sold " + money(sum.totals.consignment_owed_cents) : ""}{/if}{#if p.kind !== "vendor"}{p.kind === "both" ? " · " : ""}They owe us <b>{money(sum.totals.they_owe_cents)}</b>{/if}</p>
+        <div class="flex flex-wrap gap-2">{#each [["products", "Products (" + sum.products.length + ")"], ["consignment", "Consignment (" + sum.consignment.length + ")"], ["documents", "Bills and invoices (" + sum.documents.length + ")"], ["orders", "Orders (" + sum.orders.length + ")"]] as [k, l] (k)}<button class="min-h-10 rounded-xl px-3 text-sm {stab === k ? 'bg-accent text-accent-ink' : 'border border-line'}" onclick={() => (stab = k)}>{l}</button>{/each}</div>
+        {#if stab === "products"}
+          {#each sum.products as x (x.product + (x.id || ""))}<p class="flex flex-wrap justify-between gap-2 border-t border-line pt-1 text-sm"><span><b>{x.product_name}</b>{x.vendor_sku ? " · their code " + x.vendor_sku : ""}{x.usual_only ? " · usual supplier (no price list yet)" : ""}</span>
+            {#if !x.usual_only}<span>{money(x.cost_cents)} {x.currency}{x.pack_qty > 1 ? " per " + x.pack_qty : ""}{x.change_pct ? " · " + (x.change_pct > 0 ? "▲ " : "▼ ") + Math.abs(x.change_pct) + "%" : ""}{x.lead_days ? " · " + x.lead_days + " days" : ""}</span>{/if}</p>
+          {:else}<p class="text-sm text-muted">No products from them yet (Buying → Vendor prices, or a product's Supplier).</p>{/each}
+        {:else if stab === "consignment"}
+          {#each sum.consignment as x (x.product)}<p class="flex flex-wrap justify-between gap-2 border-t border-line pt-1 text-sm"><span><b>{x.product_name}</b> · {money(x.cost_cents)} owed per unit sold · {x.on_hand} on the shelf</span><span>sold, not billed yet: {x.sold_unbilled} ({money(x.owed_cents)})</span></p>
+          {:else}<p class="text-sm text-muted">Nothing on consignment from them.</p>{/each}
+        {:else if stab === "documents"}
+          {#each sum.documents as d (d.id)}<p class="flex flex-wrap justify-between gap-2 border-t border-line pt-1 text-sm"><span><b>{KIND_DOC[d.kind]}</b> {d.number}{d.party_ref ? " (their " + d.party_ref + ")" : ""} · {d.doc_date}{d.due_date && d.status !== "paid" ? " · due " + d.due_date : ""}</span>
+            <span>{money(d.total_cents)} {d.currency !== "CAD" ? d.currency : ""} · <span class={d.status === "paid" ? "text-ok" : d.status === "void" ? "text-muted" : "text-warn"}>{d.status === "open" || d.status === "partial" ? "open " + money(d.balance_cents) : d.status}</span></span></p>
+          {:else}<p class="text-sm text-muted">No bills or invoices yet.</p>{/each}
+        {:else}
+          {#each sum.orders as o (o.id)}<p class="flex flex-wrap justify-between gap-2 border-t border-line pt-1 text-sm"><span><b>{o.number || "Draft"}</b> · {o.order_date || "not sent"}{o.expected_date ? " · expected " + o.expected_date : ""}</span><span>{money(o.total_cents)} · {o.status}</span></p>
+          {:else}<p class="text-sm text-muted">No purchase orders yet.</p>{/each}
+        {/if}
+      </div>
+    {/if}
     <div class="card space-y-1">
       <div class="flex justify-between"><h2 class="font-semibold">Contacts</h2>{#if manage}<button class="btn-ghost min-h-10 text-sm" onclick={() => (contact = { name: "", role: "", email: "", phone: "", primary: !open.contacts.length })}>Add</button>{/if}</div>
       {#if contact}

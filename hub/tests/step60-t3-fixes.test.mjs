@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { TestHub, HUB } from "./lib/hub.mjs";
+import { parse as scaleParse, toBase } from "../../client/src/lib/scale.js";
 
 const t = new TestHub({ port: 8153 });
 const check = t.check.bind(t);
@@ -14,6 +15,10 @@ const sid = () => Array.from(randomBytes(15), (b) => "abcdefghijklmnopqrstuvwxyz
 
 let err = null;
 try {
+  console.log("Scale readings (the till's code)");
+  check("'  1.234kg' and 'ST,GS,+001.25kg' read", scaleParse("  1.234kg").value === 1.234 && scaleParse("ST,GS,+001.25kg").value === 1.25);
+  check("pounds to kilograms and back", toBase(scaleParse("2.205 LB"), "kg") === 1.0 && toBase(scaleParse("500 g"), "lb") === 1.102);
+  check("an unsteady reading is not taken", scaleParse("US,GS,+001.25kg") === null && scaleParse("????") === null);
   await t.start();
   const people = Object.fromEntries((await t.list("users")).items.map((u) => [u.name, u.id]));
   const devs = {};
@@ -46,5 +51,22 @@ try {
   await M.post("/api/chedam/stock/receive", { op_id: sid(), lines: [{ product: pr.json.product.id, qty: 1, received_on: tomorrow }] });
   const lots = (await t.list("stock_lots", `product='${pr.json.product.id}'`)).items;
   check("a day in the future is not taken (today instead)", lots.length === 2 && !lots.some((l) => l.received_at.startsWith(tomorrow)));
+
+  console.log("Vendors: one page, best supplier");
+  const parties = (await t.list("parties")).items;
+  const coastal = parties.find((x) => x.name.startsWith("Coastal")), fresh = parties.find((x) => x.name.startsWith("Fresh Fields"));
+  const up = await t.api("PATCH", `/api/collections/parties/records/${coastal.id}`, { order_method: "portal", portal_url: "https://portal.example.test", portal_account: "ACC-77", portal_user: "store@x.test", order_cutoff: "Tue 2 pm", min_order_cents: 20000 }, { token: manager });
+  check("how to order is kept (no password field)", up.status === 200 && up.json.portal_account === "ACC-77" && !("portal_password" in up.json), JSON.stringify(up.json).slice(0, 200));
+  const chips = (await C.get("/api/chedam/catalogue/lookup?code=2000000000084")).json.matches[0] || (await C.get("/api/chedam/catalogue/lookup?code=2000000000077")).json.matches[0];
+  await M.post("/api/collections/vendor_products/records", { vendor: coastal.id, product: chips.product.id, selling_unit: chips.unit.id, vendor_sku: "CB-1", cost_cents: 200, pack_qty: 1, lead_days: 2 });
+  await M.post("/api/collections/vendor_products/records", { vendor: fresh.id, product: chips.product.id, selling_unit: chips.unit.id, vendor_sku: "FF-9", cost_cents: 180, pack_qty: 1, lead_days: 5, min_order_qty: 6 });
+  const bs = await M.get(`/api/chedam/purchasing/best-supplier?product=${chips.product.id}&qty=10`);
+  const v0 = bs.json.vendors && bs.json.vendors[0];
+  check("best supplier: the lowest cost per unit first, with why", bs.status === 200 && v0.vendor_name.startsWith("Fresh Fields") && v0.best && v0.reasons[0].startsWith("lowest cost") && v0.order_units === 10, JSON.stringify(bs.json).slice(0, 400));
+  const cb = bs.json.vendors.find((x) => x.vendor === coastal.id);
+  check("how to reach each vendor: portal, account", cb && cb.ordering.portal_url === "https://portal.example.test" && cb.ordering.method === "portal");
+  check("a cashier can't see suppliers", (await C.get(`/api/chedam/purchasing/best-supplier?product=${chips.product.id}`)).status === 403);
+  const sm = await M.get(`/api/chedam/parties/${coastal.id}/summary`);
+  check("the vendor's page: products with their price, documents, orders, how to order", sm.status === 200 && sm.json.products.some((x) => x.vendor_sku === "CB-1") && Array.isArray(sm.json.documents) && Array.isArray(sm.json.orders) && sm.json.ordering.portal_account === "ACC-77", JSON.stringify(sm.json).slice(0, 300));
 } catch (e) { err = e; }
 await t.finish(err);

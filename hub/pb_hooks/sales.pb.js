@@ -116,7 +116,7 @@ routerAdd("GET", "/api/chedam/tills/current", (e) => {
     settings: {
       payment_methods: auth.setting(e.app, "sales.payment_methods", ["cash", "card"]),
       cash_rounding: auth.setting(e.app, "sales.cash_rounding", true),
-      usd_rate: auth.setting(e.app, "sales.usd_rate", 1.35),
+      usd_rate: auth.setting(e.app, "sales.usd_rate", 1.35), scale: auth.setting(e.app, "scale.enabled", false),
       discount_limit_pct: auth.setting(e.app, "sales.discount_limit_pct", 10),
       override_limit_pct: auth.setting(e.app, "sales.override_limit_pct", 10),
       float_default_cents: auth.setting(e.app, "till.float_default_cents", 0),

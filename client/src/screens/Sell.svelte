@@ -30,6 +30,7 @@
   import { ex, endExchange } from "../lib/exchange.svelte.js";
   import { publish, useHub, openWindow } from "../lib/customer_display.js";
   import { voidRefunds } from "../lib/linked.js";
+  import * as scale from "../lib/scale.js";
 
   const KEY = "chedam.cart";
   let info = $state(null);                       // /tills/current: till, settings, business
@@ -145,7 +146,7 @@
 
   function add(p, u, extra = {}) {
     note = "";
-    if (u.kind === "weight" && extra.weight === undefined) { dialog = { kind: "weight", p, u, value: "" }; return; }
+    if (u.kind === "weight" && extra.weight === undefined) { dialog = { kind: "weight", p, u, value: "", msg: "" }; if (useScale()) readScale(); return; }
     if (p.age_restricted && !extra.age_checked) { dialog = { kind: "age", p, u, extra }; return; }
     const same = cart.lines.find((l) => !l.voided && l.product === p.id && l.selling_unit === u.id && u.kind !== "weight" && !l.discount && l.price_cents === undefined);
     if (same) same.qty += 1;
@@ -308,6 +309,15 @@
     if (!add.length) return;
     note = "The card payment taken on the terminal is kept: " + add.map((co) => money(co.amount_cents)).join(", ") + ".";
     add.forEach((co) => pay({ method: "card", amount_cents: co.amount_cents, checkout: co.id, last4: co.last4, card_type: co.card_type }));
+  }
+
+  // ---- Scale (T3): weighed goods read from the till's scale when the store uses one (setting scale.enabled)
+  const useScale = () => !!(settings.scale && scale.config());
+  async function readScale() {
+    if (!dialog || dialog.kind !== "weight") return;
+    dialog.msg = "Reading the scale…";
+    try { const w = await scale.read(dialog.p.base_unit); if (dialog && dialog.kind === "weight") { dialog.value = String(w); dialog.msg = ""; } }
+    catch (err) { if (dialog && dialog.kind === "weight") dialog.msg = err.message + " You can type the weight."; }
   }
 
   function pay(p) {
@@ -610,7 +620,8 @@
         <form class="space-y-2 rounded-xl border border-accent p-3" onsubmit={(e) => { e.preventDefault(); const w = Number(dialog.value); if (w > 0) { const d = dialog; dialog = null; add(d.p, d.u, { weight: w }); } }}>
           <label class="block"><span class="font-semibold">{dialog.p.name}: weight ({dialog.p.base_unit})</span>
             <input class="field" type="number" min="0.001" step="0.001" bind:value={dialog.value} use:focusNow /></label>
-          <div class="flex gap-2"><button class="btn" type="submit">Add</button><button class="btn-ghost" type="button" onclick={() => (dialog = null)}>Cancel</button></div>
+          {#if dialog.msg}<p class="text-sm text-muted" aria-live="polite">{dialog.msg}</p>{/if}
+          <div class="flex flex-wrap gap-2"><button class="btn" type="submit">Add</button>{#if useScale()}<button class="btn-ghost" type="button" onclick={readScale}>Read the scale</button>{/if}<button class="btn-ghost" type="button" onclick={() => (dialog = null)}>Cancel</button></div>
         </form>
       {:else if dialog && dialog.kind === "variants"}
         <div class="space-y-2 rounded-xl border border-accent p-3">

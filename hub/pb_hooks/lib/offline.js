@@ -51,7 +51,7 @@ function pack(app) {
     loyalty: (() => { const c = require(`${__hooks}/lib/customers.js`); const prog = c.program(app); return prog ? Object.assign({ program: prog }, c.offlineList(app)) : null; })(),
     settings: {
       payment_methods: setting(app, "sales.payment_methods", ["cash", "card"]), cash_rounding: setting(app, "sales.cash_rounding", true),
-      usd_rate: setting(app, "sales.usd_rate", 1.35), discount_limit_pct: setting(app, "sales.discount_limit_pct", 10),
+      usd_rate: setting(app, "sales.usd_rate", 1.35), scale: setting(app, "scale.enabled", false), discount_limit_pct: setting(app, "sales.discount_limit_pct", 10),
       override_limit_pct: setting(app, "sales.override_limit_pct", 10), exempt_reasons: setting(app, "sales.exempt_reasons", {}),
       float_default_cents: setting(app, "till.float_default_cents", 0), denominations: setting(app, "till.denominations", []),
     },

@@ -6,6 +6,17 @@
   import { api } from "../lib/api.js";
   import { go, can, handleRefusal } from "../lib/session.svelte.js";
   import { toCents } from "../lib/catalogue.js";
+  import * as scale from "../lib/scale.js";
+
+  // Scale for weighed goods (T3): the store's switch (setting scale.enabled) and this till's own scale
+  let sc = $state({ rec: null, on: false, cfg: scale.config(), protocol: "command", baud: 9600, test: "" });
+  async function loadScale() {
+    const r = await api("GET", "/api/collections/settings/records?perPage=1&filter=" + encodeURIComponent("key='scale.enabled'"), null, { quiet: true });
+    if (r.ok && r.json.items[0]) { sc.rec = r.json.items[0]; sc.on = !!sc.rec.value; }
+  }
+  async function setScaleOn(v) { const r = await api("PATCH", "/api/collections/settings/records/" + sc.rec.id, { value: v }); if (r.ok) sc.on = v; else error = r.message; }
+  async function chooseScale() { sc.test = ""; try { sc.cfg = await scale.choose({ protocol: sc.protocol, baud: sc.baud }); sc.test = "Scale chosen on this till."; } catch (err) { sc.test = err.message; } }
+  async function testScale() { sc.test = "Put something on the scale…"; try { sc.test = "The scale reads " + (await scale.read("kg")) + " kg."; } catch (err) { sc.test = err.message; } }
 
   let printers = $state([]), devices = $state([]), options = $state(null), optRec = null;
   let error = $state(""), ok = $state(""), busy = $state(""), found = $state(null), edit = $state(null), preview = $state(null);
@@ -23,7 +34,7 @@
       if (d.ok) devices = d.json.devices.filter((x) => x.status === "approved" || x.status === "locked");
     }
   }
-  onMount(load);
+  onMount(() => { load(); loadScale(); });
 
   async function save(list, msg) {
     busy = "save"; error = "";
@@ -177,5 +188,23 @@
     <p class="text-sm text-muted">The last sale, exactly as the printer prints it.</p>
     <div class="flex flex-wrap gap-2">{#each PAPER as [v, l] (v)}<button class="btn-ghost min-h-10 text-sm" onclick={() => showPreview(v)}>{l}</button>{/each}</div>
     {#if preview}<pre class="overflow-x-auto rounded-xl bg-white p-3 font-mono text-xs leading-tight text-black">{preview.text}</pre>{/if}
+  </div>
+  <div class="card space-y-2">
+    <h2 class="font-semibold">Scale (products sold by weight)</h2>
+    <label class="flex min-h-12 items-center gap-3"><input type="checkbox" class="h-6 w-6 accent-accent" checked={sc.on} disabled={!sc.rec} onchange={(e) => setScaleOn(e.currentTarget.checked)} /> The store reads weights from a scale at the till</label>
+    {#if sc.on}
+      <p class="text-sm text-muted">On each till PC (Chrome or Edge) with a USB or serial scale: choose it once here. The scale must be approved by Measurement Canada. Phones and iPhones type the weight.</p>
+      {#if !scale.supported()}<p class="text-sm text-warn">This browser can't talk to a scale (open this page on the till PC in Chrome or Edge).</p>
+      {:else}
+        <div class="flex flex-wrap items-end gap-2">
+          <label class="block"><span class="text-sm text-muted">How it sends the weight</span><select class="field" bind:value={sc.protocol}><option value="command">When asked (most POS scales)</option><option value="continuous">All the time</option></select></label>
+          <label class="block"><span class="text-sm text-muted">Speed (baud)</span><select class="field" bind:value={sc.baud}>{#each [2400, 4800, 9600, 19200] as b (b)}<option value={b}>{b}</option>{/each}</select></label>
+          <button class="btn-ghost min-h-10" onclick={chooseScale}>{sc.cfg ? "Choose again" : "Choose this till's scale"}</button>
+          {#if sc.cfg}<button class="btn-ghost min-h-10" onclick={testScale}>Test</button><button class="btn-ghost min-h-10 text-bad" onclick={() => { scale.forget(); sc.cfg = null; }}>Forget</button>{/if}
+        </div>
+        <p class="text-sm">This till: {sc.cfg ? "scale chosen (" + sc.cfg.protocol + ", " + sc.cfg.baud + " baud)" : "no scale chosen"}</p>
+      {/if}
+      {#if sc.test}<p class="text-sm" aria-live="polite">{sc.test}</p>{/if}
+    {/if}
   </div>
 </section>

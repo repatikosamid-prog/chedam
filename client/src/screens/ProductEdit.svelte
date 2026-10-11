@@ -497,6 +497,7 @@
         <button class={mayPrice ? "btn-ghost" : "btn"} disabled={busy} onclick={() => save(false)}>Save as draft</button>
       {/if}
       {#if !isNew && p.status === "active"}<button class="btn-ghost" disabled={busy} onclick={() => setStatus("archived")}>Archive</button>{/if}
+      {#if !isNew && can("purchasing.view")}<button class="btn-ghost" onclick={() => { s.bestFor = s.productId; s.buyingTab = "best"; go("buying"); }}>Buy: best supplier</button>{/if}
       {#if !isNew && can("catalogue.edit")}<button class="btn-ghost" disabled={busy} onclick={() => { s.productCopy = { product: $state.snapshot(p), units: $state.snapshot(units), costText }; s.productId = ""; }}>Duplicate</button>{/if}
       {#if !isNew && !fromReceive}<button class="btn-ghost" onclick={() => { s.stockProductId = s.productId; go("stockitem"); }}>Stock</button>{/if}
       {#if s.returnTo === "receive" && s.productId}

@@ -90,3 +90,14 @@ routerAdd("POST", "/api/chedam/bill-scan/confirm", (e) => {
   e.app.runInTransaction((t) => { out = require(`${__hooks}/lib/billscan.js`).confirm(t, c, c.body); });
   return e.json(200, out);
 });
+
+// ---- T3 (2026-10-11): a vendor's page in one call, and the best supplier for a product. lib/vendor_insight.js
+routerAdd("GET", "/api/chedam/parties/{id}/summary", (e) => {
+  require(`${__hooks}/lib/sales_http.js`).ctx(e, "parties.view");
+  return e.json(200, require(`${__hooks}/lib/vendor_insight.js`).summary(e.app, e.request.pathValue("id")));
+});
+routerAdd("GET", "/api/chedam/purchasing/best-supplier", (e) => {
+  require(`${__hooks}/lib/sales_http.js`).ctx(e, "purchasing.view");
+  const q = e.request.url.query();
+  return e.json(200, require(`${__hooks}/lib/vendor_insight.js`).bestSupplier(e.app, q.get("product"), q.get("qty")));
+});

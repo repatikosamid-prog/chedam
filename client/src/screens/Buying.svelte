@@ -13,10 +13,12 @@
   import Bills from "../components/buying/Bills.svelte";
   import VendorReturns from "../components/buying/VendorReturns.svelte";
   import BillScan from "../components/buying/BillScan.svelte";
+  import BestSupplier from "../components/buying/BestSupplier.svelte";
 
   const manage = can("purchasing.manage");
-  const tabs = [["scan", "Receive a bill", can("stock.receive") || can("purchasing.manage")], ["orders", "Purchase orders", true], ["bills", "Bills and invoices", can("finance.manage") || can("purchasing.manage")], ["returns", "Returns to vendors", true],
+  const tabs = [["best", "Buy: best supplier", true], ["scan", "Receive a bill", can("stock.receive") || can("purchasing.manage")], ["orders", "Purchase orders", true], ["bills", "Bills and invoices", can("finance.manage") || can("purchasing.manage")], ["returns", "Returns to vendors", true],
     ["prices", "Vendor prices", true], ["compare", "Compare vendors", true], ["better", "Better prices", true], ["consignment", "Consignment", true]].filter((x) => x[2]);
+  const bestFor = s.bestFor || ""; s.bestFor = "";
   let tab = $state(s.buyingTab || (location.hash === "#buying-bills" ? "bills" : location.hash === "#buying-scan" ? "scan" : "orders")), error = $state("");
   let vendors = $state([]), vendor = $state(""), items = $state([]), edit = $state(null), units = $state([]);
   let pq = $state(""), hits = $state([]), cmp = $state(null), cmpName = $state("");
@@ -99,6 +101,7 @@
   </div>
   {#if error}<p role="alert" class="rounded-xl bg-bad/10 px-3 py-2 text-bad">{error}</p>{/if}
 
+  {#if tab === "best"}<BestSupplier productId={bestFor} />{/if}
   {#if tab === "orders"}<Orders {vendors} />{/if}
   {#if tab === "bills"}<Bills />{/if}
   {#if tab === "returns"}<VendorReturns {vendors} />{/if}
