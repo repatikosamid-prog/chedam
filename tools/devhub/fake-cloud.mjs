@@ -64,8 +64,17 @@ export async function startFakeCloud(port = 0, { auto = false } = {}) {
       return [200, { id: f.id, name: f.name }];
     }
     if (m === "GET" && path === "/g_api/drive/v3/files") {
-      const parent = (String(q.get("q") || "").match(/'([^']+)' in parents/) || [])[1];
-      return [200, { files: st.files.filter((f) => f.provider === "google" && f.parents.includes(parent)).map((f) => ({ id: f.id, name: f.name, size: String(f.size) })) }];
+      const qs = String(q.get("q") || "");
+      const parent = (qs.match(/'([^']+)' in parents/) || [])[1], name = (qs.match(/name = '([^']+)'/) || [])[1];
+      return [200, { files: st.files.filter((f) => f.provider === "google" && (!parent || f.parents.includes(parent)) && (!name || f.name === name)).map((f) => ({ id: f.id, name: f.name, size: String(f.size), modifiedTime: f.modified })) }];
+    }
+    if (m === "GET" && (x = path.match(/^\/g_api\/drive\/v3\/files\/([^/]+)$/)) && q.get("alt") === "media") {
+      const f = st.files.find((y) => y.id === x[1]);
+      return f ? [200, { __raw: f.content }] : [404, { error: { message: "File not found" } }];
+    }
+    if (m === "GET" && (x = path.match(/^\/ms_graph\/me\/drive\/special\/approot:\/(.+):\/content$/))) {
+      const f = st.files.find((y) => y.provider === "microsoft" && y.name === decodeURIComponent(x[1]));
+      return f ? [200, { __raw: f.content }] : [404, { error: { message: "itemNotFound" } }];
     }
     if (m === "DELETE" && (x = path.match(/^\/g_api\/drive\/v3\/files\/(.+)$/))) { st.files = st.files.filter((f) => f.id !== x[1]); return [204, null]; }
     if (m === "POST" && path === "/g_upload/drive/v3/files" && q.get("uploadType") === "resumable") {
@@ -78,14 +87,14 @@ export async function startFakeCloud(port = 0, { auto = false } = {}) {
       const u = st.codes["up-" + x[1]];
       if (!u) return [404, { error: { message: "No such upload" } }];
       delete st.codes["up-" + x[1]];
-      const f = { id: "g" + rid(), name: u.name, provider: "google", parents: u.parents, size: raw.length, content: raw };
+      const f = { id: "g" + rid(), name: u.name, provider: "google", parents: u.parents, size: raw.length, content: raw, modified: new Date().toISOString() };
       st.files.push(f);
       return [200, { id: f.id, name: f.name }];
     }
     if (m === "PATCH" && (x = path.match(/^\/g_upload\/drive\/v3\/files\/(.+)$/))) {
       const f = st.files.find((y) => y.id === x[1]);
       if (!f) return [404, { error: { message: "File not found" } }];
-      f.content = raw; f.size = raw.length;
+      f.content = raw; f.size = raw.length; f.modified = new Date().toISOString();
       return [200, { id: f.id, name: f.name }];
     }
     if (m === "PUT" && (x = path.match(/^\/ms_graph\/me\/drive\/special\/approot:\/(.+):\/content$/))) {
@@ -110,7 +119,7 @@ export async function startFakeCloud(port = 0, { auto = false } = {}) {
       const isText = !u.pathname.startsWith("/g_upload/session/") && !u.pathname.includes(":/content") && !(req.method === "PATCH");
       const [code, out, headers] = route(req.method, u.pathname, u.searchParams, isText ? body.toString("utf8") : body, req.headers, fake.url);
       res.writeHead(code, Object.assign({ "Content-Type": "application/json" }, headers || {}));
-      res.end(out === null ? "" : JSON.stringify(out));
+      res.end(out === null ? "" : out.__raw !== undefined ? out.__raw : JSON.stringify(out));
     });
   });
   await new Promise((r) => server.listen(port, "127.0.0.1", r));

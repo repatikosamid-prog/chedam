@@ -184,9 +184,12 @@ function folder(app, r) {
   return res.json.id;
 }
 
+// Scratch files (header file, small uploads) live beside the backups; the folder exists before the first backup
+function scratch(app) { const d = app.dataDir() + "/backup"; try { $os.mkdirAll(d, 0o700); } catch (_) { /* exists */ } return d; }
+
 // curl with the token in a header file (0600, removed after)
 function curl(app, args, tk) {
-  const hdr = app.dataDir() + "/backup/.cloud-hdr-" + $security.randomString(8);
+  const hdr = scratch(app) + "/.cloud-hdr-" + $security.randomString(8);
   $os.writeFile(hdr, "Authorization: Bearer " + tk + "\n", 0o600);
   try {
     const out = toString($os.cmd("curl", ...["-sS", "--fail-with-body", "--max-time", "900", "-H", "@" + hdr].concat(args)).combinedOutput());
@@ -226,7 +229,7 @@ function uploadFile(app, r, path, name, mime) {
 
 // Small text (the remote summary, step 5): replaces the file with that name
 function putText(app, r, name, text) {
-  const tmp = app.dataDir() + "/backup/.cloud-" + $security.randomString(8);
+  const tmp = scratch(app) + "/.cloud-" + $security.randomString(8);
   $os.writeFile(tmp, text, 0o600);
   try {
     if (r.getString("provider") === "google") {

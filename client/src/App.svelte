@@ -54,6 +54,8 @@
   import Statements from "./screens/Statements.svelte";
   import CardTerminal from "./screens/CardTerminal.svelte";
   import CloudDrive from "./screens/CloudDrive.svelte";
+  import RemoteView from "./screens/RemoteView.svelte";
+  import { enrolment as remoteEnrolment } from "./lib/remote_read.js";
   import Bank from "./screens/Bank.svelte";
   import Payroll from "./screens/Payroll.svelte";
   import Timesheets from "./screens/Timesheets.svelte";
@@ -73,9 +75,12 @@
   const localDisplay = location.hash === "#customer-display";
   // The receipt's feedback link (P3 step 10): a page anyone on the store's Wi-Fi can open, no sign-in
   const feedbackLink = location.hash.startsWith("#feedback/") ? location.hash.substring(10) : "";
+  // The owner's remote view away from the store (P5 step 5): no hub, no sign-in
+  const awayView = location.hash === "#away";
+  const hasRemote = !!remoteEnrolment();
 
   onMount(() => {
-    if (localDisplay || feedbackLink) return;
+    if (localDisplay || feedbackLink || awayView) return;
     startMonitor();
     refresh();
     // Offline sales upload by themselves whenever the hub answers (FR-3.16).
@@ -122,7 +127,9 @@
   });
 </script>
 
-{#if feedbackLink}
+{#if awayView}
+<RemoteView />
+{:else if feedbackLink}
 <Feedback link={feedbackLink} />
 {:else if s.screen === "kiosk"}
 <Feedback />
@@ -169,6 +176,9 @@
 
 <main class="mx-auto w-full {s.screen === 'sell' ? 'max-w-6xl' : 'max-w-3xl'} px-4 pt-2 pb-12">
 
+  {#if hasRemote && net.hub === "down"}
+    <p class="mb-3 rounded-xl border border-accent px-3 py-2"><a class="underline" href="#away" onclick={(ev) => { ev.preventDefault(); location.hash = "#away"; location.reload(); }}>Away from the store? See the latest summary</a></p>
+  {/if}
   {#if s.notice.text}
     <div role="status" class="mb-4 flex items-start justify-between gap-3 rounded-xl px-3 py-2
       {s.notice.kind === 'bad' ? 'bg-bad/10 text-bad' : s.notice.kind === 'ok' ? 'bg-ok/10 text-ok' : 'bg-soft'}">

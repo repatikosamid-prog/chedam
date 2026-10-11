@@ -6,6 +6,7 @@
   import { onMount, onDestroy } from "svelte";
   import { api } from "../lib/api.js";
   import { go, handleRefusal } from "../lib/session.svelte.js";
+  import { enrolment, saveEnrolment, forgetEnrolment } from "../lib/remote_read.js";
 
   let st = $state(null), error = $state(""), ok = $state(""), busy = $state(false), appForm = $state(null);
   let timer = null;
@@ -17,7 +18,33 @@
     const w = st && st.providers.find((p) => p.link && p.link.status === "waiting");
     if (w) timer = setInterval(() => poll(w.provider), 5000);
   }
-  async function load() { const r = await api("GET", "/api/chedam/cloud"); if (!r.ok) return fail(r); st = r.json; watch(); }
+  let remote = $state(null), here = $state(!!enrolment());
+  async function load() {
+    const r = await api("GET", "/api/chedam/cloud"); if (!r.ok) return fail(r); st = r.json; watch();
+    const v = await api("GET", "/api/chedam/remote", null, { quiet: true }); remote = v.ok ? v.json : null;
+  }
+  async function publishNow() {
+    busy = true; error = ""; ok = "";
+    const r = await api("POST", "/api/chedam/remote/publish", {}, { timeout: 60000 });
+    busy = false;
+    if (!r.ok) return fail(r);
+    if (r.json.uploaded) ok = "Summary put on the cloud drive."; else error = r.json.error || "Not sent (connect the cloud drive first).";
+    load();
+  }
+  async function enrolHere() {
+    busy = true; error = ""; ok = "";
+    const r = await api("POST", "/api/chedam/remote/enrol", {});
+    busy = false;
+    if (!r.ok) return fail(r);
+    saveEnrolment(r.json); here = true;
+    ok = "This device is enrolled. Away from the store, open Chedam: when the hub can't be reached it offers the summary (or open the address ending in #away).";
+  }
+  async function forgetAll() {
+    if (!confirm("Make a new key? Every device enrolled so far can no longer read new summaries (enrol them again here).")) return;
+    const r = await api("POST", "/api/chedam/remote/forget", {});
+    if (!r.ok) return fail(r);
+    forgetEnrolment(); here = false; ok = "New key made. Enrol your devices again."; load();
+  }
   onMount(load);
   onDestroy(() => clearInterval(timer));
 
@@ -61,6 +88,22 @@
       {#if st.connected.last_error}<p class="text-sm text-warn">Last problem: {st.connected.last_error}</p>{/if}
       <div class="flex flex-wrap gap-2"><button class="btn-ghost" disabled={busy} onclick={uploadNow}>Upload now</button>
         <button class="btn-ghost text-bad" disabled={busy} onclick={() => confirm("Disconnect the cloud drive? Backups stay on the USB drive only.") && post("/api/chedam/cloud/disconnect", {}, "Disconnected.")}>Disconnect</button></div>
+    </div>
+  {/if}
+
+  {#if st && st.connected && remote}
+    <div class="card space-y-2">
+      <h2 class="font-semibold">Remote view (away from the store)</h2>
+      <p class="text-sm">Every {remote.minutes} minutes an encrypted summary (sales, tills, who is in, what needs attention, stock, backup) goes to {st.connected.name}. Last: {remote.summary_at ? when(remote.summary_at) : "not yet"}</p>
+      {#if remote.summary_error}<p class="text-sm text-warn">Last problem: {remote.summary_error}</p>{/if}
+      <p class="text-sm">This device: {here ? "enrolled ✓" : "not enrolled"}</p>
+      <div class="flex flex-wrap gap-2">
+        <button class="btn" disabled={busy} onclick={enrolHere}>{here ? "Enrol this device again" : "Enrol this device"}</button>
+        <button class="btn-ghost" disabled={busy} onclick={publishNow}>Send the summary now</button>
+        {#if here}<a class="btn-ghost" href="#away" onclick={(ev) => { ev.preventDefault(); location.hash = "#away"; location.reload(); }}>Open the remote view</a>{/if}
+        <button class="btn-ghost text-bad" disabled={busy} onclick={forgetAll}>Forget enrolled devices</button>
+      </div>
+      <p class="text-sm text-muted">Enrol only the owner's own phone or computer: it keeps a key and a read-only sign-in to the cloud drive.</p>
     </div>
   {/if}
 

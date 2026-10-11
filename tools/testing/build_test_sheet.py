@@ -500,6 +500,12 @@ P5_TESTS = [
     ("D04", "Cloud drive", "Google account", "Remove Chedam's access in the Google account's security page; next upload", "Cloud drive says: connect the cloud drive again; the backup waits in the outbox"),
     ("D05", "Cloud drive", "Laptop (owner)", "Disconnect; connect OneDrive the same way (microsoft.com/devicelogin)", "Connected; the next backup is in OneDrive → Apps → Chedam"),
     ("D06", "Cloud drive", "Laptop (manager)", "Look for Cloud drive on Home", "No tile (owner only)"),
+    # ---- Step 5: owner's remote view (DL-226..228)
+    ("D10", "Remote view", "Laptop (owner)", "Cloud drive → Send the summary now", "Last: now; in the cloud drive a file chedam-summary.enc (its content is unreadable)"),
+    ("D11", "Remote view", "iPhone (owner, at the store)", "Home → Cloud drive → Enrol this device → Open the remote view", "Today's sales, tills open, who is clocked in, attention, stock, last backup; Last updated with the time"),
+    ("D12", "Remote view", "iPhone (owner, on mobile data, away)", "Turn Wi-Fi off; open Chedam from the home screen", "The bar says the hub can't be reached; the link Away from the store? See the latest summary opens it"),
+    ("D13", "Remote view", "iPhone (owner, away)", "Sell something at the store; 15 minutes later press Refresh", "The sale is in today's total; the time is newer"),
+    ("D14", "Remote view", "Laptop (owner)", "Forget enrolled devices; on the iPhone (away) press Refresh after the next summary", "The iPhone says to enrol this device again"),
 ]
 
 def build(OUT=OUT, TESTS=TESTS, intro=None):

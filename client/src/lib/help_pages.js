@@ -104,6 +104,7 @@ export const PAGES = [
       { p: "The nightly backup is encrypted on the hub and also copied to the owner's Google Drive or OneDrive, in a folder of Chedam's own. If the store burns down, the backup and the printed recovery key bring everything back on a new hub." },
       { steps: ["Home → Cloud drive. The first time, enter the app registration (the client ID; Google also its secret).", "Press Connect. A short code appears.", "On any phone or computer open the address shown (google.com/device or microsoft.com/devicelogin), type the code, sign in with the owner's account and allow Chedam.", "The page says Connected. After the next nightly backup, Last backup copied shows its name."] },
       { tip: "The newest 14 backups are kept in the cloud (setting cloud.backup_keep); older ones are removed there." },
+      { p: "Remote view: every 15 minutes an encrypted summary of the store goes to the cloud drive. At the store, the owner presses Enrol this device on their own phone; away from the store, Chedam on that phone shows the summary with the time it was made." },
       { warn: "Without the printed backup key a backup cannot be opened, also not from the cloud. Keep the key away from the store." },
     ] },
   { id: "payproc", title: "Linked card terminal", screens: ["payproc"], words: "square terminal card processor link pair code token clover",
